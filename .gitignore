@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pem
+*.pyd
+.pytest_cache/
+venv/
+.env
+
+# QuMail local secrets and OAuth artifacts
+secrets/
+!secrets/.gitkeep
+certs/
+
+liboqs/
+
+# Internal development documents — not for public repository
+INSTRUCTIONS.md
+audit_report.md
+cloud_run_migration_plan.md
+qumail_audit_report.md
+QuMail_Project_Abstract.md

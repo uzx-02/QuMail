@@ -1,0 +1,28 @@
+# QuMail v1 — Python Dependencies
+# Install with: pip install -r requirements.txt
+# Note: liboqs requires the native liboqs C library installed on the system first.
+# See: https://github.com/open-quantum-safe/liboqs-python
+# Last verified: March 2026
+
+# --- UI ---
+PyQt6==6.10.2
+
+# --- Virtual KME Server ---
+Flask==3.1.3
+
+# --- Cryptography ---
+cryptography==46.0.5        # AES-256-GCM (Level 2) — fixes CVE-2026-26007
+liboqs-python==0.14.1       # ML-KEM FIPS 203 (Level 3) — requires native liboqs C lib
+
+# --- Email Transport ---
+google-auth==2.49.1
+google-auth-oauthlib==1.3.0  # Note: upstream repo archived Feb 2026 — monitor for v2
+
+# --- PDF Certificate Export ---
+fpdf2==2.8.4
+
+# --- HTTP (KME REST client) ---
+requests==2.33.0
+
+# --- Cloud (Portal session store — Cloud Run deployment only) ---
+google-cloud-firestore==2.20.2
