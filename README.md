@@ -536,7 +536,7 @@ QuMail/
 
 **Open Quantum Safe project** — The `liboqs` library and Python bindings that power QuMail's Level 3 ML-KEM FIPS 203 implementation. [github.com/open-quantum-safe/liboqs](https://github.com/open-quantum-safe/liboqs)
 
-**HackToon 1.0, AIKTC** — 2nd Runner Up. Thank you to the coordinators and the HackToon team for organising an exceptional platform for student builders.
+**HackToon 1.0, AIKTC** — 2nd Runner Up. Grateful to the event coordinators and the HackToon organizing team for providing an exceptional platform for student developers to build and showcase innovative projects.
 
 ---
 
