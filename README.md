@@ -35,8 +35,10 @@ post-compromise-security, self-destruction or production-support claim.
 ## Reproducible development setup
 
 Initial validation target: **CPython 3.12 / Windows x64**. Exact local runtime:
-3.12.14. CI is configured for Windows 2022 and Ubuntu 24.04, but no hosted run
-has been verified. See [support and dependencies](docs/operations/dependencies.md).
+3.12.14. Hosted Windows 2022 and Ubuntu 24.04 research validation passed for
+commit `023c941ec2ef284f6be28b5a9605f1dca9c28787`, with 37 tests in each of
+three orders on each platform. See [support and dependencies](docs/operations/dependencies.md)
+and [exact hosted evidence](docs/operations/m1-validation.md#hosted-validation-completed-2026-10-03).
 
 Create a fresh virtual environment with your CPython 3.12 interpreter, then install
 with hash verification:

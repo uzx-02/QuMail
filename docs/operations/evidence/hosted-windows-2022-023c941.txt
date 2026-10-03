@@ -1,0 +1,429 @@
+regression (windows-2022)	Report runtime inputs	﻿2026-10-03T13:59:32.2049731Z ##[group]Run uv --version
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2050156Z ^[[36;1muv --version^[[0m
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2050742Z ^[[36;1mpython -c "import platform, sys; print(platform.platform()); print(sys.version); assert sys.version_info[:3] == (3, 12, 14)"^[[0m
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2130347Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2130820Z env:
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2131064Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2131361Z   PYTHONUTF8: 1
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2131609Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2131924Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2132291Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2132649Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2132993Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2133267Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.2133617Z ##[endgroup]
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.5186114Z uv 0.12.22 (70fe1196a 2026-10-01 x86_64-pc-windows-msvc)
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.7358782Z Windows-2022Server-10.0.20348-SP0
+regression (windows-2022)	Report runtime inputs	2026-10-03T13:59:32.7359461Z 3.12.14 (main, Sep 29 2026, 15:00:58) [MSC v.1944 64 bit (AMD64)]
+regression (windows-2022)	Install hash-locked research dependencies	﻿2026-10-03T13:59:32.8820867Z ##[group]Run uv pip install --require-hashes -r packaging/requirements-dev.lock
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8821579Z ^[[36;1muv pip install --require-hashes -r packaging/requirements-dev.lock^[[0m
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8862355Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8862721Z env:
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8862906Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8863128Z   PYTHONUTF8: 1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8863314Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8863550Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8863831Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8864117Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8864384Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8864584Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:32.8864821Z ##[endgroup]
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.6246562Z Resolved 47 packages in 362ms
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.6774993Z Downloading pillow (6.9MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.7298097Z Downloading pyqt6-qt6 (74.8MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.7557484Z Downloading pyqt6 (24.8MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.8902960Z Downloading pygments (1.2MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:33.9433273Z Downloading cryptography (3.6MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:34.0209525Z Downloading fonttools (2.4MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:34.0254422Z Downloading grpcio (5.0MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:34.1281984Z Downloading cmake (34.7MiB)
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:34.9665969Z  Downloaded pillow
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:35.0754344Z  Downloaded grpcio
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:35.1098815Z  Downloaded cryptography
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:35.4277394Z  Downloaded pygments
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:35.5972434Z  Downloaded fonttools
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:37.9106181Z  Downloaded pyqt6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.0311991Z  Downloaded pyqt6-qt6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.5174382Z  Downloaded cmake
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.5187403Z Prepared 47 packages in 7.89s
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.5219485Z warning: Failed to hardlink files; falling back to full copy. This may lead to degraded performance.
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.5222145Z          If the cache and target directories are on different filesystems, hardlinking may not be supported.
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:41.5223550Z          If this is intentional, set `export UV_LINK_MODE=copy` or use `--link-mode=copy` to suppress this warning.
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4545343Z Installed 47 packages in 2.93s
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4547368Z  + blinker==1.9.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4549427Z  + certifi==2026.7.22
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4550421Z  + cffi==2.1.1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4553221Z  + charset-normalizer==3.5.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4553708Z  + click==8.5.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4556018Z  + cmake==3.31.6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4557497Z  + colorama==0.4.6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4559550Z  + cryptography==50.0.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4560874Z  + defusedxml==0.7.1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4562842Z  + flask==3.1.3
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4564331Z  + fonttools==4.66.1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4566235Z  + fpdf2==2.8.4
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4567586Z  + google-api-core==2.40.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4569012Z  + google-auth==2.49.1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4570249Z  + google-auth-oauthlib==1.3.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4572119Z  + google-cloud-core==2.8.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4573698Z  + google-cloud-firestore==2.20.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4574847Z  + googleapis-common-protos==1.75.5
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4576037Z  + grpcio==1.84.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4577280Z  + grpcio-status==1.84.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4578288Z  + idna==3.20
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4579272Z  + iniconfig==2.3.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4580536Z  + itsdangerous==2.2.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4581642Z  + jinja2==3.1.6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4582950Z  + liboqs-python==0.16.0.1
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4584079Z  + markupsafe==3.0.4
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4585332Z  + ninja==1.11.1.3
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4586451Z  + oauthlib==4.0.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4587620Z  + opentelemetry-api==1.45.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4588618Z  + packaging==26.3
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4589730Z  + pillow==12.3.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4590807Z  + pluggy==1.6.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4592035Z  + proto-plus==1.29.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4593196Z  + protobuf==6.33.6
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4596294Z  + pyasn1==0.6.4
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4596645Z  + pyasn1-modules==0.4.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4598238Z  + pycparser==3.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4599678Z  + pygments==2.21.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4600945Z  + pyqt6==6.10.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4601549Z  + pyqt6-qt6==6.10.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4603314Z  + pyqt6-sip==13.12.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4604429Z  + pytest==8.4.2
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4605877Z  + requests==2.33.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4607045Z  + requests-oauthlib==2.0.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4608459Z  + typing-extensions==4.16.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4609522Z  + urllib3==2.8.0
+regression (windows-2022)	Install hash-locked research dependencies	2026-10-03T13:59:44.4611033Z  + werkzeug==3.1.9
+regression (windows-2022)	Check dependency consistency	﻿2026-10-03T13:59:44.5762118Z ##[group]Run uv pip check
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5762473Z ^[[36;1muv pip check^[[0m
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5802396Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5802744Z env:
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5802920Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5803136Z   PYTHONUTF8: 1
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5803335Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5803567Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5803840Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5804104Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5804367Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5804561Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.5804792Z ##[endgroup]
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.8429745Z Checked 47 packages in 2ms
+regression (windows-2022)	Check dependency consistency	2026-10-03T13:59:44.8475450Z All installed packages are compatible
+regression (windows-2022)	Build explicit native research inputs	﻿2026-10-03T13:59:50.6017877Z ##[group]Run $manifest = Get-Content packaging/native-research.json | ConvertFrom-Json
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6018626Z ^[[36;1m$manifest = Get-Content packaging/native-research.json | ConvertFrom-Json^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6019103Z ^[[36;1m$revision = git -C tmp/liboqs-src rev-parse HEAD^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6019556Z ^[[36;1mif ($revision -ne $manifest.commit) { throw 'Unexpected native source commit' }^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6020064Z ^[[36;1m$prefix = Join-Path $env:GITHUB_WORKSPACE 'tmp/oqs-install'^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6020668Z ^[[36;1m$generator = if ($IsWindows) { @('-G', 'Visual Studio 17 2022', '-A', 'x64') } else { @('-G', 'Ninja', '-DCMAKE_INSTALL_LIBDIR=lib') }^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6021448Z ^[[36;1mcmake -S tmp/liboqs-src -B tmp/liboqs-build @generator "-DCMAKE_INSTALL_PREFIX=$prefix" @($manifest.cmake_flags)^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6022026Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6022398Z ^[[36;1mcmake --build tmp/liboqs-build --config Release --parallel 2^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6022807Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6023143Z ^[[36;1mcmake --install tmp/liboqs-build --config Release^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6023771Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6024255Z ^[[36;1m"OQS_INSTALL_PATH=$prefix" >> $env:GITHUB_ENV^[[0m
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6066911Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6067270Z env:
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6067451Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6067672Z   PYTHONUTF8: 1
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6067851Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6068080Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6068367Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6068647Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6068924Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6069119Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:50.6069354Z ##[endgroup]
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T13:59:52.0335477Z -- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.20348.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:01.6849682Z -- The C compiler identification is MSVC 19.44.35229.0
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:01.9381258Z -- The ASM compiler identification is MSVC
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:01.9446247Z -- Found assembler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:01.9782279Z -- Detecting C compiler ABI info
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7497748Z -- Detecting C compiler ABI info - done
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7673790Z -- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7677701Z -- Detecting C compile features
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7684400Z -- Detecting C compile features - done
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7825137Z -- OQS Testing: Pytest parallel workers set to 'auto'
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7827771Z -- CMAKE_BUILD_TYPE=
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:02.7856380Z -- Performing Test CC_SUPPORTS_WA_NOEXECSTACK
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:03.2862198Z -- Performing Test CC_SUPPORTS_WA_NOEXECSTACK - Failed
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:03.2884267Z -- Performing Test LD_SUPPORTS_WL_Z_NOEXECSTACK
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:03.9597182Z -- Performing Test LD_SUPPORTS_WL_Z_NOEXECSTACK - Failed
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:04.0064960Z -- Algorithms filtered for KEM_ml_kem_768
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:04.0750969Z -- Looking for aligned_alloc
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:05.3654036Z -- Looking for aligned_alloc - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:05.3656482Z -- Looking for posix_memalign
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:05.8537836Z -- Looking for posix_memalign - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:05.8540352Z -- Looking for memalign
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:06.3767579Z -- Looking for memalign - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:06.3770368Z -- Looking for explicit_bzero
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:06.8852565Z -- Looking for explicit_bzero - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:06.8855070Z -- Looking for explicit_memset
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:07.3907954Z -- Looking for explicit_memset - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:07.3911858Z -- Looking for memset_s
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:07.9009407Z -- Looking for memset_s - not found
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:07.9263814Z -- Configuring done (16.1s)
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:07.9995520Z -- Generating done (0.1s)
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:08.0005408Z -- Build files have been written to: D:/a/QuMail/QuMail/tmp/liboqs-build
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:08.4494461Z MSBuild version 17.14.60+43b635718 for .NET Framework
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:08.4800468Z 
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:08.8635594Z   1>Checking Build System
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.0473313Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/common/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.2032465Z   aes_impl.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.2033612Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/common/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.2389809Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/kem/ml_kem/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3123030Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3126130Z   aes_c.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3313065Z   kem_ml_kem_768.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3330947Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3401880Z   aes128_ni.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3739132Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3805954Z   aes_impl.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3809797Z   compress.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.3836510Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4088556Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4437527Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4438769Z   aes_c.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4567385Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4613883Z   aes128_ni.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.4936233Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5398001Z   aes256_ni.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5400555Z   aes256_ni.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5712753Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5717975Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5791603Z   aes.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.5793141Z   aes.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6115105Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6117066Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6146176Z   sha2_impl.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6147849Z   sha2_impl.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6420194Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6438560Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6458942Z   sha2_c.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6474152Z   sha2_c.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6735448Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6774593Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.6994354Z   sha2.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7038577Z   sha2.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7350129Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7372443Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7385209Z   xkcp_sha3.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7402787Z   xkcp_sha3.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7672351Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7688882Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7753354Z   xkcp_sha3x4.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.7778388Z   xkcp_sha3x4.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8026508Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8088522Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8128134Z   sha3.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8171671Z   sha3.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8456764Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8488136Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8518076Z   sha3x4.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8543356Z   sha3x4.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8804193Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8845739Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8863657Z   common.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.8898575Z   common.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.9164361Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:09.9180889Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:10.8974552Z   debug.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:10.9301599Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:10.9382926Z   indcpa.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:10.9699852Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0018730Z   rand_nist.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0019285Z   fips202.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0345249Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0367958Z   fips202x4.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0395029Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.0433055Z   Generating Code...
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.1028068Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.1058481Z   rand.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.4072763Z   kem.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.5395246Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.5809662Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:11.5863624Z   Generating Code...
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:12.0393892Z   poly.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:12.2430976Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:12.7283081Z   poly_k.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:12.9003107Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:13.3703845Z   sampling.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:13.5730000Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:14.0926548Z   verify.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:14.3240669Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:14.7077629Z   Generating Code...
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:16.1291018Z   ml_kem_768_ref.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\src\kem\ml_kem\ml_kem_768_ref.dir\Release\ml_kem_768_ref.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:16.2543341Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/common/sha3/xkcp_low/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:16.3716911Z   KeccakP-1600-opt64.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:20.3442170Z   internal.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\src\common\internal.dir\Release\internal.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:20.3457943Z   common.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\src\common\common.dir\Release\common.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:20.4420929Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/common/sha3/xkcp_low/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:20.5143715Z   KeccakP-1600-times4-on1.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:20.6116314Z   xkcp_low_keccakp_1600times4_serial.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\src\common\sha3\xkcp_low\xkcp_low_keccakp_1600times4_serial.dir\Release\xkcp_low_keccakp_1600times4_serial.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:25.2950915Z   xkcp_low_keccakp_1600_plain64.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\src\common\sha3\xkcp_low\xkcp_low_keccakp_1600_plain64.dir\Release\xkcp_low_keccakp_1600_plain64.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:25.3902135Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:25.3903554Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/src/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:25.9729245Z   kem.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:25.9879803Z   oqs-internal.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\lib\Release\oqs-internal.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0127780Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0178269Z   sig.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0480252Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0562839Z   sig_stfl.c
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0862426Z   WARNING: non-GNUC/Clang toolchain detected. liboqs cannot                      guarantee optimization barrier on unsupported platforms.                       Compiler may introduce non-constant-time behaviors. Please                     verify generated assembly and proceed with caution.
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.0927540Z   Generating Code...
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:26.2278346Z   Auto build dll exports
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:27.7421244Z      Creating library D:/a/QuMail/QuMail/tmp/liboqs-build/lib/Release/oqs.lib and object D:/a/QuMail/QuMail/tmp/liboqs-build/lib/Release/oqs.exp
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:27.8143210Z   oqs.vcxproj -> D:\a\QuMail\QuMail\tmp\liboqs-build\bin\Release\oqs.dll
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:27.8714973Z   Building Custom Rule D:/a/QuMail/QuMail/tmp/liboqs-src/CMakeLists.txt
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.2970151Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsConfig.cmake
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.2975027Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsConfigVersion.cmake
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.2980713Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/pkgconfig/liboqs.pc
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.2985311Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/oqs.lib
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.2992759Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/bin/oqs.dll
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3003315Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsTargets.cmake
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3008797Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsTargets-release.cmake
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3015034Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/oqs.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3018928Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/aes_ops.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3023034Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/common.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3027595Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/rand.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3031710Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/sha2_ops.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3036174Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/sha3_ops.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3040526Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/sha3x4_ops.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3046976Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/kem.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3051861Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/sig.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3057137Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/sig_stfl.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3061985Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/kem_ml_kem.h
+regression (windows-2022)	Build explicit native research inputs	2026-10-03T14:00:28.3066024Z -- Installing: D:/a/QuMail/QuMail/tmp/oqs-install/include/oqs/oqsconfig.h
+regression (windows-2022)	Report available research provider and native hash	﻿2026-10-03T14:00:28.3690648Z ##[group]Run python -m crypto.legacy_provider --research
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3691160Z ^[[36;1mpython -m crypto.legacy_provider --research^[[0m
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3731596Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3731949Z env:
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3732135Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3732364Z   PYTHONUTF8: 1
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3732553Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3732790Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3733072Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3733356Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3733628Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3733832Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3734130Z   OQS_INSTALL_PATH: D:\a\QuMail\QuMail\tmp\oqs-install
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.3734413Z ##[endgroup]
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8356833Z liboqs-python faulthandler is disabled
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8764312Z {
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8764928Z   "original_binding": "0.14.1",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8765844Z   "original_status": "blocked: unavailable from PyPI at M1 verification; no live lookup performed",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8766946Z   "historical_ciphertext_compatibility": "unverified",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8768403Z   "production_approved": false,
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8768866Z   "research_status": "available",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8769245Z   "binding": "0.16.0.1",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8769560Z   "native": "0.16.0",
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8770104Z   "native_sha256": "f797a7483d13e134f0a8c76cb2c0afc93ba1ba43e556f31fea70597ff27192e3"
+regression (windows-2022)	Report available research provider and native hash	2026-10-03T14:00:28.8770752Z }
+regression (windows-2022)	Complete regression	﻿2026-10-03T14:00:28.9993707Z ##[group]Run python -m pytest -q
+regression (windows-2022)	Complete regression	2026-10-03T14:00:28.9994093Z ^[[36;1mpython -m pytest -q^[[0m
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0040887Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0041599Z env:
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0042037Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0042529Z   PYTHONUTF8: 1
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0042862Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0043401Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0044002Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0044589Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0045193Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0045672Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0046315Z   OQS_INSTALL_PATH: D:\a\QuMail\QuMail\tmp\oqs-install
+regression (windows-2022)	Complete regression	2026-10-03T14:00:29.0046924Z ##[endgroup]
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3339466Z .....................................                                    [100%]
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3340063Z ============================== warnings summary ===============================
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3340767Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3342292Z   D:\a\QuMail\QuMail\certificates\cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3343788Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3344144Z 
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3344455Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3345975Z   D:\a\QuMail\QuMail\portal\portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3347312Z     .not_valid_before(_dt.datetime.utcnow())
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3347557Z 
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3347867Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3349378Z   D:\a\QuMail\QuMail\portal\portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3350778Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3351058Z 
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3351251Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3351849Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3353119Z   D:\a\QuMail\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3354174Z     issued_at= datetime.utcnow().isoformat(),
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3354377Z 
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3354586Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (windows-2022)	Complete regression	2026-10-03T14:00:33.3354977Z 37 passed, 5 warnings in 3.25s
+regression (windows-2022)	Complete regression in reverse order	﻿2026-10-03T14:00:33.5878813Z ##[group]Run python -m pytest -q --test-order reverse
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5879316Z ^[[36;1mpython -m pytest -q --test-order reverse^[[0m
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5922265Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5922622Z env:
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5922807Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5923030Z   PYTHONUTF8: 1
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5923221Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5923468Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5923757Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5924033Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5924316Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5924529Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5924823Z   OQS_INSTALL_PATH: D:\a\QuMail\QuMail\tmp\oqs-install
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:33.5925104Z ##[endgroup]
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3243320Z .....................................                                    [100%]
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3244748Z ============================== warnings summary ===============================
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3245751Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3246695Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3248262Z   D:\a\QuMail\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3249733Z     issued_at= datetime.utcnow().isoformat(),
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3250005Z 
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3250352Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3252017Z   D:\a\QuMail\QuMail\portal\portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3253496Z     .not_valid_before(_dt.datetime.utcnow())
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3253897Z 
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3255197Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3257075Z   D:\a\QuMail\QuMail\portal\portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3258247Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3258518Z 
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3258753Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3259955Z   D:\a\QuMail\QuMail\certificates\cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3261425Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3261714Z 
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3261927Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (windows-2022)	Complete regression in reverse order	2026-10-03T14:00:35.3262332Z 37 passed, 5 warnings in 1.11s
+regression (windows-2022)	Complete regression with fixed shuffled order	﻿2026-10-03T14:00:35.5759527Z ##[group]Run python -m pytest -q --test-order 20261003
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5760048Z ^[[36;1mpython -m pytest -q --test-order 20261003^[[0m
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5801795Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5802148Z env:
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5802329Z   QT_QPA_PLATFORM: offscreen
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5802553Z   PYTHONUTF8: 1
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5802736Z   UV_MANAGED_PYTHON: true
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5802972Z   UV_TOOL_BIN_DIR: D:\a\_temp\uv-tool-bin-dir
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5803270Z   UV_TOOL_DIR: D:\a\_temp\uv-tool-dir
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5803538Z   UV_PYTHON_INSTALL_DIR: D:\a\_temp\uv-python-dir
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5803801Z   UV_PYTHON: 3.12.14
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5803996Z   VIRTUAL_ENV: D:\a\QuMail\QuMail\.venv
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5804279Z   OQS_INSTALL_PATH: D:\a\QuMail\QuMail\tmp\oqs-install
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:35.5804557Z ##[endgroup]
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3764041Z .....................................                                    [100%]
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3765409Z ============================== warnings summary ===============================
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3766246Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3767097Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3768677Z   D:\a\QuMail\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3770173Z     issued_at= datetime.utcnow().isoformat(),
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3770461Z 
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3770807Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3772509Z   D:\a\QuMail\QuMail\portal\portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3773996Z     .not_valid_before(_dt.datetime.utcnow())
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3774263Z 
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3774606Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3776185Z   D:\a\QuMail\QuMail\portal\portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3777606Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3777947Z 
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3778216Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3779722Z   D:\a\QuMail\QuMail\certificates\cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3781197Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3781556Z 
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3781819Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (windows-2022)	Complete regression with fixed shuffled order	2026-10-03T14:00:37.3782304Z 37 passed, 5 warnings in 1.14s
+regression (windows-2022)	Complete job	2026-10-03T14:00:41.3466231Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11d5960a326750d5838078e36cf38b85af677262. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

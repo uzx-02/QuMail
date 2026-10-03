@@ -8,9 +8,13 @@ Original records are preserved byte-for-byte in the ignored local directory
 `tmp/m1-private-evidence/2026-10-03-publish-review`. Redaction and original-byte
 hashes are recorded in `evidence/publication-redactions.json`. No test results,
 warning counts, tracebacks apart from account paths, or provider inputs changed.
-Branch `main`; HEAD `7079cf16cb2623172a329fd045045227f7eb65b4`.
-Changes are local and uncommitted. No push, mail, cloud deployment or user-data
-migration occurred. Canonical engineering source: root Markdown specification.
+Historical baseline: `main` / `7079cf16cb2623172a329fd045045227f7eb65b4`.
+Current review branch: `codex/m1-hosted-validation`, published to `uzx-02/QuMail`.
+**M1 COMPLETE at research-baseline scope**, based on hosted commit
+`023c941ec2ef284f6be28b5a9605f1dca9c28787` and run 37128055379. The final section
+records exact results and supersedes earlier pending decisions retained below.
+No main push, merge, mail, cloud deployment or user-data migration occurred.
+Canonical engineering source: root Markdown specification.
 
 ## Specification comparison
 
@@ -277,3 +281,135 @@ The additional `workflow` scope is needed for committing the workflow definition
 it does not increase the workflow's own read-only runtime permissions. Keep tokens
 out of chat and repository files. After authentication, resume the already
 authorized review-branch publication and exact-commit hosted validation.
+
+## Hosted validation completed (2026-10-03)
+
+Authentication succeeded through the normal OS keyring outside the network
+sandbox. The sandbox's initial connection failure misleadingly reported an
+invalid token; the permitted retry verified repository access and workflow scope.
+No unrelated credential search or application secret was introduced.
+
+Published branch: `codex/m1-hosted-validation`. Initial commit:
+`529625de20ee11d556f0bae3e467b9c221c9d4be`. An explicit 67-file allowlist included
+reviewed M1 work, canonical Markdown and redacted evidence. Staged common-secret,
+private-key, personal-path and binary/NUL scans passed. The reference PDF, private
+originals, environments, user keys/token caches and native binaries were excluded.
+Canonical Markdown hard-break whitespace and archived traceback whitespace were
+preserved; code diff checks passed with these records excluded. No merge/release.
+
+### Runs and minimal corrections
+
+| Run / exact tested commit | Actual result | Correction |
+|---|---|---|
+| [37127749711](https://github.com/uzx-02/QuMail/actions/runs/37127749711), `529625de20ee11d556f0bae3e467b9c221c9d4be` | Windows setup-python could not obtain 3.12.14; no tests ran. Ubuntu dependencies/native build passed, then collection failed with missing libEGL.so.1: one error, no tests executed. Later order steps were skipped by Actions. | Fresh managed-Python setup and explicit Linux Qt libraries. |
+| [37127932449](https://github.com/uzx-02/QuMail/actions/runs/37127932449), `8f9525c0691109ea53ee3854a9060c39866b32c3` | Both setups failed because uv 0.11.15's embedded catalog lacks Python 3.12.14. Dependency/native/test steps did not run. | Explicit CI-only uv 0.12.22 pin, after verifying its Python download catalog. |
+| [37128055379](https://github.com/uzx-02/QuMail/actions/runs/37128055379), **`023c941ec2ef284f6be28b5a9605f1dca9c28787`** | **Both jobs passed clean setup, hash install, consistency check, independent native builds, provider report and all three test orders.** | No application/test changes needed. |
+
+Workflow: [.github/workflows/m1.yml at tested SHA](https://github.com/uzx-02/QuMail/blob/023c941ec2ef284f6be28b5a9605f1dca9c28787/.github/workflows/m1.yml).
+Jobs: [Windows](https://github.com/uzx-02/QuMail/actions/runs/37128055379/job/111217345728),
+[Ubuntu](https://github.com/uzx-02/QuMail/actions/runs/37128055379/job/111217345547).
+Run JSON snapshots, failure excerpts and successful job command/output excerpts
+are retained in `evidence/hosted-*`. Full downloaded logs remain under ignored
+`tmp/hosted-*-run.log`. Published excerpts remove ANSI colors only, retaining
+native warnings and complete pytest results. No binary artifact was uploaded.
+
+### Exact environments and provider inputs
+
+| Input | Windows | Ubuntu |
+|---|---|---|
+| Runner/image | windows-2022; image 20260927.320.1; runner 2.337.0 | ubuntu-24.04; image 20260927.320.1; runner 2.337.0 |
+| Python | Managed CPython 3.12.14 x64, Sep 29 2026 build, MSC v.1944 | Managed CPython 3.12.14 x64, Sep 29 2026 build, Clang 22.1.3 |
+| Provisioning | uv 0.12.22, setup-uv commit 94527f2e458b27549849d47d273a16bec83a01e9; fresh venv/caches disabled | Same pinned inputs; independently provisioned |
+| Consistency | Checked 47 packages in 2ms; all installed packages compatible | Checked 46 packages in 1ms; all installed packages compatible |
+| Locked packages | cryptography 50.0.2, PyQt6 6.10.2, pytest 8.4.2; unchanged development lock | Same lock; Windows colorama marker explains count difference |
+| Native tools | CMake 3.31.6, Ninja 1.11.1.3 installed; Visual Studio 17 2022 x64 generator; MSVC 19.44.35229.0; SDK 10.0.26100.0 | CMake 3.31.6 / Ninja 1.11.1.3; GNU 13.3.0 |
+| Qt system prerequisites | Not applicable | libegl1 and libopengl0, each 1.7.0-1build1 |
+| OQS research pair | binding 0.16.0.1 / native 0.16.0 | binding 0.16.0.1 / native 0.16.0 |
+| Native SHA-256 | `f797a7483d13e134f0a8c76cb2c0afc93ba1ba43e556f31fea70597ff27192e3` | `43abe526be5a7a067c8e0e4d460bc354b7c0570be3bc2d685727f97c6dd0a2e6` |
+
+Each runner verified native source commit
+`5a1a854b0dc9f2141bdc771c555ee60c37950183` against the unchanged build manifest:
+shared/build-only library, ML-KEM-768 only, OpenSSL OFF, distribution build ON,
+Windows export-all-symbols TRUE; Linux also sets install libdir `lib`.
+Linux does not depend on any Windows binary or local filesystem path. Distinct
+hashes are expected for different compilers/platforms, not bit-reproducibility.
+
+### Commands and exact results at 023c941
+
+The pinned setup action creates and activates a fresh managed-Python venv.
+Commands below ran in both hosted checkouts except the Linux-only apt/dpkg step.
+Expanded prefix/generator values and native output are in the job excerpts.
+
+```powershell
+# Linux only:
+sudo apt-get update
+sudo apt-get install --no-install-recommends -y libegl1 libopengl0
+dpkg-query -W libegl1 libopengl0
+# Both:
+uv --version
+python -c "import platform, sys; print(platform.platform()); print(sys.version); assert sys.version_info[:3] == (3, 12, 14)"
+uv pip install --require-hashes -r packaging/requirements-dev.lock
+uv pip check
+git -C tmp/liboqs-src rev-parse HEAD
+# Verify source SHA; set the platform generator and runner-local prefix:
+cmake -S tmp/liboqs-src -B tmp/liboqs-build @generator "-DCMAKE_INSTALL_PREFIX=$prefix" @($manifest.cmake_flags)
+cmake --build tmp/liboqs-build --config Release --parallel 2
+cmake --install tmp/liboqs-build --config Release
+# OQS_INSTALL_PATH points to this runner's native install:
+python -m crypto.legacy_provider --research
+python -m pytest -q
+python -m pytest -q --test-order reverse
+python -m pytest -q --test-order 20261003
+```
+
+| Platform | Normal | Reverse | Seed 20261003 |
+|---|---|---|---|
+| Windows | 37 passed, 5 warnings in 3.25s | 37 passed, 5 warnings in 1.11s | 37 passed, 5 warnings in 1.14s |
+| Ubuntu | 37 passed, 5 warnings in 2.38s | 37 passed, 5 warnings in 0.66s | 37 passed, 5 warnings in 0.70s |
+
+Every invocation exited 0: **zero failed tests, errors, skips, xfails or xpasses**.
+That is 37 distinct tests repeated three times on each platform. Windows' Linux-
+only setup step is conditionally skipped by design; no required test is skipped.
+Five pytest warnings per invocation are the recorded legacy utcnow deprecations.
+
+Additional warnings: Windows liboqs emitted **42 repeated compiler warnings**
+that MSVC lacks the reviewed optimization barrier and may introduce non-constant-
+time behavior. Passing functional tests does not establish constant-time safety;
+assembly/side-channel review and production compiler/provider approval remain
+gated. Ubuntu emitted no corresponding native warning. Each job also emitted one
+notice that the pinned checkout action targets deprecated Node 20 and the runner
+forced Node 24. Both jobs succeeded; these notices are retained, not suppressed.
+
+Local focused check after the setup edit (configured local OQS):
+
+```powershell
+.venv-m1-clean\Scripts\python.exe -m pytest -q tests/test_ui_claims.py tests/test_legacy_provider.py tests/test_native_compatibility.py
+```
+
+**12 passed in 1.12s**, exit 0. YAML, matrix, immutable action references and
+read-only permissions also passed local static checks. Temporary uv 0.12.22
+confirmed both Python download targets before updating its CI pin. These local
+results are separate from hosted evidence. Application locks and tests unchanged.
+
+### Final M1 acceptance assessment
+
+| Criterion | Assessment | Evidence and limits |
+|---|---|---|
+| Clean installation on declared initial platform | satisfied | Local Windows and clean hosted Windows/Ubuntu hash installs. |
+| Exact dependency/native inputs and hashes | satisfied | Unchanged locks/source/flags; binding digest, toolchain/image/package versions and independent native hashes recorded. Bit-identical release builds not claimed. |
+| Deterministic existing tests and isolated state | satisfied | All 37 tests pass in all three orders on both platforms; Windows/POSIX permission branches exercised. |
+| Mandatory crypto/no false green skips | satisfied | Native tests executed, zero pytest skips; local missing-native/skip-gate negative evidence preserved. |
+| F07/F10 characterization | satisfied | Unsafe send ordering and memory fallback recorded without redesign. |
+| Hosted Windows/Ubuntu evidence | satisfied | Successful run 37128055379 at exact commit 023c941; independent native builds. |
+| Truthful claims/support and simulator boundary | satisfied | Docs now reflect tested platforms; no production/QKD/ITS claim; startup and UI tests pass. |
+| Advisory/license triage | satisfied at M1 scope | Decisions and residual MSVC warning recorded; no license or cryptographic production qualification inferred. |
+| No secret leakage/unexpected native install | satisfied within baseline evidence | Reviewed staged list and bounded scans; no app secrets/uploads; explicit build and tested runtime no-install guard. Not universal security certification. |
+| Preserve legacy data/migration boundaries | satisfied | No wire/key/storage migration; original evidence/user data retained; PDF and binaries excluded. |
+| Original 0.14.1 artifact/historical fixtures | deferred from M1; compatibility gate blocked | §54 explicitly allows the research pair or unavailable legacy lane; ADR 002 leaves original reproduction/historical compatibility unverified. |
+| Independent interoperability, licensing/distribution, release | deferred; existing gates retained | §§17, 54 and 58; ADR 002. No M2 proof, license choice, installer/binary distribution or production approval. |
+
+**M1 COMPLETE at research-baseline scope**, for the validated implementation above.
+F01–F19 remain tracked open; test success does not close them. No M2 work, merge,
+release or deployment occurred. A later documentation commit does not inherit
+this run's results: any later reported run must name its own SHA. The next bounded
+task is reviewing the M1 branch and evidence before separately authorizing M2.

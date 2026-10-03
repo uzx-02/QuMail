@@ -1,0 +1,8 @@
+regression (ubuntu-24.04)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:13.1212227Z   version: 0.11.15
+regression (ubuntu-24.04)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:14.2529275Z error: No interpreter found for Python 3.12.14 in managed installations
+regression (ubuntu-24.04)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:14.2530592Z hint: uv embeds available Python downloads and may require an update to install new versions. Consider retrying on a newer version of uv.
+regression (ubuntu-24.04)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:14.2566643Z ##[error]The process '/opt/hostedtoolcache/uv/0.11.15/x86_64/uv' failed with exit code 2
+regression (windows-2022)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:20.0464411Z   version: 0.11.15
+regression (windows-2022)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:21.5873016Z error: No interpreter found for Python 3.12.14 in managed installations
+regression (windows-2022)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:21.5874142Z hint: uv embeds available Python downloads and may require an update to install new versions. Consider retrying on a newer version of uv.
+regression (windows-2022)	Run astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9	2026-10-03T13:57:21.5929901Z ##[error]The process 'C:\hostedtoolcache\windows\uv\0.11.15\x86_64\uv.exe' failed with exit code 2

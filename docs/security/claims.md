@@ -13,7 +13,7 @@ Read the canonical Markdown specification for full F01–F19 findings. Tests mar
 | Secure credential/key storage | Not established (F08/F09/F18). POSIX chmod tests do not prove Windows ACLs; local wrapping key, account binding and path/persistence defects remain. |
 | Private metadata / authentic certificate | Not established (F16). Header metadata is visible; recipient hashes are guessable; JSON/PDF is unsigned. Labels corrected, fields preserved. |
 | Native crypto available | Only explicit research pair, native hash and passing tests substantiate availability. Original pin blocked (F17); no FIPS-validation claim. |
-| Reproducible green suite | M1 tests isolate limiter/state, reject skips and run with multiple orders (F19). Hosted CI is configured, not yet verified. |
+| Reproducible green suite | M1 tests isolate limiter/state, reject skips and run with multiple orders (F19). Hosted Windows/Ubuntu run 37128055379 passed at exact commit `023c941`, 37 tests in each order; this is baseline research evidence, not release assurance. |
 
 F12 capability logging, F13 resource limits, F14 endpoint/local TLS defects and
 F15 MIME/rendering/worker issues remain open. The duplicate-control characterization

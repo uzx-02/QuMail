@@ -1,0 +1,519 @@
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	﻿2026-10-03T13:59:28.3331341Z ##[group]Run sudo apt-get update
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3331757Z ^[[36;1msudo apt-get update^[[0m
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3332085Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3332550Z ^[[36;1msudo apt-get install --no-install-recommends -y libegl1 libopengl0^[[0m
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3332987Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3333688Z ^[[36;1mdpkg-query -W libegl1 libopengl0^[[0m
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3366067Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3366393Z env:
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3366604Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3366866Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3367135Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3367452Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3367794Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3368054Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:28.3368390Z ##[endgroup]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:30.9983677Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.0241855Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.0242833Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.0265199Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.0303693Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.0341856Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.1504142Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.6 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.1607875Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [458 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.1697195Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [511 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2074293Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1364 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2154212Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [304 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2179916Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [181 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2204065Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1699 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2294585Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [341 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2322363Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2337810Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1720 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2421963Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [394 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2451319Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.2687109Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5736 B]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3196175Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3215280Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1069 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3273943Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [221 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3292630Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.5 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3306932Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1216 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3378802Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [244 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3400130Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3416222Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1566 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:31.3490764Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [361 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:36.3380479Z Fetched 12.6 MB in 1s (9348 kB/s)
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.1778211Z Reading package lists...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.2324159Z Reading package lists...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.4157546Z Building dependency tree...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.4164924Z Reading state information...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5626524Z The following additional packages will be installed:
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5631128Z   libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5797840Z The following NEW packages will be installed:
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5802621Z   libegl-mesa0 libegl1 libopengl0
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5806907Z The following packages will be upgraded:
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5811305Z   libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5968351Z 4 upgraded, 3 newly installed, 0 to remove and 21 not upgraded.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5968817Z Need to get 11.1 MB of archives.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5969448Z After this operation, 726 kB of additional disk space will be used.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.5970090Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.6749213Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgl1-mesa-dri amd64 25.2.8-0ubuntu0.24.04.4 [38.0 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.7397022Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglx-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [110 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:37.8674343Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgbm1 amd64 25.2.8-0ubuntu0.24.04.4 [34.2 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:38.0214561Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 mesa-libgallium amd64 25.2.8-0ubuntu0.24.04.4 [10.8 MB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:38.6750852Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libegl-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [117 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:38.7439276Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libegl1 amd64 1.7.0-1build1 [28.7 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:38.8084691Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 libopengl0 amd64 1.7.0-1build1 [32.8 kB]
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.0553807Z Fetched 11.1 MB in 1s (9120 kB/s)
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1124820Z (Reading database ... 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1125615Z (Reading database ... 5%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1126137Z (Reading database ... 10%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1126639Z (Reading database ... 15%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1127118Z (Reading database ... 20%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1127451Z (Reading database ... 25%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1127743Z (Reading database ... 30%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1128118Z (Reading database ... 35%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1128625Z (Reading database ... 40%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1129128Z (Reading database ... 45%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1129639Z (Reading database ... 50%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.1174085Z (Reading database ... 55%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.2338255Z (Reading database ... 60%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.3817379Z (Reading database ... 65%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.5865667Z (Reading database ... 70%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.7515487Z (Reading database ... 75%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:39.9288489Z (Reading database ... 80%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.1366833Z (Reading database ... 85%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.3439245Z (Reading database ... 90%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.4539608Z (Reading database ... 95%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.4540101Z (Reading database ... 100%
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.4540639Z (Reading database ... 202296 files and directories currently installed.)
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.4582216Z Preparing to unpack .../0-libgl1-mesa-dri_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.4747907Z Unpacking libgl1-mesa-dri:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.5289852Z Preparing to unpack .../1-libglx-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.5328171Z Unpacking libglx-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.5697070Z Preparing to unpack .../2-libgbm1_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.5721482Z Unpacking libgbm1:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.6094360Z Preparing to unpack .../3-mesa-libgallium_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.6117800Z Unpacking mesa-libgallium:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.7790025Z Selecting previously unselected package libegl-mesa0:amd64.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.7915094Z Preparing to unpack .../4-libegl-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.7924175Z Unpacking libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8143866Z Selecting previously unselected package libegl1:amd64.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8268320Z Preparing to unpack .../5-libegl1_1.7.0-1build1_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8275495Z Unpacking libegl1:amd64 (1.7.0-1build1) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8488367Z Selecting previously unselected package libopengl0:amd64.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8611491Z Preparing to unpack .../6-libopengl0_1.7.0-1build1_amd64.deb ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.8620266Z Unpacking libopengl0:amd64 (1.7.0-1build1) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9003357Z Setting up mesa-libgallium:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9025783Z Setting up libgbm1:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9046005Z Setting up libgl1-mesa-dri:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9119574Z Setting up libopengl0:amd64 (1.7.0-1build1) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9141503Z Setting up libegl-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9161625Z Setting up libegl1:amd64 (1.7.0-1build1) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9182674Z Setting up libglx-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:40.9206485Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5738847Z 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5739514Z Running kernel seems to be up-to-date.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5739938Z 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5740108Z No services need to be restarted.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5740419Z 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5740590Z No containers need to be restarted.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5740895Z 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5741100Z No user sessions are running outdated binaries.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5741451Z 
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:41.5741780Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:42.5059720Z libegl1:amd64	1.7.0-1build1
+regression (ubuntu-24.04)	Install Linux Qt system dependencies	2026-10-03T13:59:42.5060251Z libopengl0:amd64	1.7.0-1build1
+regression (ubuntu-24.04)	Report runtime inputs	﻿2026-10-03T13:59:44.1151888Z ##[group]Run uv --version
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1152225Z ^[[36;1muv --version^[[0m
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1152767Z ^[[36;1mpython -c "import platform, sys; print(platform.platform()); print(sys.version); assert sys.version_info[:3] == (3, 12, 14)"^[[0m
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1177975Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1178273Z env:
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1178472Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1178711Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1178933Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1179241Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1179571Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1179818Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.1180110Z ##[endgroup]
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.2873411Z uv 0.12.22 (x86_64-unknown-linux-gnu)
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.3900363Z Linux-6.17.0-1022-azure-x86_64-with-glibc2.39
+regression (ubuntu-24.04)	Report runtime inputs	2026-10-03T13:59:44.3901053Z 3.12.14 (main, Sep 29 2026, 15:01:18) [Clang 22.1.3 ]
+regression (ubuntu-24.04)	Install hash-locked research dependencies	﻿2026-10-03T13:59:44.9756821Z ##[group]Run uv pip install --require-hashes -r packaging/requirements-dev.lock
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9757454Z ^[[36;1muv pip install --require-hashes -r packaging/requirements-dev.lock^[[0m
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9781960Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9782247Z env:
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9782447Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9782688Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9782903Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9783873Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9784286Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9784550Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:44.9784847Z ##[endgroup]
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4110070Z Resolved 46 packages in 200ms
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4230822Z Downloading pygments (1.2MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4280414Z Downloading cmake (26.5MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4281954Z Downloading pyqt6-qt6 (80.1MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4290242Z Downloading grpcio (6.8MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4299473Z Downloading cryptography (4.5MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4303632Z Downloading pillow (6.6MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4305826Z Downloading fonttools (5.1MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.4308026Z Downloading pyqt6 (36.1MiB)
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.5466234Z  Downloaded pygments
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.6198437Z  Downloaded cryptography
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.6199308Z  Downloaded fonttools
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.6320161Z  Downloaded pillow
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.6363840Z  Downloaded grpcio
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:45.8357008Z  Downloaded pyqt6
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.0128783Z  Downloaded cmake
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.3519727Z  Downloaded pyqt6-qt6
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.3521995Z Prepared 46 packages in 940ms
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4457067Z Installed 46 packages in 93ms
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4457602Z  + blinker==1.9.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4457978Z  + certifi==2026.7.22
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4458336Z  + cffi==2.1.1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4458688Z  + charset-normalizer==3.5.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4459082Z  + click==8.5.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4459408Z  + cmake==3.31.6
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4459796Z  + cryptography==50.0.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4460174Z  + defusedxml==0.7.1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4460520Z  + flask==3.1.3
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4461717Z  + fonttools==4.66.1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4462067Z  + fpdf2==2.8.4
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4462451Z  + google-api-core==2.40.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4462906Z  + google-auth==2.49.1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4463684Z  + google-auth-oauthlib==1.3.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4464128Z  + google-cloud-core==2.8.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4464566Z  + google-cloud-firestore==2.20.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4465038Z  + googleapis-common-protos==1.75.5
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4465490Z  + grpcio==1.84.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4465850Z  + grpcio-status==1.84.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4466229Z  + idna==3.20
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4466563Z  + iniconfig==2.3.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4466934Z  + itsdangerous==2.2.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4467299Z  + jinja2==3.1.6
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4467661Z  + liboqs-python==0.16.0.1
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4468060Z  + markupsafe==3.0.4
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4468418Z  + ninja==1.11.1.3
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4468774Z  + oauthlib==4.0.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4469141Z  + opentelemetry-api==1.45.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4469553Z  + packaging==26.3
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4469897Z  + pillow==12.3.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4470252Z  + pluggy==1.6.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4470618Z  + proto-plus==1.29.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4514622Z  + protobuf==6.33.6
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4515327Z  + pyasn1==0.6.4
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4515703Z  + pyasn1-modules==0.4.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4516128Z  + pycparser==3.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4516470Z  + pygments==2.21.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4516842Z  + pyqt6==6.10.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4517175Z  + pyqt6-qt6==6.10.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4517520Z  + pyqt6-sip==13.12.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4517856Z  + pytest==8.4.2
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4518175Z  + requests==2.33.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4518528Z  + requests-oauthlib==2.0.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4518946Z  + typing-extensions==4.16.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4519346Z  + urllib3==2.8.0
+regression (ubuntu-24.04)	Install hash-locked research dependencies	2026-10-03T13:59:46.4519671Z  + werkzeug==3.1.9
+regression (ubuntu-24.04)	Check dependency consistency	﻿2026-10-03T13:59:47.0907161Z ##[group]Run uv pip check
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0907452Z ^[[36;1muv pip check^[[0m
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0931939Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0932230Z env:
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0932431Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0932680Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0932888Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0933540Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0934073Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0934325Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.0934625Z ##[endgroup]
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.2594027Z Checked 46 packages in 1ms
+regression (ubuntu-24.04)	Check dependency consistency	2026-10-03T13:59:47.2610860Z All installed packages are compatible
+regression (ubuntu-24.04)	Build explicit native research inputs	﻿2026-10-03T13:59:50.0546157Z ##[group]Run $manifest = Get-Content packaging/native-research.json | ConvertFrom-Json
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0546841Z ^[[36;1m$manifest = Get-Content packaging/native-research.json | ConvertFrom-Json^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0547321Z ^[[36;1m$revision = git -C tmp/liboqs-src rev-parse HEAD^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0547781Z ^[[36;1mif ($revision -ne $manifest.commit) { throw 'Unexpected native source commit' }^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0548325Z ^[[36;1m$prefix = Join-Path $env:GITHUB_WORKSPACE 'tmp/oqs-install'^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0548948Z ^[[36;1m$generator = if ($IsWindows) { @('-G', 'Visual Studio 17 2022', '-A', 'x64') } else { @('-G', 'Ninja', '-DCMAKE_INSTALL_LIBDIR=lib') }^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0549766Z ^[[36;1mcmake -S tmp/liboqs-src -B tmp/liboqs-build @generator "-DCMAKE_INSTALL_PREFIX=$prefix" @($manifest.cmake_flags)^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0550341Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0550741Z ^[[36;1mcmake --build tmp/liboqs-build --config Release --parallel 2^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0551170Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0551521Z ^[[36;1mcmake --install tmp/liboqs-build --config Release^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0551863Z ^[[36;1mif ($LASTEXITCODE) { exit $LASTEXITCODE }^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0552186Z ^[[36;1m"OQS_INSTALL_PATH=$prefix" >> $env:GITHUB_ENV^[[0m
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0576909Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0577195Z env:
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0577384Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0577621Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0577828Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0578168Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0578507Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0578753Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:50.0579043Z ##[endgroup]
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.4527338Z -- The C compiler identification is GNU 13.3.0
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.4632262Z -- The ASM compiler identification is GNU
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.4649639Z -- Found assembler: /usr/bin/cc
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.4703518Z -- Detecting C compiler ABI info
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5526977Z -- Detecting C compiler ABI info - done
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5686833Z -- Check for working C compiler: /usr/bin/cc - skipped
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5690300Z -- Detecting C compile features
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5695531Z -- Detecting C compile features - done
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5802164Z -- OQS Testing: Pytest parallel workers set to 'auto'
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5803265Z -- CMAKE_BUILD_TYPE=Release
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.5823346Z -- Performing Test CC_SUPPORTS_WA_NOEXECSTACK
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.6296788Z -- Performing Test CC_SUPPORTS_WA_NOEXECSTACK - Success
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.6310643Z -- Performing Test LD_SUPPORTS_WL_Z_NOEXECSTACK
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.6770748Z -- Performing Test LD_SUPPORTS_WL_Z_NOEXECSTACK - Success
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.6780177Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.7484114Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.7493771Z -- Found Threads: TRUE
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.7874277Z -- Algorithms filtered for KEM_ml_kem_768
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.8145679Z -- Looking for getentropy
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.8686155Z -- Looking for getentropy - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.8688302Z -- Looking for getentropy
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.9282644Z -- Looking for getentropy - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.9285963Z -- Looking for aligned_alloc
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.9880377Z -- Looking for aligned_alloc - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:51.9882664Z -- Looking for posix_memalign
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.0413721Z -- Looking for posix_memalign - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.0415701Z -- Looking for memalign
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.0963327Z -- Looking for memalign - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.0965794Z -- Looking for explicit_bzero
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.1488856Z -- Looking for explicit_bzero - found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.1491249Z -- Looking for explicit_memset
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.1770075Z -- Looking for explicit_memset - not found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.1772694Z -- Looking for memset_s
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.2046393Z -- Looking for memset_s - not found
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.2228331Z -- Configuring done (0.9s)
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.2456437Z -- Generating done (0.0s)
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.2462578Z -- Build files have been written to: /home/runner/work/QuMail/QuMail/tmp/liboqs-build
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.4361025Z [1/88] Building C object src/CMakeFiles/oqs.dir/sig/sig.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.4488049Z [2/88] Building C object src/CMakeFiles/oqs.dir/kem/kem.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.5177129Z [3/88] Building C object src/CMakeFiles/oqs.dir/sig_stfl/sig_stfl.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.5357215Z [4/88] Building C object src/common/CMakeFiles/common.dir/aes/aes_impl.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.6385153Z [5/88] Building C object src/common/CMakeFiles/common.dir/aes/aes128_ni.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.7325971Z [6/88] Building C object src/common/CMakeFiles/common.dir/aes/aes256_ni.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.7742038Z [7/88] Building C object src/common/CMakeFiles/common.dir/aes/aes.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.8107971Z [8/88] Building C object src/common/CMakeFiles/common.dir/sha2/sha2_impl.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.8711181Z [9/88] Building C object src/common/CMakeFiles/common.dir/aes/aes_c.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:52.9220321Z [10/88] Building C object src/common/CMakeFiles/common.dir/sha2/sha2.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.0476336Z [11/88] Building C object src/common/CMakeFiles/common.dir/sha3/xkcp_sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.1316255Z [12/88] Building C object src/common/CMakeFiles/common.dir/sha3/xkcp_sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.1797162Z [13/88] Building C object src/common/CMakeFiles/common.dir/sha3/avx512vl_sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.2154208Z [14/88] Building C object src/common/CMakeFiles/common.dir/sha3/avx512vl_sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.2728259Z [15/88] Building C object src/common/CMakeFiles/common.dir/sha3/sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.3137105Z [16/88] Building C object src/common/CMakeFiles/common.dir/sha3/sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.3789526Z [17/88] Building C object src/common/CMakeFiles/common.dir/common.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.4057019Z [18/88] Building C object src/common/CMakeFiles/common.dir/pqclean_shims/fips202.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.7076622Z [19/88] Building C object src/common/CMakeFiles/common.dir/sha2/sha2_c.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.7355682Z [20/88] Building C object src/common/CMakeFiles/common.dir/pqclean_shims/fips202x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.7479383Z [21/88] Building C object src/common/CMakeFiles/common.dir/rand/rand.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.7909590Z [22/88] Building C object src/common/CMakeFiles/internal.dir/aes/aes_impl.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.8779814Z [23/88] Building C object src/common/CMakeFiles/internal.dir/aes/aes128_ni.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:53.9715230Z [24/88] Building C object src/common/CMakeFiles/internal.dir/aes/aes256_ni.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.0121362Z [25/88] Building C object src/common/CMakeFiles/internal.dir/aes/aes.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.0484902Z [26/88] Building C object src/common/CMakeFiles/internal.dir/sha2/sha2_impl.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.0858454Z [27/88] Building C object src/common/CMakeFiles/internal.dir/aes/aes_c.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.1272409Z [28/88] Building C object src/common/CMakeFiles/internal.dir/sha2/sha2.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.2455560Z [29/88] Building C object src/common/CMakeFiles/internal.dir/sha3/xkcp_sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.3295949Z [30/88] Building C object src/common/CMakeFiles/internal.dir/sha3/xkcp_sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.3785005Z [31/88] Building C object src/common/CMakeFiles/internal.dir/sha3/avx512vl_sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.4149153Z [32/88] Building C object src/common/CMakeFiles/internal.dir/sha3/avx512vl_sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.4721672Z [33/88] Building C object src/common/CMakeFiles/internal.dir/sha3/sha3.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.5143843Z [34/88] Building C object src/common/CMakeFiles/internal.dir/sha3/sha3x4.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.5758568Z [35/88] Building C object src/common/CMakeFiles/internal.dir/common.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.6366264Z [36/88] Building C object src/common/CMakeFiles/internal.dir/rand/rand_nist.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.9166837Z [37/88] Building C object src/common/CMakeFiles/internal.dir/sha2/sha2_c.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.9610628Z [38/88] Building C object src/common/sha3/xkcp_low/CMakeFiles/xkcp_low_keccakp_1600times4_serial.dir/KeccakP-1600times4/serial/KeccakP-1600-times4-on1.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:54.9711109Z [39/88] Building ASM object src/common/sha3/xkcp_low/CMakeFiles/xkcp_low_keccakp_1600_avx2.dir/KeccakP-1600/avx2/KeccakP-1600-AVX2.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.3537828Z [40/88] Building C object src/common/sha3/xkcp_low/CMakeFiles/xkcp_low_keccakp_1600_plain64.dir/KeccakP-1600/plain-64bits/KeccakP-1600-opt64.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.3627181Z [41/88] Building ASM object src/common/sha3/avx512vl_low/CMakeFiles/sha3_avx512vl_low.dir/KeccakP-1600-AVX512VL.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.3734459Z [42/88] Building ASM object src/common/sha3/avx512vl_low/CMakeFiles/sha3_avx512vl_low.dir/SHA3-AVX512VL.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.3821423Z [43/88] Building ASM object src/common/sha3/avx512vl_low/CMakeFiles/sha3_avx512vl_low.dir/KeccakP-1600-times4-AVX512VL.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.3926073Z [44/88] Building ASM object src/common/sha3/avx512vl_low/CMakeFiles/sha3_avx512vl_low.dir/SHA3-times4-AVX512VL.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.4336830Z [45/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/kem_ml_kem_768.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.5922819Z [46/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/compress.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.6110717Z [47/88] Building C object src/common/sha3/xkcp_low/CMakeFiles/xkcp_low_keccakp_1600times4_avx2.dir/KeccakP-1600times4/avx2/KeccakP-1600-times4-SIMD256.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.6142059Z [48/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/debug.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:57.9658944Z [49/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/indcpa.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.2994305Z [50/88] Linking C static library lib/liboqs-internal.a
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.3479292Z [51/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/kem.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.7044568Z [52/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/poly_k.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.7367456Z [53/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/poly.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.7599827Z [54/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/verify.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.8464588Z [55/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/compress.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:58.8704483Z [56/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/debug.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.1036833Z [57/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_ref.dir/mlkem-native_ml-kem-768_ref/mlkem/src/sampling.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2089145Z [58/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/indcpa.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2339673Z [59/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/compress_consts.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2590042Z [60/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/consts.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2694724Z [61/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/intt_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2791031Z [62/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/ntt_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2880990Z [63/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/nttfrombytes_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.2975805Z [64/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/ntttobytes_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3069173Z [65/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/nttunpack_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3160789Z [66/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_compress_d10_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3246038Z [67/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_compress_d11_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3331582Z [68/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_compress_d4_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3414575Z [69/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_compress_d5_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3500925Z [70/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_decompress_d10_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3584518Z [71/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_decompress_d11_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3667900Z [72/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_decompress_d4_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3749369Z [73/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_decompress_d5_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3831564Z [74/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/poly_mulcache_compute_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.3914224Z [75/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/polyvec_basemul_acc_montgomery_cached_k2_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4011123Z [76/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/polyvec_basemul_acc_montgomery_cached_k3_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4099373Z [77/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/polyvec_basemul_acc_montgomery_cached_k4_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4185176Z [78/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/reduce_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4269120Z [79/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/rej_uniform_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4494572Z [80/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/kem.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4538007Z [81/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/rej_uniform_table.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.4584318Z [82/88] Building ASM object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/native/x86_64/src/tomont_avx2_asm.S.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.7694155Z [83/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/poly.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.7738443Z [84/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/poly_k.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T13:59:59.7973317Z [85/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/verify.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.1411829Z [86/88] Building C object src/kem/ml_kem/CMakeFiles/ml_kem_768_x86_64.dir/mlkem-native_ml-kem-768_x86_64/mlkem/src/sampling.c.o
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.1731209Z [87/88] Linking C shared library lib/liboqs.so.0.16.0
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.1760485Z [88/88] Creating library symlink lib/liboqs.so.9 lib/liboqs.so
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2906774Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsConfig.cmake
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2908279Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsConfigVersion.cmake
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2910557Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/pkgconfig/liboqs.pc
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2969055Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/liboqs.so.0.16.0
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2974090Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/liboqs.so.9
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2975095Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/liboqs.so
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2976163Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsTargets.cmake
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2977467Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/lib/cmake/liboqs/liboqsTargets-release.cmake
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2978558Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/oqs.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2979464Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/aes_ops.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2980401Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/common.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2981231Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/rand.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2981776Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/sha2_ops.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2982362Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/sha3_ops.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2982955Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/sha3x4_ops.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2984255Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/kem.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2985116Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/sig.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2985689Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/sig_stfl.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2986243Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/kem_ml_kem.h
+regression (ubuntu-24.04)	Build explicit native research inputs	2026-10-03T14:00:00.2986796Z -- Installing: /home/runner/work/QuMail/QuMail/tmp/oqs-install/include/oqs/oqsconfig.h
+regression (ubuntu-24.04)	Report available research provider and native hash	﻿2026-10-03T14:00:00.3464040Z ##[group]Run python -m crypto.legacy_provider --research
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3464522Z ^[[36;1mpython -m crypto.legacy_provider --research^[[0m
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3489022Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3489315Z env:
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3489514Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3489763Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3489969Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3490271Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3490605Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3490878Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3491469Z   OQS_INSTALL_PATH: /home/runner/work/QuMail/QuMail/tmp/oqs-install
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.3491834Z ##[endgroup]
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6307684Z liboqs-python faulthandler is disabled
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6566915Z {
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6567356Z   "original_binding": "0.14.1",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6568032Z   "original_status": "blocked: unavailable from PyPI at M1 verification; no live lookup performed",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6568667Z   "historical_ciphertext_compatibility": "unverified",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6569003Z   "production_approved": false,
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6569270Z   "research_status": "available",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6569523Z   "binding": "0.16.0.1",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6569751Z   "native": "0.16.0",
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6570121Z   "native_sha256": "43abe526be5a7a067c8e0e4d460bc354b7c0570be3bc2d685727f97c6dd0a2e6"
+regression (ubuntu-24.04)	Report available research provider and native hash	2026-10-03T14:00:00.6570528Z }
+regression (ubuntu-24.04)	Complete regression	﻿2026-10-03T14:00:01.3117016Z ##[group]Run python -m pytest -q
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3117589Z ^[[36;1mpython -m pytest -q^[[0m
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3154002Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3154488Z env:
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3154824Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3155248Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3155616Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3156174Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3156781Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3157284Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3157888Z   OQS_INSTALL_PATH: /home/runner/work/QuMail/QuMail/tmp/oqs-install
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:01.3158270Z ##[endgroup]
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3737801Z .....................................                                    [100%]
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3738612Z =============================== warnings summary ===============================
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3739272Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3741025Z   /home/runner/work/QuMail/QuMail/certificates/cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3742651Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3743318Z 
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3743806Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3745479Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3746947Z     .not_valid_before(_dt.datetime.utcnow())
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3747205Z 
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3747500Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3748834Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3750059Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3750342Z 
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3750534Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3751145Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3752496Z   /home/runner/work/QuMail/QuMail/kme/virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3753884Z     issued_at= datetime.utcnow().isoformat(),
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3754111Z 
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3754660Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (ubuntu-24.04)	Complete regression	2026-10-03T14:00:04.3755077Z 37 passed, 5 warnings in 2.38s
+regression (ubuntu-24.04)	Complete regression in reverse order	﻿2026-10-03T14:00:05.1082756Z ##[group]Run python -m pytest -q --test-order reverse
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1083506Z ^[[36;1mpython -m pytest -q --test-order reverse^[[0m
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1109101Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1109385Z env:
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1109581Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1109825Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1110039Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1110343Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1110684Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1110941Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1111333Z   OQS_INSTALL_PATH: /home/runner/work/QuMail/QuMail/tmp/oqs-install
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:05.1111686Z ##[endgroup]
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1917667Z .....................................                                    [100%]
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1918635Z =============================== warnings summary ===============================
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1919515Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1920380Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1921901Z   /home/runner/work/QuMail/QuMail/kme/virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1923370Z     issued_at= datetime.utcnow().isoformat(),
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1923664Z 
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1923939Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1925248Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1926408Z     .not_valid_before(_dt.datetime.utcnow())
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1926620Z 
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1926880Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1928172Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1929378Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1929660Z 
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1929886Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1931176Z   /home/runner/work/QuMail/QuMail/certificates/cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1932460Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1932734Z 
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1932948Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (ubuntu-24.04)	Complete regression in reverse order	2026-10-03T14:00:06.1933688Z 37 passed, 5 warnings in 0.66s
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	﻿2026-10-03T14:00:06.9325530Z ##[group]Run python -m pytest -q --test-order 20261003
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9325974Z ^[[36;1mpython -m pytest -q --test-order 20261003^[[0m
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9350912Z shell: /usr/bin/pwsh -command ". '{0}'"
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9351195Z env:
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9351396Z   QT_QPA_PLATFORM: offscreen
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9351640Z   PYTHONUTF8: 1
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9351849Z   UV_MANAGED_PYTHON: true
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9352158Z   UV_PYTHON_INSTALL_DIR: /home/runner/work/_temp/uv-python-dir
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9352498Z   UV_PYTHON: 3.12.14
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9352923Z   VIRTUAL_ENV: /home/runner/work/QuMail/QuMail/.venv
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9353616Z   OQS_INSTALL_PATH: /home/runner/work/QuMail/QuMail/tmp/oqs-install
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:06.9353975Z ##[endgroup]
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0157268Z .....................................                                    [100%]
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0158539Z =============================== warnings summary ===============================
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0159640Z tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0160565Z tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0162207Z   /home/runner/work/QuMail/QuMail/kme/virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0164153Z     issued_at= datetime.utcnow().isoformat(),
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0164474Z 
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0164831Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0166500Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0167763Z     .not_valid_before(_dt.datetime.utcnow())
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0167989Z 
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0168269Z tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0169668Z   /home/runner/work/QuMail/QuMail/portal/portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0170967Z     .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0171277Z 
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0171515Z tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0172916Z   /home/runner/work/QuMail/QuMail/certificates/cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0174543Z     return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0174865Z 
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0175109Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+regression (ubuntu-24.04)	Complete regression with fixed shuffled order	2026-10-03T14:00:08.0175556Z 37 passed, 5 warnings in 0.70s
+regression (ubuntu-24.04)	Complete job	2026-10-03T14:00:09.3200840Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11d5960a326750d5838078e36cf38b85af677262. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

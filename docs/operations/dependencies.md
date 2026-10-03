@@ -7,8 +7,8 @@ the root Markdown audit specification §54. No production platform is supported.
 |---|---|
 | Original Level 3 | `liboqs-python==0.14.1` is unavailable from PyPI. Preserved in `packaging/requirements-original-provider.txt`. BLOCKED, not replaced as an exact-reproduction claim. |
 | Windows local research | CPython 3.12.14 x64; hash-locked development dependencies; binding 0.16.0.1 / native 0.16.0. Local validation is recorded in `m1-validation.md`. |
-| Windows hosted CI | Windows 2022 / Visual Studio 2022 configuration exists. No hosted execution verified. This differs from the locally validated MinGW compiler. |
-| Linux hosted CI | Ubuntu 24.04 / Ninja configuration exists. No Linux execution verified. |
+| Windows hosted CI | Passed at `023c941`: Windows 2022, CPython 3.12.14, MSVC 19.44.35229.0; 47 consistent packages, 37 tests in all three orders. Different native build from local MinGW. |
+| Linux hosted CI | Passed at `023c941`: Ubuntu 24.04, CPython 3.12.14, GNU 13.3.0/Ninja; 46 consistent packages, 37 tests in all three orders. Native library built independently on Linux. |
 | Other platforms / historical ciphertext | Unvalidated; do not infer compatibility from same-provider round trips. No historical 0.14.1 ciphertext fixture or native binary was supplied. |
 | Gmail / Yahoo / Firestore | Adapter/fixture tests only. No real mailbox, OAuth, cloud deployment or transaction integration was exercised. |
 | Real QKD / ETSI | Not implemented. Custom unauthenticated CSPRNG simulator only. |
@@ -18,6 +18,13 @@ OQS and Firestore. The development lock adds their explicitly research/legacy
 test dependencies and native build tools. Install with `--require-hashes`; the
 locks constrain transitive versions and accepted distribution hashes. They are
 universal Python 3.12 inputs, not a claim that all wheel platforms were tested.
+Hosted environments use pinned uv 0.12.22 and a pinned setup-uv action, with
+managed Python and caches disabled. Ubuntu additionally installs `libegl1` and
+`libopengl0` (observed 1.7.0-1build1). Local lock-generation evidence remains uv
+0.11.15. Exact run/job links, hashes, warnings and commands are in `m1-validation.md`.
+The hosted MSVC build warns that its optimization barrier is unsupported and
+generated code may be non-constant-time. This lane is functional research only;
+side-channel/assembly qualification remains part of production-provider review.
 
 ## Explicit availability reports
 

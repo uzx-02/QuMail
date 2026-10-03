@@ -8,7 +8,8 @@ Pinned native source, flags and wrapper digest: `packaging/native-research.json`
 Python wheels, CMake 3.31.6 and Ninja 1.11.1.3: development hash lock.
 Local Windows build used MSYS2 UCRT64 GCC 15.2.0 at `C:/msys64/ucrt64/bin/gcc.exe`.
 That compiler is an external prerequisite, not installed by QuMail. CI uses
-Visual Studio 2022 on Windows instead; that lane has not been executed here.
+Visual Studio 2022 on Windows instead; hosted MSVC and Linux builds both passed
+at `023c941`. Their independently generated hashes are in `m1-validation.md`.
 
 Run from the repository root after installing the development lock:
 

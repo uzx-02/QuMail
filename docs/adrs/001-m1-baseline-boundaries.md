@@ -55,5 +55,9 @@ all existing keys/messages. Never interpret rollback as production approval.
 Portable test success does not demonstrate native crypto, Gmail/Yahoo E2E,
 Windows ACL protection, real Firestore, ETSI conformance or release readiness.
 M2 follows only once the documented M1 exit criteria are met.
-Local regression is passing; hosted CI execution has not been verified. M1 is
-not marked complete while that requested evidence is missing.
+The initially missing hosted evidence is now satisfied at commit
+`023c941ec2ef284f6be28b5a9605f1dca9c28787`: run 37128055379 passed Windows and
+Ubuntu, all three orders, with 37 passed/five warnings/zero skips per invocation.
+M1 baseline completion does not close original-artifact compatibility, licensing,
+independent interoperability or production-provider/release gates. See the exact
+acceptance assessment and historical failures in the M1 validation report.

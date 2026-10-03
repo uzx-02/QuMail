@@ -63,5 +63,6 @@
       "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders",
       "additional_change": "Appended publication blocker, authentication steps and M1 acceptance assessment; original document retained locally."
     }
-  ]
+  ],
+  "published_sha256_scope": "Initial redacted publication snapshot in commit 529625de20ee11d556f0bae3e467b9c221c9d4be; later validation-document additions are separately committed."
 }

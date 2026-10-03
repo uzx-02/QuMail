@@ -1,0 +1,4 @@
+regression (windows-2022)	Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065	2026-10-03T13:54:07.4146740Z ##[error]The version '3.12.14' with architecture 'x64' was not found for Windows 2022.
+regression (ubuntu-24.04)	Complete regression	2026-10-03T13:54:21.5708702Z E   ImportError: libEGL.so.1: cannot open shared object file: No such file or directory
+regression (ubuntu-24.04)	Complete regression	2026-10-03T13:54:21.5710695Z 1 error in 0.48s
+regression (ubuntu-24.04)	Complete regression	2026-10-03T13:54:22.1321358Z ##[error]Process completed with exit code 1.
