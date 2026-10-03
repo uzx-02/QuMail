@@ -67,3 +67,16 @@ an isolated historical reader if required; never delete historical key material.
 
 Installed wheel contents and executed resolver results take precedence over
 cached web snippets. Exact platform/build evidence is in the M1 validation report.
+
+## Hosted setup correction (2026-10-03)
+
+Initial hosted commit `529625de20ee11d556f0bae3e467b9c221c9d4be` could not obtain
+Windows Python 3.12.14 through actions/setup-python. Use pinned setup-uv action
+`94527f2e458b27549849d47d273a16bec83a01e9` and uv 0.11.15 to provide managed
+CPython 3.12.14 in a fresh virtual environment on both platforms; caches are
+disabled. This explicitly changes runtime provisioning, not Python version or
+the OQS pair. Ubuntu's actual test collection failure identified missing
+`libEGL.so.1`; declare `libegl1` and `libopengl0` and record installed package
+versions in CI. These system packages come from the Ubuntu runner's repositories;
+byte-reproducible OS images remain a release gate. No runtime provider fallback,
+test skip or assertion weakening is introduced.
