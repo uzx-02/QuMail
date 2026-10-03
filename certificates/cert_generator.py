@@ -22,9 +22,9 @@ from core.config import APP_NAME, APP_VERSION, CERT_OUTPUT_DIR
 # Human-readable algorithm labels keyed by TQR level integer.
 # Used in the certificate and surfaced in the PDF by pdf_export.py.
 _ALGORITHM_LABELS: dict[int, str] = {
-    1: "One-Time Pad (QKD-delivered key)",
-    2: "AES-256-GCM (QKD-seeded key)",
-    3: "ML-KEM-768 + AES-256-GCM (FIPS 203)",
+    1: "Legacy XOR (simulator key; unauthenticated)",
+    2: "Legacy AES-256-GCM (simulator key)",
+    3: "Legacy ML-KEM-768 + AES-256-GCM",
 }
 
 
@@ -55,9 +55,7 @@ class EncryptionCertificate:
     key_id         : UUID of the QKD key used (Level 1 / 2). Empty string for Level 3.
     sender         : Sender's email address in plain text.
     recipient_hash : SHA-256 hex digest of the recipient's email address.
-                     The recipient's address is hashed rather than stored in
-                     plain text so certificates can be shared without disclosing
-                     communication partners.
+                     This is guessable for known addresses, not anonymization.
     """
     cert_id:        str
     app_name:       str

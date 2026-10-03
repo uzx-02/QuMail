@@ -1,0 +1,9 @@
+-r requirements.in
+pytest==8.4.2
+# Legacy portal characterization only; not a mandatory client backend.
+google-cloud-firestore==2.20.2
+# Research only. Import exclusively through crypto.legacy_provider.
+liboqs-python==0.16.0.1
+# Explicit native build tools, never installed by the application.
+cmake==3.31.6
+ninja==1.11.1.3

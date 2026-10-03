@@ -1,0 +1,52 @@
+..F..F                                                                   [100%]
+================================== FAILURES ===================================
+____________________ TestCrypto.test_level3_tqr_roundtrip _____________________
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\level3_mlkem.py:65: in generate_keypair
+    oqs = load_oqs()
+          ^^^^^^^^^^
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\legacy_provider.py:77: in load_oqs
+    raise LegacyProviderUnavailable("Set OQS_INSTALL_PATH to the absolute pinned native build directory.")
+E   crypto.legacy_provider.LegacyProviderUnavailable: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+
+The above exception was the direct cause of the following exception:
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\tqr.py:200: in encrypt
+    public_key, private_key = level3_mlkem.generate_keypair()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\level3_mlkem.py:71: in generate_keypair
+    raise MLKEMKeypairError(
+E   crypto.level3_mlkem.MLKEMKeypairError: ML-KEM-768 keypair generation failed: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+
+The above exception was the direct cause of the following exception:
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\test_crypto.py:41: in test_level3_tqr_roundtrip
+    result, private_key = tqr_encrypt(
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\tqr.py:213: in encrypt
+    raise TQREncryptionError(
+E   crypto.tqr.TQREncryptionError: TQR Level 3 encryption failed unexpectedly: ML-KEM-768 keypair generation failed: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+________________ TestTQRRoundtrip.test_level3_mlkem_roundtrip _________________
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\level3_mlkem.py:65: in generate_keypair
+    oqs = load_oqs()
+          ^^^^^^^^^^
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\legacy_provider.py:77: in load_oqs
+    raise LegacyProviderUnavailable("Set OQS_INSTALL_PATH to the absolute pinned native build directory.")
+E   crypto.legacy_provider.LegacyProviderUnavailable: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+
+The above exception was the direct cause of the following exception:
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\tqr.py:200: in encrypt
+    public_key, private_key = level3_mlkem.generate_keypair()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\level3_mlkem.py:71: in generate_keypair
+    raise MLKEMKeypairError(
+E   crypto.level3_mlkem.MLKEMKeypairError: ML-KEM-768 keypair generation failed: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+
+The above exception was the direct cause of the following exception:
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\test_tqr_roundtrip.py:86: in test_level3_mlkem_roundtrip
+    self._roundtrip(level=3)
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\test_tqr_roundtrip.py:48: in _roundtrip
+    result_dict, private_key = encrypt(
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\crypto\tqr.py:213: in encrypt
+    raise TQREncryptionError(
+E   crypto.tqr.TQREncryptionError: TQR Level 3 encryption failed unexpectedly: ML-KEM-768 keypair generation failed: Set OQS_INSTALL_PATH to the absolute pinned native build directory.
+=========================== short test summary info ===========================
+FAILED tests/test_crypto.py::TestCrypto::test_level3_tqr_roundtrip - crypto.t...
+FAILED tests/test_tqr_roundtrip.py::TestTQRRoundtrip::test_level3_mlkem_roundtrip
+2 failed, 4 passed in 0.44s

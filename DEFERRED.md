@@ -1,5 +1,24 @@
 # DEFERRED.md — Alternative Approaches & Future Suggestions
 
+## Current disposition (2026-10-03)
+
+The historical proposals below are superseded by the canonical Markdown audit
+§54 and Appendix C2, targeting the first proper QuMail 1.0, not “v2”. M1 only
+establishes reproducibility, truthful boundaries and characterization. See
+IMPLEMENTATION_STATUS.md for executed evidence and remaining gates.
+
+- The google-auth-oauthlib archival claim is stale; the audit records a maintained
+  successor. Provider identity/account binding still requires later work.
+- ML-KEM-768 is category 3 and ML-KEM-1024 category 5; the old categories below
+  are incorrect. Changing a constant is not a reviewed protocol upgrade.
+- Simulator bytes are CSPRNG output, not QKD; device rates require measured
+  hardware evidence. Production XOR/OTP is not approved.
+- Sender-owned private keys, server decryption, cloud-memory fallback, local
+  wrapping-key storage and SMTP-before-persistence remain known findings.
+- OpenPGP provider/profile proof is M2; vault/identity M3, durable send M4,
+  MIME/protocol M5, UI M6, optional relay/QKD M7 and release assurance M8.
+  None of these later milestones was started during M1.
+
 ## Log
 
 ### [2026-03-28] Replace google-auth-oauthlib in v2

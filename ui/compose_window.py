@@ -60,9 +60,9 @@ _C = {
 # ---------------------------------------------------------------------------
 
 _LEVEL_LABELS: dict[int, str] = {
-    TQR_LEVEL_OTP:   "Maximum",
-    TQR_LEVEL_AES:   "High",
-    TQR_LEVEL_MLKEM: "Quantum-Safe",
+    TQR_LEVEL_OTP:   "Legacy XOR",
+    TQR_LEVEL_AES:   "Legacy AES-GCM",
+    TQR_LEVEL_MLKEM: "Legacy ML-KEM",
 }
 _LEVEL_ICONS: dict[int, str] = {
     TQR_LEVEL_OTP:   "🔒",
@@ -70,9 +70,9 @@ _LEVEL_ICONS: dict[int, str] = {
     TQR_LEVEL_MLKEM: "⚛️",
 }
 _LEVEL_TOOLTIPS: dict[int, str] = {
-    TQR_LEVEL_OTP:   "One-time quantum key — strongest protection. Requires active Quantum Network.",
-    TQR_LEVEL_AES:   "Quantum-seeded AES-256 — strong and fast. Requires Quantum Network.",
-    TQR_LEVEL_MLKEM: "Post-quantum ML-KEM — works offline, no Quantum Network required.",
+    TQR_LEVEL_OTP:   "Unauthenticated XOR with simulator keys. Development use only.",
+    TQR_LEVEL_AES:   "AES-GCM with simulator keys; metadata and sender identity are unverified.",
+    TQR_LEVEL_MLKEM: "Experimental ML-KEM; sender creates the private key. No independent recipient key flow.",
 }
 _LEVEL_COLORS: dict[int, tuple[str, str, str]] = {
     # (active_fg, active_bg, hover_bg)
@@ -338,9 +338,9 @@ def _user_message_for(exc: Exception) -> str:
         "CertGenerationError": "The encryption certificate could not be saved.",
         "PdfExportError":      "The certificate PDF could not be created.",
         "SMTPSenderError":     "The message could not be sent. Check your connection.",
-        "RecipientCheckError": "Could not verify the recipient on the Quantum Network.",
+        "RecipientCheckError": "Could not look up the recipient in the development registry.",
         "TQREncryptionError":  "Message encryption failed. Please try again.",
-        "TQRKeyError":         "A required quantum key could not be retrieved.",
+        "TQRKeyError":         "A required simulator key could not be retrieved.",
         "TQRLevelError":       "The selected security level is not supported.",
     }
     return _map.get(name, f"Something went wrong: {exc}")
@@ -473,7 +473,7 @@ class ComposeWindow(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
-        self._send_btn = QPushButton("  🔐  Send Securely")
+        self._send_btn = QPushButton("Send prototype message")
         self._send_btn.setStyleSheet(_STYLE_SEND_BTN)
         self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._send_btn.setFixedHeight(46)
@@ -500,12 +500,7 @@ class ComposeWindow(QWidget):
 
     @staticmethod
     def _hint_for(level: int) -> str:
-        hints = {
-            TQR_LEVEL_OTP:   "One-time quantum key — strongest possible protection, requires Quantum Network.",
-            TQR_LEVEL_AES:   "Quantum-seeded AES-256 — strong, fast, requires Quantum Network.",
-            TQR_LEVEL_MLKEM: "Post-quantum ML-KEM — works without Quantum Network.",
-        }
-        return hints.get(level, "")
+        return _LEVEL_TOOLTIPS.get(level, "Unknown legacy mode")
 
     # --- Send Flow ---
 
@@ -554,7 +549,7 @@ class ComposeWindow(QWidget):
         elif effective_level in (TQR_LEVEL_OTP, TQR_LEVEL_AES) and not sae_id:
             self._alert(
                 "Recipient setup incomplete",
-                "The recipient appears to use QuMail, but no Quantum Network ID was found. "
+                "The development registry returned no simulator ID. "
                 "Please try again later.",
             )
             return
@@ -562,11 +557,9 @@ class ComposeWindow(QWidget):
         if effective_level in (TQR_LEVEL_OTP, TQR_LEVEL_AES):
             if not session.kme_connected:
                 self._alert(
-                    "Quantum Network unavailable",
-                    "The selected security level requires a Quantum Network connection, "
-                    "which is currently offline.\n\n"
-                    "Switch to Quantum-Safe level to send without the network, "
-                    "or check your connection and try again.",
+                    "Development simulator unavailable",
+                    "This legacy mode requires the development key simulator. "
+                    "Use --dev-simulator for laboratory testing. No real QKD is implemented.",
                 )
                 return
 
@@ -583,15 +576,15 @@ class ComposeWindow(QWidget):
         dialog.setIcon(QMessageBox.Icon.Information)
         dialog.setText(f"<b>{recipient}</b> doesn't use QuMail.")
         dialog.setInformativeText(
-            "Your message will be encrypted using quantum-safe encryption and "
-            "delivered as a secure link. The recipient can open it in their browser "
-            "— no QuMail installation required.\n\n"
-            "The encryption level will be set to Quantum-Safe automatically."
+            "This prototype switches to legacy ML-KEM and creates a portal link after SMTP. "
+            "The portal server holds the private key and can read the message. "
+            "The link must be shared separately. This is not endpoint-only E2EE. "
+            "Use only nonsensitive laboratory data."
         )
         dialog.setStandardButtons(
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
         )
-        dialog.button(QMessageBox.StandardButton.Ok).setText("Send via Secure Link")
+        dialog.button(QMessageBox.StandardButton.Ok).setText("Use development portal")
         dialog.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
         return dialog.exec() == QMessageBox.StandardButton.Ok
 
@@ -615,7 +608,7 @@ class ComposeWindow(QWidget):
 
     def _on_send_success(self, result: _SendResult) -> None:
         self._send_btn.setEnabled(True)
-        self._send_btn.setText("  🔐  Send Securely")
+        self._send_btn.setText("Send prototype message")
         dialog = _SuccessDialog(result, parent=self)
         dialog.exec()
         self._to_field.clear()
@@ -624,8 +617,8 @@ class ComposeWindow(QWidget):
 
     def _on_send_failure(self, message: str) -> None:
         self._send_btn.setEnabled(True)
-        self._send_btn.setText("  🔐  Send Securely")
-        self._alert("Message not sent", message)
+        self._send_btn.setText("Send prototype message")
+        self._alert("Send workflow failed", message + "\nSMTP may already have accepted this message. Check before retrying.")
 
     def _alert(self, title: str, message: str) -> None:
         box = QMessageBox(self)
@@ -654,15 +647,15 @@ class _SuccessDialog(QDialog):
         layout.setSpacing(10)
 
         # Header with checkmark
-        header = QLabel("✅  Message sent securely")
+        header = QLabel("SMTP submission completed")
         header.setStyleSheet(
             f"font-size: 16px; font-weight: 700; color: {_C['text_primary']};"
         )
         layout.addWidget(header)
 
         body = QLabel(
-            "Your message was encrypted and delivered successfully. "
-            "An encryption certificate has been saved for your records."
+            "The mail server accepted the prototype message. Recipient delivery and "
+            "decryption are not confirmed. An unsigned local record has been saved."
         )
         body.setWordWrap(True)
         body.setStyleSheet(f"font-size: 12px; color: {_C['text_secondary']};")
@@ -712,7 +705,7 @@ class _SuccessDialog(QDialog):
         layout.addSpacing(14)
 
         btn_row = QDialogButtonBox()
-        open_cert_btn = QPushButton("Open Certificate")
+        open_cert_btn = QPushButton("Open unsigned record")
         open_cert_btn.setStyleSheet(
             f"QPushButton {{ font-size: 13px; font-weight: 600; color: #FFF; "
             f"background: {_C['accent']}; border: none; border-radius: 7px; padding: 8px 20px; }} "

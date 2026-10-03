@@ -1,4 +1,4 @@
-# mime/encapsulator.py — RFC 3156-style MIME encapsulation of encrypted QuMail payloads.
+# Legacy custom MIME encapsulation. This is not RFC 3156 OpenPGP/MIME.
 # Single responsibility: wrap a ciphertext and its associated metadata into a
 # multipart/encrypted MIME message ready for smtp_sender.py to dispatch.
 # Does not perform encryption, transport, or KME interaction.
@@ -146,8 +146,8 @@ def encapsulate(
     # Keep human-readable context without adding extra MIME parts that would
     # break the strict two-part control/payload contract expected by decapsulator.py.
     container.preamble = (
-        f"This message was sent using {APP_NAME} v{APP_VERSION}, a quantum-secure email client.\n"
-        "Use QuMail to open and decrypt the enclosed payload."
+        f"This message was sent using the {APP_NAME} development prototype.\n"
+        "Legacy custom payload: sender identity and metadata are not authenticated."
     )
     container.attach(_build_control_part(metadata))
     container.attach(_build_payload_part(ciphertext))

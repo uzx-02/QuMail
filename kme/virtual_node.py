@@ -1,6 +1,5 @@
-# kme/virtual_node.py — Simulated ETSI GS QKD 014 KME (Key Management Entity).
-# Runs as a local Flask server. Drop-in interface: replace with live KME in v2.
-# Exposes only the endpoints QuMail needs. Not a full ETSI 014 implementation.
+# Development-only CSPRNG key service with a custom, unauthenticated API.
+# Not an ETSI-conformant KME or real QKD source. Keep on loopback.
 # Do not import from ui/, transport/, or crypto/ here.
 
 import os
@@ -87,7 +86,7 @@ _load_registry()
 
 def _generate_key_bytes(size_bits: int) -> bytes:
     """Generate cryptographically random key bytes using os.urandom.
-    os.urandom is the correct source for simulating QKD-grade entropy in v1."""
+    This is simulated provenance, not quantum-derived randomness."""
     return os.urandom(size_bits // 8)
 
 
@@ -237,7 +236,9 @@ def status():
     """Simple liveness check used by kme_client to confirm KME is reachable."""
     return jsonify({
         "status":       "online",
-        "node":         "QuMail ETSI QKD 014 Virtual Node",
+        "node":         "QuMail development key simulator",
+        "provenance":   "simulated-csprng",
+        "production_ready": False,
         "version":      "1.0.0",
         "sae_count":    len(_sae_registry),
         "keys_issued":  len(_issued_keys),

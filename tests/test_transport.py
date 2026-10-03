@@ -20,32 +20,33 @@ class TestTransport(unittest.TestCase):
         self.assertEqual(status.sae_id, "sae-1")
 
     def test_gmail_secure_permission_helper(self) -> None:
-        try:
-            import transport.oauth2_gmail as gmail_oauth
-        except Exception:
-            self.skipTest("Google auth dependencies are not available in this environment")
+        import transport.oauth2_gmail as gmail_oauth
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "gmail_token.json")
             gmail_oauth._ensure_secret_dir(path)
             with open(path, "w", encoding="utf-8") as f:
                 f.write("{}")
-            gmail_oauth._secure_file_permissions(path)
-            mode = stat.S_IMODE(os.stat(path).st_mode)
-            self.assertIn(mode, (0o600, 0o644))
+            with patch.object(gmail_oauth.os, "chmod", wraps=os.chmod) as chmod:
+                gmail_oauth._secure_file_permissions(path)
+                chmod.assert_called_once_with(path, stat.S_IRUSR | stat.S_IWUSR)
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            # Windows chmod does not establish a user-only ACL (F08 remains open).
+            self.assertTrue(os.access(path, os.R_OK | os.W_OK))
 
     def test_yahoo_secure_permission_helper(self) -> None:
-        try:
-            import transport.oauth2_yahoo as yahoo_oauth
-        except Exception:
-            self.skipTest("Yahoo auth dependencies are not available in this environment")
+        import transport.oauth2_yahoo as yahoo_oauth
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "yahoo_token.json")
             yahoo_oauth._ensure_secret_dir(path)
             with open(path, "w", encoding="utf-8") as f:
                 f.write("{}")
-            yahoo_oauth._secure_file_permissions(path)
-            mode = stat.S_IMODE(os.stat(path).st_mode)
-            self.assertIn(mode, (0o600, 0o644))
+            with patch.object(yahoo_oauth.os, "chmod", wraps=os.chmod) as chmod:
+                yahoo_oauth._secure_file_permissions(path)
+                chmod.assert_called_once_with(path, stat.S_IRUSR | stat.S_IWUSR)
+            if os.name == "posix":
+                self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            self.assertTrue(os.access(path, os.R_OK | os.W_OK))
 
 
 if __name__ == "__main__":

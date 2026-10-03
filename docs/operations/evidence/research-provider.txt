@@ -1,0 +1,11 @@
+liboqs-python faulthandler is disabled
+{
+  "original_binding": "0.14.1",
+  "original_status": "blocked: unavailable from PyPI at M1 verification; no live lookup performed",
+  "historical_ciphertext_compatibility": "unverified",
+  "production_approved": false,
+  "research_status": "available",
+  "binding": "0.16.0.1",
+  "native": "0.16.0",
+  "native_sha256": "bc4199a54ec5e79d62d3d0deb7bebb0310d287266889b63122866fa1e8aa07fd"
+}

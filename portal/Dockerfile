@@ -1,3 +1,6 @@
+# HISTORICAL / UNVALIDATED: excluded from M1 builds and deployment.
+# This recipe uses obsolete native inputs and lacks the packaging/ lock files.
+# Retained as historical evidence; see docs/operations/dependencies.md.
 # portal/Dockerfile — Cloud Run container for the QuMail portal service.
 # Builds liboqs C library from source before installing Python dependencies.
 # The desktop app, transport, and UI layers are not included.

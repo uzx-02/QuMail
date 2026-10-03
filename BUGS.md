@@ -1,5 +1,14 @@
 # BUGS.md — Out-of-Scope Bugs & Issues
 
+## Current disposition (2026-10-03)
+
+Historical entries below are preserved, not current security acceptance evidence.
+See IMPLEMENTATION_STATUS.md and the canonical Markdown audit, F01–F19.
+In particular, sender-side private-key persistence does not fix independent
+recipient decryption (F01); shared limiter state and Windows test assumptions
+are addressed by M1 fixtures, while real QKD, storage, identity and portal defects
+remain open. Earlier “FIXED” labels describe narrow historical changes only.
+
 ## Log
 
 ### [2026-03-28] Level 3 inbox decryption private key unavailable

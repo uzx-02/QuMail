@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._nav_buttons: list[QPushButton] = []
 
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(f"{APP_NAME} 1.0 development prototype — not production-ready")
         self.setMinimumSize(1100, 680)
         self.resize(1280, 760)
 
@@ -341,6 +341,11 @@ class MainWindow(QMainWindow):
         outer = QVBoxLayout(root)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+
+        notice = QLabel("Development prototype: legacy unauthenticated messages; no verified identity or real QKD. Use nonsensitive test data.")
+        notice.setWordWrap(True)
+        notice.setStyleSheet("color: #FDE68A; background: #332B10; padding: 8px;")
+        outer.addWidget(notice)
 
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)

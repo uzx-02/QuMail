@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-03",
+  "original_records": "Retained byte-for-byte locally under ignored tmp/m1-private-evidence/2026-10-03-publish-review; do not stage this directory",
+  "files": [
+    {
+      "file": "docs/operations/evidence/before-qt-fix-normal.txt",
+      "original_sha256": "92db231270879929edd933aa16269a6531bd4cd9db67ab02ab58abe4e421d4ea",
+      "published_sha256": "e47dde9e26f8a0e5202966bdd31c94dd156bb9ab248fe6364982cf49eec5e641",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/before-qt-fix-reverse.txt",
+      "original_sha256": "99de64f0117f267bb72bc7fc021a1fd4cc6db18d49da21303b53db0877fac3c0",
+      "published_sha256": "ff6383ac1c4ce710814cacf97c1b3996b16089e25da7c675ccfdf2b296ccda9c",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/before-qt-fix-seeded.txt",
+      "original_sha256": "ecfe8abb93a9e70978b052e98a6eb66cca2238e42d82e602ef2ad16289de9d90",
+      "published_sha256": "9266270e1f1f4f8562d82613cd5bb48b3c1385855c982b2ad285679d5f36e083",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/focused.txt",
+      "original_sha256": "30480af80455918024f35d75e89cdfa04f74c204442c8c39dc8474cc6238f3b7",
+      "published_sha256": "46eb8e2f18bc6d083951dc808a40f7683e3956db5f5700b590f9e0d935c384ed",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/full-normal.txt",
+      "original_sha256": "e091ee91f519933bc3bb1a7317ad72da19ea677c474def24830d764f90c4bfcd",
+      "published_sha256": "924c9fa694af20290deea727eb01e32d67159a0bf150b279a52a6ac44859c405",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/full-reverse.txt",
+      "original_sha256": "133dea4a2c886c56c563e48dd4c77d338d4034d06e72b2de3efe5a88150d37e6",
+      "published_sha256": "5cf1059177327c298bd2489e8b8216f6dde7ec8e62a74274ce87d761040118c2",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/full-seeded.txt",
+      "original_sha256": "0bc691251368b4dc2b91404cd27c71d57a3f99e06621021d86b4cd8097160424",
+      "published_sha256": "d14c101de5640eaeace02096445c8fc9595773ffe4a183176cd811a70a9b8764",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/missing-native.txt",
+      "original_sha256": "e31ef7ad9a25a645b9db296dc370f2a44c92e65b3035d2f4f5186068c9772263",
+      "published_sha256": "c7c3e86618f95a08b0afc3d19112376d31198d807eeb9a435001d2cff11f06d4",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/evidence/qt-fixture-focused.txt",
+      "original_sha256": "1e848c8480577aab54ee54f0f1e2a7ebe1b4ce31f142f06f9c566e890d04009d",
+      "published_sha256": "c150f3944bb5933d942f5c6df2567e86d3fc272dd4853b81f0ab980e9a46b5e1",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders"
+    },
+    {
+      "file": "docs/operations/m1-validation.md",
+      "original_sha256": "f09a9c896b243793502e28264c0b430f9743c3248b45abb218b13ef6fb763e84",
+      "published_sha256": "ff5de4db66259d5080d8f321494fbe6fd52e6a4ffd0bb84f7080c2eefdca85a7",
+      "redaction": "Windows account component and pytest user directory replaced with LOCAL_USER placeholders",
+      "additional_change": "Appended publication blocker, authentication steps and M1 acceptance assessment; original document retained locally."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+.....................................                                    [100%]
+============================== warnings summary ===============================
+tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    issued_at= datetime.utcnow().isoformat(),
+
+tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\portal\portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    .not_valid_before(_dt.datetime.utcnow())
+
+tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\portal\portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+
+tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\certificates\cert_generator.py:83: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+37 passed, 5 warnings in 1.55s

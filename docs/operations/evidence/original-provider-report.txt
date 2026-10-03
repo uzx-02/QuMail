@@ -1,0 +1,6 @@
+{
+  "original_binding": "0.14.1",
+  "original_status": "blocked: unavailable from PyPI at M1 verification; no live lookup performed",
+  "historical_ciphertext_compatibility": "unverified",
+  "production_approved": false
+}

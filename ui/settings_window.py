@@ -395,7 +395,7 @@ class _AccountTab(QWidget):
                     "Account connected successfully. You can now send and receive messages.")
         except KMEConnectionError as exc:
             self.hydrate()
-            self._warn("Quantum Network unavailable",
+            self._warn("Development simulator unavailable",
                 f"Account authenticated, but SAE registration failed:\n{exc}")
 
     def _on_auth_error(self, message: str, is_reauth: bool) -> None:
@@ -453,14 +453,14 @@ class _AccountTab(QWidget):
 class _SecurityTab(QWidget):
 
     _LEVEL_INFO = [
-        (TQR_LEVEL_OTP,   "🔒", "Maximum Security",
-         "One-Time Pad using quantum-delivered key.\nStrongest possible — requires active Quantum Network.",
+        (TQR_LEVEL_OTP,   "⚠", "Legacy XOR",
+         "Unauthenticated XOR using development simulator keys.\nNot suitable for confidential messages.",
          "#D1FAE5", "#064E3B"),
-        (TQR_LEVEL_AES,   "🛡️", "High Security",
-         "AES-256-GCM seeded with quantum-delivered key.\nStrong and fast — requires Quantum Network.",
+        (TQR_LEVEL_AES,   "⚠", "Legacy AES-GCM",
+         "AES-GCM using development simulator keys.\nSender identity and metadata are not authenticated.",
          "#DBEAFE", "#1E3A5F"),
-        (TQR_LEVEL_MLKEM, "⚛️", "Quantum-Safe",
-         "ML-KEM post-quantum encryption.\nWorks without Quantum Network — future-proof.",
+        (TQR_LEVEL_MLKEM, "⚠", "Legacy ML-KEM",
+         "Experimental ML-KEM with sender-generated private keys.\nIndependent recipient key ownership is not implemented.",
          "#EDE9FE", "#2E1065"),
     ]
 
@@ -474,11 +474,11 @@ class _SecurityTab(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(12)
 
-        section_label = QLabel("Default Encryption Level")
+        section_label = QLabel("Default legacy test mode")
         section_label.setStyleSheet(_STYLE_VALUE_LABEL)
         outer.addWidget(section_label)
 
-        hint = QLabel("Choose the default security level for new messages. You can change it per-message in Compose.")
+        hint = QLabel("Development modes are not an ordered security scale. Use nonsensitive test data only.")
         hint.setStyleSheet(_STYLE_HINT)
         hint.setWordWrap(True)
         outer.addWidget(hint)
@@ -568,8 +568,9 @@ class _NetworkTab(QWidget):
         cl.addLayout(status_row)
 
         desc = QLabel(
-            "The Quantum Key Node (KME) provides quantum-distributed encryption keys for "
-            "Level 1 and Level 2 security. In v1, a virtual node runs locally."
+            "The development key simulator provides CSPRNG bytes through a custom, "
+            "unauthenticated API. It is not real QKD or an ETSI-conformant KME. "
+            "Start it explicitly with --dev-simulator."
         )
         desc.setStyleSheet(_STYLE_HINT)
         desc.setWordWrap(True)
@@ -618,10 +619,10 @@ class _NetworkTab(QWidget):
     def _update_status_display(self, online: bool) -> None:
         if online:
             self._status_dot.setStyleSheet(f"color: {_C['online']}; font-size: 18px;")
-            self._status_text.setText("Quantum Network: Connected")
+            self._status_text.setText("Development simulator: reachable")
         else:
             self._status_dot.setStyleSheet(f"color: {_C['offline']}; font-size: 18px;")
-            self._status_text.setText("Quantum Network: Offline")
+            self._status_text.setText("Development simulator: unavailable")
 
     def _save_endpoint(self) -> None:
         value = self._kme_input.text().strip()
@@ -642,7 +643,7 @@ class _NetworkTab(QWidget):
         session.kme_connected = online
         self._update_status_display(online)
         self._kme_detail.setText(
-            "Connection successful — Quantum Network is live."
+            "Simulator HTTP endpoint reachable. This does not verify QKD or identity."
             if online else
             "Connection failed — check that the virtual node is running."
         )

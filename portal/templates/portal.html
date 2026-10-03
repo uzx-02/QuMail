@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuMail — Secure Message Portal</title>
+  <title>QuMail — Development Portal</title>
   <style>
     /* ------------------------------------------------------------------ */
     /* Reset & base                                                         */
@@ -212,24 +212,24 @@
         <circle cx="18" cy="23" r="1.5" fill="#fff"/>
       </svg>
       <div>
-        <h1>QuMail Secure Portal</h1>
-        <p>Quantum-encrypted message delivery</p>
+        <h1>QuMail Development Portal</h1>
+        <p>Server-readable prototype messages</p>
       </div>
     </div>
 
     <!-- Notice -->
     <div class="notice">
-      You have received a message encrypted with <strong>QuMail</strong>, a
-      quantum-secure email client. This link is single-use and time-limited.
-      Retrieve your message below — it will not be accessible again after you
-      do so.
+      This legacy <strong>QuMail</strong> portal stores the private decryption key
+      and decrypts messages on the server. It is not endpoint-only E2EE.
+      Successful retrieval marks a link consumed; it does not erase stored keys,
+      backups or recipient copies. Use nonsensitive development data only.
     </div>
 
     <!-- Panel: Retrieve -->
     <div id="panel-retrieve" class="panel active">
       <div class="meta-row">
         <span>ML-KEM FIPS 203 &nbsp;·&nbsp; AES-256-GCM</span>
-        <span class="badge">QUANTUM&#8209;SECURE</span>
+        <span class="badge">DEVELOPMENT ONLY</span>
       </div>
       <button class="btn" id="btn-retrieve" onclick="retrieveMessage()">
         <span class="spinner" id="spinner"></span>

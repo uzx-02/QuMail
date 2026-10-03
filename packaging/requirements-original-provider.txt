@@ -1,0 +1,4 @@
+# Historical input, retained explicitly as a blocked provider requirement.
+# Not part of the research lock. PyPI returned 404 / resolver found no match.
+# Do not substitute another version while claiming exact baseline reproduction.
+liboqs-python==0.14.1

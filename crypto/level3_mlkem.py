@@ -9,7 +9,7 @@
 
 import os
 
-import oqs
+from crypto.legacy_provider import load_oqs
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 # Constants
 # -------------------------------------------------------------------------
 
-_ML_KEM_ALGORITHM:   str = "ML-KEM-768"  # FIPS 203 — NIST security level 2 (128-bit PQC)
+_ML_KEM_ALGORITHM:   str = "ML-KEM-768"  # FIPS 203 parameter set, NIST category 3
 _NONCE_SIZE_BYTES:   int = 12             # 96-bit nonce — GCM standard recommendation
 _AES_KEY_SIZE_BYTES: int = 32             # ML-KEM-768 shared secret is always 32 bytes
 
@@ -54,14 +54,15 @@ def generate_keypair() -> tuple[bytes, bytes]:
     Generate an ephemeral ML-KEM-768 keypair for one send session.
 
     Called by tqr.py before encrypt(). The public key is passed into encrypt().
-    The private key is returned to tqr.py, which routes it to portal_server.py
-    for browser-side decapsulation. The private key is never written to disk or
-    transmitted in the email.
+    The private key is returned through tqr.py to the caller. Compose persists
+    it locally and may store it in the server-decrypting portal. It is excluded
+    from the email payload; recipient-owned identity is not implemented.
 
     Returns:
         (public_key_bytes, private_key_bytes)
     """
     try:
+        oqs = load_oqs()
         with oqs.KeyEncapsulation(_ML_KEM_ALGORITHM) as kem:
             public_key  = kem.generate_keypair()
             private_key = kem.export_secret_key()
@@ -99,8 +100,8 @@ def encrypt(plaintext: bytes, public_key: bytes, private_key: bytes) -> dict:
                 "nonce":          str,   ← hex — 12-byte AES-GCM nonce
                 "tag":            str,   ← hex — 16-byte GCM authentication tag
             },
-            "private_key": bytes,        ← Level 3 ONLY. Never transmitted. tqr.py routes
-                                           this to portal_server.py for browser-side decrypt.
+            "private_key": bytes,        ← Level 3 ONLY. Excluded from MIME; the caller
+                                           can persist it locally and in the portal.
         }
 
     NOTE: The "private_key" key is absent from Level 1 and Level 2 results. tqr.py must
@@ -108,6 +109,7 @@ def encrypt(plaintext: bytes, public_key: bytes, private_key: bytes) -> dict:
     """
     try:
         # --- ML-KEM encapsulation ---
+        oqs = load_oqs()
         with oqs.KeyEncapsulation(_ML_KEM_ALGORITHM) as kem:
             kem_ciphertext, shared_secret = kem.encap_secret(public_key)
 
@@ -169,6 +171,7 @@ def decrypt(
     Returns the recovered plaintext as bytes.
     """
     try:
+        oqs = load_oqs()
         kem_ciphertext = bytes.fromhex(kem_ciphertext_hex)
         nonce          = bytes.fromhex(nonce_hex)
         tag            = bytes.fromhex(tag_hex)

@@ -7,10 +7,7 @@ class TestVirtualKME(unittest.TestCase):
     """Covers health, registration, lookup, key issue/retrieve, and throttling."""
 
     def setUp(self) -> None:
-        try:
-            from kme.virtual_node import app
-        except Exception:
-            self.skipTest("Flask dependency is not available in this environment")
+        from kme.virtual_node import app
         self.client = app.test_client()
 
     def test_register_lookup_and_issue_key(self) -> None:

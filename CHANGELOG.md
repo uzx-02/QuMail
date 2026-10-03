@@ -22,6 +22,19 @@ One block per session. Most recent session at the top.
 
 ## Log
 
+## [2026-10-03] — M1 reproducible research baseline
+
+- Retained prior M1 work, isolated tests and explicit simulator opt-in; corrected
+  UI/docs/unsigned record claims without changing crypto dispatch or wire fields.
+- Added hash locks, explicit original-provider blocker and separate research
+  provider availability reporting, native build manifest and guarded loading.
+- Added baseline/compatibility tests and Windows/Linux CI definition. Hosted CI
+  execution is not verified; exact local results are in the M1 validation report.
+- Added preservation/support/claims documentation and ADRs; M2–M8 remain untouched.
+- Historical “100%”, “cloud-ready”, end-to-end and universal race-safety statements
+  below are preserved as prior reports, not present release approval or evidence.
+  Current findings and decision: IMPLEMENTATION_STATUS.md.
+
 ## [2026-03-30] — Session 3: Cloud Run Portal Migration (v1 Closeout)
 **Overall v1 progress moved from ~78% to 100%. Portal is cloud-ready.**
 ### Added

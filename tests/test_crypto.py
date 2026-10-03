@@ -1,6 +1,7 @@
 """tests/test_crypto.py — Unit tests for crypto modules and TQR entrypoint."""
 
 import unittest
+import pytest
 
 from kme.key_models import QuantumKey
 from crypto.level1_otp import encrypt as otp_encrypt, decrypt as otp_decrypt
@@ -32,12 +33,9 @@ class TestCrypto(unittest.TestCase):
         self.assertEqual(recovered, plaintext)
         self.assertEqual(out["metadata"]["tqr_level"], 2)
 
+    @pytest.mark.native_crypto
     def test_level3_tqr_roundtrip(self) -> None:
-        try:
-            import oqs  # noqa: F401
-            from crypto.tqr import decrypt as tqr_decrypt, encrypt as tqr_encrypt
-        except Exception:
-            self.skipTest("liboqs is not available in this environment")
+        from crypto.tqr import decrypt as tqr_decrypt, encrypt as tqr_encrypt
 
         plaintext = b"level3 message"
         result, private_key = tqr_encrypt(

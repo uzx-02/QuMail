@@ -29,11 +29,11 @@ _FONT_FAMILY         = "Helvetica"       # Core 14 font — no embedding require
 
 # Human-readable display labels for each JSON key, in display order.
 _FIELD_ORDER: list[tuple[str, str]] = [
-    ("cert_id",        "Certificate ID"),
+    ("cert_id",        "Local Record ID"),
     ("timestamp_utc",  "Issued At (UTC)"),
-    ("tqr_level",      "TQR Security Level"),
+    ("tqr_level",      "Legacy Mode"),
     ("algorithm",      "Algorithm"),
-    ("key_id",         "QKD Key UUID"),
+    ("key_id",         "Legacy Key ID"),
     ("sender",         "Sender"),
     ("recipient_hash", "Recipient (SHA-256)"),
 ]
@@ -90,7 +90,7 @@ def _draw_header(pdf: FPDF) -> None:
     # Subtitle — smaller white regular text.
     pdf.set_font(_FONT_FAMILY, size=9)
     pdf.set_xy(_PAGE_MARGIN_MM + 4, 28)
-    pdf.cell(_CONTENT_WIDTH_MM - 8, 7, "Quantum-Secure Email Client", align="L")
+    pdf.cell(_CONTENT_WIDTH_MM - 8, 7, "Development Email Prototype", align="L")
 
     # Version string — right-aligned in the header.
     pdf.set_xy(_PAGE_MARGIN_MM + 4, 28)
@@ -109,7 +109,7 @@ def _draw_title_block(pdf: FPDF) -> None:
     pdf.set_text_color(r, g, b)
     pdf.set_font(_FONT_FAMILY, style="B", size=14)
     pdf.set_xy(_PAGE_MARGIN_MM, 48)
-    pdf.cell(_CONTENT_WIDTH_MM, 9, "Encryption Certificate", align="C")
+    pdf.cell(_CONTENT_WIDTH_MM, 9, "Unsigned Local Send Record", align="C")
 
     # Subtitle clarification.
     r, g, b = _COLOUR_LABEL_GREY
@@ -119,7 +119,7 @@ def _draw_title_block(pdf: FPDF) -> None:
     pdf.cell(
         _CONTENT_WIDTH_MM,
         5,
-        "Cryptographic audit record generated automatically on message send.",
+        "Not proof of sender identity, recipient decryption or delivery.",
         align="C",
     )
 
@@ -190,8 +190,7 @@ def _draw_footer(pdf: FPDF, cert: dict) -> None:
         _CONTENT_WIDTH_MM,
         4,
         (
-            "This certificate is an automated audit record produced by QuMail. "
-            "It does not constitute a legally binding document."
+            "Unsigned prototype record. It can be edited and does not authenticate a message."
         ),
         align="C",
     )

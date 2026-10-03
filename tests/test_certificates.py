@@ -9,12 +9,9 @@ class TestCertificates(unittest.TestCase):
     """Validates cert generation and PDF conversion from disk JSON."""
 
     def test_generate_and_export_pdf(self) -> None:
-        try:
-            from certificates.cert_generator import generate
-            from certificates.pdf_export import export
-            import certificates.cert_generator as cert_gen_mod
-        except Exception:
-            self.skipTest("Certificate dependencies are not available in this environment")
+        from certificates.cert_generator import generate
+        from certificates.pdf_export import export
+        import certificates.cert_generator as cert_gen_mod
 
         with tempfile.TemporaryDirectory() as tmpdir:
             old_dir = cert_gen_mod.CERT_OUTPUT_DIR

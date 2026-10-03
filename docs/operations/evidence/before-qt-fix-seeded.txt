@@ -1,0 +1,607 @@
+.........................EEEEEEEEEEEE                                    [100%]
+=================================== ERRORS ====================================
+_______ ERROR at setup of TestTransport.test_recipient_check_registered _______
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_recipient_check_registere0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B530297F0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+________ ERROR at setup of TestTQRRoundtrip.test_level2_aes_roundtrip _________
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_level2_aes_roundtrip1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B53028E00>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+_ ERROR at setup of test_f10_cloud_initialization_failure_selects_volatile_memory _
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_f10_cloud_initialization_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FE71A0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+_ ERROR at setup of test_reviewed_binding_rejects_install_sentinel_before_any_side_effect _
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_reviewed_binding_rejects_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FE67B0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+___________ ERROR at setup of TestCrypto.test_level3_tqr_roundtrip ____________
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_level3_tqr_roundtrip0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FE5CA0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+________ ERROR at setup of test_research_report_exposes_unavailability ________
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_research_report_exposes_u0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FD31D0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+______ ERROR at setup of test_wrong_binding_version_fails_before_import _______
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_wrong_binding_version_fai0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FD37D0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+_______ ERROR at setup of TestTQRRoundtrip.test_level3_mlkem_roundtrip ________
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_level3_mlkem_roundtrip0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FD2120>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+__ ERROR at setup of test_f05_dispatch_metadata_can_bypass_gcm_verification ___
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_f05_dispatch_metadata_can0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FD0A10>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+_ ERROR at setup of test_research_provider_rejects_wrong_key_and_tampering[wrong_key] _
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_research_provider_rejects4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52FD0BF0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+_______ ERROR at setup of TestCertificates.test_generate_and_export_pdf _______
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_generate_and_export_pdf0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52F8B5F0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+___________ ERROR at setup of TestCrypto.test_level1_otp_roundtrip ____________
+
+tmp_path = WindowsPath('C:/Users/<LOCAL_USER>/AppData/Local/Temp/pytest-of-LOCAL_USER/pytest-48/test_level1_otp_roundtrip1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000025B52F8ADB0>
+
+    @pytest.fixture(autouse=True)
+    def isolated_state(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from kme import virtual_node as node
+        from portal import portal_server as portal
+        from core.session import session
+        from kme.kme_client import kme_client
+    
+        monkeypatch.setattr(node, "_sae_registry", {})
+        monkeypatch.setattr(node, "_issued_keys", {})
+        monkeypatch.setattr(node, "_RATE_HISTORY", {})
+        monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
+        # Fixed time prevents the rate-limit test depending on machine speed.
+        monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
+        monkeypatch.setattr(portal, "_memory_store", {})
+        monkeypatch.setattr(portal, "_memory_rate_limits", {})
+        monkeypatch.setattr(portal, "_firestore_client", None)
+        monkeypatch.setattr(portal, "_firestore_available", False)
+        monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
+        monkeypatch.setattr(portal, "_server_started", False)
+        monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
+>       session.reset()
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\tests\conftest.py:65: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <core.session.Session object at 0x0000025B50EE4E10>
+
+    def reset(self):
+        """Clear session state — called on logout or account switch."""
+        self._active_account = None
+        self.provider = None
+        self.oauth_token = None
+        self.kme_connected = False
+        self.kme_sae_id = None
+        self.tqr_level = TQR_DEFAULT
+        self.last_key_uuid = None
+        self.last_cert_path = None
+>       self.account_changed.emit("")
+        ^^^^^^^^^^^^^^^^^^^^
+E       RuntimeError: wrapped C/C++ object of type Session has been deleted
+
+C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\core\session.py:51: RuntimeError
+============================== warnings summary ===============================
+tests/test_legacy_characterization.py::test_f03_simulator_releases_keys_without_caller_authentication
+tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    issued_at= datetime.utcnow().isoformat(),
+
+tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\portal\portal_server.py:420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    .not_valid_before(_dt.datetime.utcnow())
+
+tests/test_dependency_compatibility.py::test_local_legacy_certificate_generation_api
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\portal\portal_server.py:421: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    .not_valid_after(_dt.datetime.utcnow() + _dt.timedelta(days=1))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/test_transport.py::TestTransport::test_recipient_check_registered
+ERROR tests/test_tqr_roundtrip.py::TestTQRRoundtrip::test_level2_aes_roundtrip
+ERROR tests/test_legacy_characterization.py::test_f10_cloud_initialization_failure_selects_volatile_memory
+ERROR tests/test_legacy_provider.py::test_reviewed_binding_rejects_install_sentinel_before_any_side_effect
+ERROR tests/test_crypto.py::TestCrypto::test_level3_tqr_roundtrip - RuntimeEr...
+ERROR tests/test_legacy_provider.py::test_research_report_exposes_unavailability
+ERROR tests/test_legacy_provider.py::test_wrong_binding_version_fails_before_import
+ERROR tests/test_tqr_roundtrip.py::TestTQRRoundtrip::test_level3_mlkem_roundtrip
+ERROR tests/test_legacy_characterization.py::test_f05_dispatch_metadata_can_bypass_gcm_verification
+ERROR tests/test_native_compatibility.py::test_research_provider_rejects_wrong_key_and_tampering[wrong_key]
+ERROR tests/test_certificates.py::TestCertificates::test_generate_and_export_pdf
+ERROR tests/test_crypto.py::TestCrypto::test_level1_otp_roundtrip - RuntimeEr...
+25 passed, 4 warnings, 12 errors in 1.08s

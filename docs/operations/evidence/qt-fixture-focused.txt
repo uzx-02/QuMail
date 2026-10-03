@@ -1,0 +1,8 @@
+.......                                                                  [100%]
+============================== warnings summary ===============================
+tests/test_kme.py::TestVirtualKME::test_register_lookup_and_issue_key
+  C:\Users\<LOCAL_USER>\Desktop\Aavishkar-26\QuMail\kme\virtual_node.py:144: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    issued_at= datetime.utcnow().isoformat(),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+7 passed, 1 warning in 0.55s

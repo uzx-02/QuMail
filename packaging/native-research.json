@@ -1,0 +1,13 @@
+{
+  "purpose": "Legacy characterization only; not production or original-pin reproduction",
+  "source": "https://github.com/open-quantum-safe/liboqs.git",
+  "commit": "5a1a854b0dc9f2141bdc771c555ee60c37950183",
+  "native_version": "0.16.0",
+  "binding_version": "0.16.0.1",
+  "binding_source_sha256": "307c2a35c2571585eb8eac5397bfd03e79c462e1c7dfc6e8e76694e8103b6255",
+  "cmake_flags": [
+    "-DBUILD_SHARED_LIBS=ON", "-DOQS_BUILD_ONLY_LIB=ON",
+    "-DOQS_MINIMAL_BUILD=KEM_ml_kem_768", "-DOQS_USE_OPENSSL=OFF",
+    "-DOQS_DIST_BUILD=ON", "-DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=TRUE"
+  ]
+}

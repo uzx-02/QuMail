@@ -10,6 +10,7 @@ Item 7 from the v1 completion plan.
 import sys
 import os
 import unittest
+import pytest
 from unittest.mock import patch, MagicMock
 
 # Add project root to path for direct execution.
@@ -79,12 +80,9 @@ class TestTQRRoundtrip(unittest.TestCase):
         """Level 2 AES-256-GCM: encrypt then decrypt must recover original plaintext."""
         self._roundtrip(level=2)
 
+    @pytest.mark.native_crypto
     def test_level3_mlkem_roundtrip(self) -> None:
         """Level 3 ML-KEM: encrypt then decrypt using returned private key."""
-        try:
-            import oqs  # noqa: F401
-        except ImportError:
-            self.skipTest("liboqs is not available in this test environment — skipping Level 3.")
         self._roundtrip(level=3)
 
 

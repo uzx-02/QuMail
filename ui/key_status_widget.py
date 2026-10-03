@@ -25,9 +25,9 @@ from kme.kme_client import kme_client
 _POLL_INTERVAL_MS = 5 * 60 * 1000   # 5 minutes
 
 _TQR_LABELS: dict[int, str] = {
-    TQR_LEVEL_OTP:   "Maximum Security",
-    TQR_LEVEL_AES:   "High Security",
-    TQR_LEVEL_MLKEM: "Quantum-Safe",
+    TQR_LEVEL_OTP:   "Legacy XOR / unverified",
+    TQR_LEVEL_AES:   "Legacy AES-GCM / unverified",
+    TQR_LEVEL_MLKEM: "Legacy ML-KEM / unverified",
 }
 
 _TQR_ICONS: dict[int, str] = {
@@ -245,13 +245,13 @@ class KeyStatusWidget(QWidget):
 
         # Network pill
         if online:
-            self._network_pill.setText("QKD  Online")
+            self._network_pill.setText("Dev simulator: reachable / no real QKD")
             self._network_pill.setStyleSheet(
                 f"color: {_C['online']}; font-size: 11px; font-weight: 600; "
                 f"background: #052E16; border-radius: 4px; padding: 2px 8px;"
             )
         else:
-            self._network_pill.setText("QKD  Offline")
+            self._network_pill.setText("Dev simulator: unavailable / no real QKD")
             self._network_pill.setStyleSheet(
                 f"color: {_C['offline']}; font-size: 11px; font-weight: 600; "
                 f"background: #2D0E0E; border-radius: 4px; padding: 2px 8px;"

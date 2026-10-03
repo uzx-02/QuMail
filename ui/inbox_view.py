@@ -429,14 +429,14 @@ def _decrypt_error_notice(exc: Exception, tqr_level: int | None) -> str:
         exc_name = type(exc).__name__
         if exc_name == "TQRMissingPrivateKeyError":
             return (
-                "This message was encrypted with quantum-safe encryption (ML-KEM). "
+                "This message uses legacy ML-KEM encryption. "
                 "The decryption key for this message was not found on this device."
             )
-        return "This message was encrypted with quantum-safe encryption. Decryption failed."
+        return "This message uses legacy ML-KEM. Decryption failed; identity is unverified."
     if not session.kme_connected:
         return (
-            "This message requires a Quantum Network connection to decrypt, "
-            "but the network is currently offline. Reconnect and try again."
+            "This legacy message requires its development simulator key, "
+            "but the simulator is unavailable. Restarted simulators lose issued keys."
         )
     return "This message could not be decrypted. It may have been corrupted or sent with a different key."
 
@@ -773,7 +773,7 @@ class InboxView(QWidget):
                 sender=msg.sender,
                 subject=msg.subject,
                 date=msg.date,
-                is_qumail=True,   # We can check later on open; assume QuMail for badge hint
+                is_qumail=False,  # Headers alone do not establish encryption or authenticity.
             )
             self._message_list.addItem(item)
             self._message_list.setItemWidget(item, widget)
@@ -876,8 +876,8 @@ class InboxView(QWidget):
 def _badge_for_level(tqr_level: int) -> tuple[str, str, str]:
     from core.config import TQR_LEVEL_OTP, TQR_LEVEL_AES, TQR_LEVEL_MLKEM
     badges = {
-        TQR_LEVEL_OTP:   ("🔒 Maximum Security", "#D1FAE5", "#064E3B"),
-        TQR_LEVEL_AES:   ("🔒 High Security",    "#DBEAFE", "#1E3A5F"),
-        TQR_LEVEL_MLKEM: ("🔒 Quantum-Safe",      "#EDE9FE", "#2E1065"),
+        TQR_LEVEL_OTP:   ("Legacy XOR / unauthenticated", "#FDE68A", "#332B10"),
+        TQR_LEVEL_AES:   ("Legacy AES-GCM / identity unverified", "#FDE68A", "#332B10"),
+        TQR_LEVEL_MLKEM: ("Legacy ML-KEM / identity unverified", "#FDE68A", "#332B10"),
     }
     return badges.get(tqr_level, (f"Level {tqr_level}", "#8B949E", "#21262D"))

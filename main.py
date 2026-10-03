@@ -1,16 +1,11 @@
 # main.py — QuMail desktop entry point.
 # Single responsibility: initialize QApplication and launch MainWindow.
-# Auto-starts the virtual KME Flask server in a daemon thread so the
-# Quantum Network status is live as soon as the window appears.
+# Starts the development key simulator only with --dev-simulator.
 # Does not contain business logic, transport calls, or direct crypto operations.
 
+import argparse
 import sys
 import threading
-import time
-
-from PyQt6.QtWidgets import QApplication
-
-from ui.main_window import MainWindow
 
 
 def _start_kme_server() -> None:
@@ -21,8 +16,8 @@ def _start_kme_server() -> None:
     The thread is marked daemon so it terminates automatically with the
     main process — no explicit shutdown is needed.
 
-    Called once before the Qt event loop starts so the first KME status
-    poll (fired by KeyStatusWidget on construction) hits a live server.
+    Called only for explicit laboratory startup. The first status poll can
+    precede server readiness; HTTP liveness does not establish real QKD.
     """
     try:
         from kme.virtual_node import app
@@ -39,22 +34,26 @@ def _start_kme_server() -> None:
         print(f"[KME] Virtual node failed to start: {exc}")
 
 
-def main() -> int:
-    """Start the QuMail desktop application and return the process exit code."""
-    # --- Start virtual KME before UI ---
-    kme_thread = threading.Thread(target=_start_kme_server, daemon=True, name="kme-virtual-node")
-    kme_thread.start()
+def _launch_desktop() -> int:
+    from PyQt6.QtWidgets import QApplication
+    from ui.main_window import MainWindow
 
-    # Give Flask ~600 ms to bind its port before the first Qt poll fires.
-    # This is a best-effort warm-up; if the server isn't ready the widget
-    # retries automatically every 5 minutes (and the user can hit Refresh).
-    time.sleep(0.6)
-
-    # --- Launch Qt app ---
-    app = QApplication(sys.argv)
+    app = QApplication([sys.argv[0]])
     window = MainWindow()
     window.show()
     return app.exec()
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Launch the development client; simulator startup requires explicit opt-in."""
+    parser = argparse.ArgumentParser(description="QuMail 1.0 development prototype; not production-ready")
+    parser.add_argument("--dev-simulator", action="store_true",
+                        help="start unauthenticated loopback CSPRNG simulator (not real QKD)")
+    args = parser.parse_args(argv)
+    if args.dev_simulator:
+        print("Development simulator enabled: CSPRNG keys, no caller authentication, no real QKD.")
+        threading.Thread(target=_start_kme_server, daemon=True, name="qumail-dev-simulator").start()
+    return _launch_desktop()
 
 
 if __name__ == "__main__":
