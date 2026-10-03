@@ -16,7 +16,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
-      UV_PYTHON_PREFERENCE: only-managed
+      UV_MANAGED_PYTHON: 'true'
     defaults:
       run:
         shell: pwsh
@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9
         with:
-          version: '0.11.15'
+          version: '0.12.22'
           python-version: '3.12.14'
           activate-environment: true
           enable-cache: false

@@ -72,7 +72,7 @@ cached web snippets. Exact platform/build evidence is in the M1 validation repor
 
 Initial hosted commit `529625de20ee11d556f0bae3e467b9c221c9d4be` could not obtain
 Windows Python 3.12.14 through actions/setup-python. Use pinned setup-uv action
-`94527f2e458b27549849d47d273a16bec83a01e9` and uv 0.11.15 to provide managed
+`94527f2e458b27549849d47d273a16bec83a01e9` and uv 0.12.22 to provide managed
 CPython 3.12.14 in a fresh virtual environment on both platforms; caches are
 disabled. This explicitly changes runtime provisioning, not Python version or
 the OQS pair. Ubuntu's actual test collection failure identified missing
@@ -80,3 +80,10 @@ the OQS pair. Ubuntu's actual test collection failure identified missing
 versions in CI. These system packages come from the Ubuntu runner's repositories;
 byte-reproducible OS images remain a release gate. No runtime provider fallback,
 test skip or assertion weakening is introduced.
+
+The first uv attempt pinned the existing local resolver 0.11.15, but hosted
+logs showed that its embedded download catalog lacks Python 3.12.14. The explicit
+CI-only update to uv 0.12.22 was verified with `uv python list 3.12.14
+--all-platforms`, which reports both Windows x86_64 and Linux x86_64 GNU downloads.
+Existing dependency locks are not regenerated. The earlier local lock-generation
+and installation evidence still belongs to uv 0.11.15, not the newer CI tool.
