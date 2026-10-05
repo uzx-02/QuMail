@@ -1,0 +1,21 @@
+[package]
+name = "qumail-m2-backend-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+default = ["backend-probe"]
+backend-probe = []
+
+[dependencies]
+anyhow = "=1.0.100"
+sequoia-openpgp = { version = "=2.4.1", default-features = false, features = ["crypto-openssl", "qumail-m2-fault-probe"] }
+pgp = { version = "=0.21.0", default-features = false, features = ["pqc"] }
+rand = "=0.8.8"
+openssl-sys = "=0.9.117"
+kem = "=0.3.0-pre.0"
+mailparse = "=0.17.0"
+
+[patch.crates-io]
+sequoia-openpgp = { path = "../../../tmp/m2/probe-sequoia" }

@@ -1,0 +1,35 @@
+   Compiling bindgen v0.72.1
+   Compiling openssl-sys v0.9.117
+   Compiling ossl v1.5.3
+   Compiling sequoia-openpgp v2.4.1
+   Compiling qumail-m2-proof v0.1.0 (<REPO>\experiments\m2)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 57.00s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-04439a576a0f7e0a.exe)
+
+running 4 tests
+test tests::both_composite_signature_components_required ... FAILED
+test tests::independent_exchange_and_negative_cases ... FAILED
+test tests::multiple_recipients_and_fresh_envelopes ... FAILED
+test tests::unsupported_certificates_and_limits ... ok
+
+failures:
+
+---- tests::both_composite_signature_components_required stdout ----
+Error: Malformed packet: unknown version
+
+---- tests::independent_exchange_and_negative_cases stdout ----
+Error: signer
+
+---- tests::multiple_recipients_and_fresh_envelopes stdout ----
+Error: signer
+
+
+failures:
+    tests::both_composite_signature_components_required
+    tests::independent_exchange_and_negative_cases
+    tests::multiple_recipients_and_fresh_envelopes
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+error: test failed, to rerun pass `--lib`
+

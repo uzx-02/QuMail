@@ -1,0 +1,24 @@
+   Compiling qumail-m2-proof v0.1.0 (<REPO>\experiments\m2)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.81s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 9 tests
+test tests::both_composite_signature_components_required ... ok
+test tests::independent_exchange_and_negative_cases ... ok
+test tests::multiple_recipients_and_fresh_envelopes ... ok
+test tests::native_version_and_published_signature_vector ... ok
+test tests::pgp_mime_protected_header_fixture ... ok
+test tests::published_kem_message_vector_rpgp ... ok
+test tests::rpgp_generated_certificate_exchange ... ok
+test tests::rpgp_rng_failure_returns_no_result ... ok
+test tests::unsupported_certificates_and_limits ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.11s
+
+   Doc-tests qumail_m2_proof
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+

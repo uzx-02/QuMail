@@ -1,12 +1,22 @@
 # QuMail 1.0 implementation status
 
-Updated: 2026-10-03 (Asia/Calcutta). Target: first proper QuMail 1.0.
+Updated: 2026-10-05 (Asia/Calcutta). Target: first proper QuMail 1.0.
 
 ## Current milestone and exit decision
 
-**M1: COMPLETE at baseline scope — local and hosted Windows/Ubuntu evidence
-passes. Stop after M1; this is not production or release approval.**
-M2–M8 have not begun. No production release is approved.
+**M1: COMPLETE at baseline scope. M2: PARTIAL.**
+**M2 engineering proof complete; M2 exit pending external expert review.**
+M3–M8 have not begun. No production release is approved.
+
+Current local branch: `codex/m2-provider-proof`. At test execution, HEAD was
+`5880dd4d6bc15a2e111c49d929432e6ed2419f33` and M2 was working-tree content,
+identified by the experiment source/input hashes in
+`docs/operations/evidence/m2/20261005-input-audit.json`. The local review checkpoint
+preserves those exact 15 input files; its SHA is recorded in the local reviewer
+request prepared after committing (`docs/operations/m2-reviewer-request.md`).
+Results belong to the hash-identified snapshot, not its earlier parent commit.
+The M1 review branch below is preserved. No M2 publication,
+merge, production integration, user-data migration or release occurred.
 
 Review branch: `codex/m1-hosted-validation`, published to `uzx-02/QuMail`.
 Audited source baseline: `7079cf16cb2623172a329fd045045227f7eb65b4` on `main`.
@@ -18,7 +28,66 @@ The 143-page PDF is a presentation/reference copy. Comparison found formatting,
 link/reference extraction differences (including merged/omitted citation labels),
 not differing engineering requirements. Both supplied files remain untouched.
 
-## Evidence authority
+## M2 engineering continuation and acceptance (2026-10-05)
+
+[Current acceptance table and exact validation](docs/operations/m2-validation.md),
+[external review package](docs/operations/m2-external-review.md),
+[provider evaluation](docs/operations/m2-provider-evaluation.md) and
+[proposed ADR 003](docs/adrs/003-m2-provider-proof.md) are consistent with this
+decision. The original nine-test evidence, hashes and dated 2026-10-04 decision
+snapshots are retained; the broad provider survey was not repeated.
+
+- Handoff unchanged: 023c941 → 5880dd4 is documentation/evidence only (15 files);
+  application/dependency/CI paths unchanged. M1 review branch/evidence preserved.
+- Candidate unchanged: Sequoia 2.4.1/OpenSSL 3.5.9; independent rPGP 0.21.0.
+  The unmodified-provider lane retains all nine positive/negative/vector/header
+  tests plus three typed contract tests. No provider version substitution.
+- `CryptoPolicy`/`OpenPgpProvider` and explicit profile/failure/result types are
+  implemented only inside the experiment. Unknown/weak/malformed/unsupported
+  profiles, untrusted/changed recipients, forbidden portal/simulator routes,
+  critical extensions and resource violations fail closed. Private staging
+  cannot become VerifiedPlaintext on provider error or incomplete verification.
+- Actual provider-generated OCB, SHA-256 signatures and unknown critical
+  notations are rejected, with a valid-profile positive control. Mock provider
+  status/staging/panic tests are labeled separately from native evidence.
+- Sequoia's private OpenSSL context uses HMAC-DRBG/SHA-512. A diagnostic-only
+  source copy exposes its context pointer without changing algorithms. Supported
+  OpenSSL controls in fresh child processes demonstrate actual random-source
+  initialization and provider failures, plus real post-health send/open panic
+  containment. No ciphertext/plaintext success escapes. The native library is
+  unchanged; the 651-file audit finds only a feature and accessor addition;
+  transitive lock versions/checksums match the ordinary lane.
+- Exact configuration has no default-provider self-test callback. Its return
+  value 1 is not a FIPS/KAT guarantee. Direct OS entropy-outage and allocation
+  failure are not claimed as executed; review questions state the limitations.
+- Final normal: **12 passed** (3.03s) ordinary, **5 passed** (0.13s) diagnostic,
+  zero failures/ignored. Reverse executes the **same 17 distinct tests**.
+  New legacy regression: **37 passed, 5 existing warnings**, 2.40s, zero skips.
+  No hosted/Linux M2 result or production IPC execution is claimed.
+- Warnings remain visible: M1's 42 liboqs barrier emissions; the candidate native
+  build's 871 MSVC diagnostics/231 Perl locale lines; diagnostic path dependency's
+  22 upstream Rust deprecation warnings. Native mandatory-SHA256 panic and
+  deprecated context constructor's allocation-failure fallback are reviewer
+  questions. Successful tests/no-asm do not establish constant-time safety.
+
+| M2 traceability | Current disposition |
+|---|---|
+| QM-CRYPTO-001/002; QM-INT-001 M2 portion; QM-PQC-001; §§41/54 exact provider/AEAD/header fixture | Engineering proof satisfied on measured Windows build; candidate frozen for review, not production-approved |
+| QM-CRYPTO-006 / T01 | Published integration vectors and negative cases retained/passing; broad primitive/fuzz/platform qualification remains M8 |
+| QM-CRYPTO-004 / T01/T09 | Real selected-backend RNG/provider failures prevent key generation/encryption; late native errors/panics contained. No nonexistent FIPS self-test guarantee claimed |
+| QM-SEC-001/002/006, QM-QKD-004, QM-PORTAL-003 / T03, §54 typed interfaces | Isolated contract/matrix satisfied; no downgrade/substitution. Production UI/TQR/portal are unchanged and not declared fixed |
+| §54 M2 Review | **Pending external human cryptographer/protocol review** of composition, secret boundaries and disclosed assurance limits |
+| §54 Docs/Migration | Review package, proposed ADR, hash-identified validation ready; no production write migration |
+
+**M2 engineering proof complete; M2 exit pending external expert review.**
+Keep M2 PARTIAL until the specification's reviewer accepts it or requests bounded
+corrections. Passing tests and this agent's inspection are not independent approval.
+No new milestone requirement for enrollment, production UI, SMTP, installer or
+Linux CI is invented. Linux/helper/package qualification, full independent MUA
+interoperability, original-artifact/historical compatibility, owner licensing and
+production release retain their existing gates. F01–F19 are not fully remediated.
+
+## M1 evidence authority (preserved record)
 
 [Checkpoint, exact commands and retained output](docs/operations/m1-validation.md)
 records the pre-edit inventory, current tests, failed order runs and final results.
@@ -131,11 +200,12 @@ https --web --scopes workflow`, then `gh auth setup-git --hostname github.com` a
 `gh auth status` in a local terminal. Do not paste tokens into chat. The review
 branch publication remains authorized once normal authentication is available.
 
-## Next milestone
+## Next authorized bounded step
 
-Review the M1 branch and its exact-commit evidence. **Do not begin M2 in this
-work.** A later, separately authorized M2 task is the bounded production
-protocol/provider/interoperability proof; no implementation was started here.
+Obtain the §54 external human cryptographer/protocol review of the local M2
+package and exact input hashes. Address any requested corrections within M2.
+Do not begin M3, integrate production sending, push, merge or release. The package
+has not been sent or published; this task does not claim independent approval.
 
 ## Hosted continuation completed (2026-10-03)
 
@@ -160,4 +230,5 @@ The final acceptance assessment, commands, toolchain versions, native hashes,
 warnings and preserved failed runs are in `docs/operations/m1-validation.md`.
 All M1 criteria are satisfied; historical compatibility, project/Qt distribution
 rights, independent interoperability and production approval retain their
-existing separate gates. F01–F19 are not declared fully fixed. M2 not started.
+existing separate gates. F01–F19 are not declared fully fixed. At the end of that
+M1 continuation M2 had not started; the subsequent M2 state is recorded above.

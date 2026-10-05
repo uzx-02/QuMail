@@ -1,0 +1,5 @@
+RFC 9980 armored vectors: whitespace-normalized exact containment check; no vector bodies emitted.
+v6-mldsa-65-sample-pk.asc : match=True sha256=4880dead81e043038df20e961ab74a7c61f14245371d6a229c1888be79813764
+v6-mldsa-65-sample-sk.asc : match=True sha256=515c09226777ed771ac0171576911d395d101dd1d9be094bbaefa4e5e1e03f19
+v6-mldsa-65-sample-signature.asc : match=True sha256=af8689111ee427d9f78e5bca17d1d2227ae8787071adf8b1ded66e36a6058c0c
+v6-mldsa-65-sample-message.asc : match=True sha256=dc75363621276ad6f50f16faea3f4d33da8400d4253c5bdd8dacab5d4354a976

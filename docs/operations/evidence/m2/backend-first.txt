@@ -1,0 +1,156 @@
+   Compiling sequoia-openpgp v2.4.1 (<REPO>\tmp\m2\probe-sequoia)
+error[E0603]: module `openssl` is private
+   --> <REPO>\tmp\m2\probe-sequoia\src\lib.rs:439:22
+    |
+439 |     crypto::backend::openssl::context().ptr().cast()
+    |                      ^^^^^^^ private module
+    |
+note: the module `openssl` is defined here
+   --> <REPO>\tmp\m2\probe-sequoia\src\crypto\backend.rs:83:1
+    |
+ 83 | mod openssl;
+    | ^^^^^^^^^^^^
+help: consider importing this function through its public re-export instead
+    |
+439 -     crypto::backend::openssl::context().ptr().cast()
+439 +     crypto::backend::context().ptr().cast()
+    |
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\crypto\hash.rs:1231:28
+     |
+1231 |             .min(std::u16::MAX as usize);
+     |                            ^^^
+     |
+     = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated constant `std::i32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\crypto\mem.rs:460:23
+    |
+460 |         1..=std::i32::MAX => Ordering::Greater,
+    |                       ^^^
+
+warning: use of deprecated constant `std::i32::MIN`: replaced by the `MIN` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\crypto\mem.rs:462:19
+    |
+462 |         std::i32::MIN..=-1 => Ordering::Less,
+    |                   ^^^
+
+warning: use of deprecated module `std::usize`: all constants in this module replaced by associated constants on the type
+   --> <REPO>\tmp\m2\probe-sequoia\src\crypto\s2k.rs:328:18
+    |
+328 |         use std::usize;
+    |                  ^^^^^
+
+warning: use of deprecated constant `std::usize::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\crypto\s2k.rs:332:32
+    |
+332 |             0x3e00001..=usize::MAX => 0x3e00000,
+    |                                ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\packet\signature.rs:2729:38
+     |
+2729 |             if size + l <= std::u16::MAX as usize && acc.insert(p) {
+     |                                      ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\packet\signature.rs:2753:38
+     |
+2753 |             if size + l <= std::u16::MAX as usize && acc.insert(p.clone()) {
+     |                                      ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\packet\signature.rs:2757:35
+     |
+2757 |         assert!(size <= std::u16::MAX as usize);
+     |                                   ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\packet\signature\subpacket.rs:1037:27
+     |
+1037 |             > ::std::u16::MAX as usize
+     |                           ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\packet\signature\subpacket.rs:1131:65
+     |
+1131 |         }).sum::<usize>() + packet.serialized_len() > std::u16::MAX as usize {
+     |                                                                 ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\serialize.rs:2026:26
+     |
+2026 |         if l > std::u16::MAX as usize {
+     |                          ^^^
+
+warning: use of deprecated constant `std::u16::MAX`: replaced by the `MAX` associated constant on this type
+    --> <REPO>\tmp\m2\probe-sequoia\src\serialize.rs:2034:26
+     |
+2034 |         if l > std::u16::MAX as usize {
+     |                          ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\serialize\stream\partial_body.rs:116:30
+    |
+116 |             if l > std::u32::MAX as usize {
+    |                              ^^^
+
+warning: use of deprecated module `std::u32`: all constants in this module replaced by associated constants on the type
+ --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:5:10
+  |
+5 | use std::u32;
+  |          ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+  --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:85:47
+   |
+85 |             Ok(d) if d.as_secs() <= std::u32::MAX as u64 =>
+   |                                               ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:307:37
+    |
+307 |         if d.as_secs() <= std::u32::MAX as u64 {
+    |                                     ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:407:21
+    |
+407 |         if s > u32::MAX as f64 {
+    |                     ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:454:35
+    |
+454 |                 Ok(Self(std::u32::MAX))
+    |                                   ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\types\timestamp.rs:466:55
+    |
+466 |     pub(crate) const MAX : Timestamp = Timestamp(u32::MAX);
+    |                                                       ^^^
+
+warning: use of deprecated module `std::u32`: all constants in this module replaced by associated constants on the type
+  --> <REPO>\tmp\m2\probe-sequoia\src\policy.rs:31:10
+   |
+31 | use std::u32;
+   |          ^^^
+
+warning: use of deprecated constant `std::u32::MAX`: replaced by the `MAX` associated constant on this type
+   --> <REPO>\tmp\m2\probe-sequoia\src\policy.rs:830:17
+    |
+830 |     if t > u32::MAX as u64 {
+    |                 ^^^
+
+warning: use of deprecated associated function `ossl::OsslContext::new_lib_ctx`: Please use `new_lib_ctx_checked` instead.
+  --> <REPO>\tmp\m2\probe-sequoia\src\crypto\backend\openssl.rs:72:46
+   |
+72 |         let mut context = ossl::OsslContext::new_lib_ctx();
+   |                                              ^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0603`.
+warning: `sequoia-openpgp` (lib) generated 22 warnings
+error: could not compile `sequoia-openpgp` (lib) due to 1 previous error; 22 warnings emitted
+

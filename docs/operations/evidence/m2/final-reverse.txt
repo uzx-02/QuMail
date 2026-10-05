@@ -1,0 +1,76 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.36s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::unsupported_certificates_and_limits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.02s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::rpgp_rng_failure_returns_no_result ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::rpgp_generated_certificate_exchange ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.74s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::published_kem_message_vector_rpgp ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.12s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::pgp_mime_protected_header_fixture ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.55s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::native_version_and_published_signature_vector ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.02s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::multiple_recipients_and_fresh_envelopes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.78s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::independent_exchange_and_negative_cases ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.91s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src\lib.rs (tmp\m2\target\debug\deps\qumail_m2_proof-49f9448c7b689916.exe)
+
+running 1 test
+test tests::both_composite_signature_components_required ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.11s
+
+Reverse order: 9 distinct tests passed; each invocation filtered the other 8 tests.
+
