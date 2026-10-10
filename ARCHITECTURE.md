@@ -5,6 +5,43 @@ root-level research Markdown, §§3–18 and 38–54 (PDF is a reference copy).
 See IMPLEMENTATION_STATUS.md and ADRs.
 The original “100% complete” and “v2” narrative did not establish release evidence.
 
+## Provisional M3 boundary (2026-10-06)
+
+[ADR 004](docs/adrs/004-m3-development-exception.md) records the owner's exception
+allowing M3 development while M2 independent review remains pending. M2 is not
+unconditionally complete. Production crypto enablement and security release still
+require independent review. No production entry point imports this new boundary.
+
+`experiments/m3/identity.py` verifies Google token signatures through maintained
+google-auth and validates provider/account/address claims. Synthetic tests do not
+establish live Gmail/Yahoo support. New Yahoo enrollment fails closed; existing
+legacy OAuth flows below are unchanged. Typed account/device/root/key-handle
+records are distinct; two accounts at the same provider have separate state.
+
+`Vault` uses Windows Credential Manager for a random master key and SQLite for
+AES-GCM authenticated account aggregates. Account/device ownership, key purpose,
+lifecycle, pinned recipients and OAuth records are protected together. Opaque
+IDs select database records, never filesystem paths. Missing OS storage blocks
+enrollment/access. Public exports are provider-serialized public certificates.
+
+The separate Rust helper uses provisional Sequoia/OpenSSL to generate a
+certification-only root with separate signing/encryption subkeys; rPGP exchanges
+this changed certificate shape in the isolated tests. Additive rotation retains
+historical decryption material. Manual fingerprint verification controls first
+contact/root replacement. One active device per local account is supported;
+simultaneous devices are deferred. No directory or escrow backend exists here.
+
+Recovery export locally encrypts one account under a random recovery secret and
+suspends the source. Clean restore authenticates ownership and commits all records
+transactionally in archive-only state. Fresh-root activation requires contacts
+to reverify. No remote erasure of old copies, full-database rollback protection,
+secure memory erasure or production helper qualification is claimed.
+
+[M3 validation/acceptance](docs/operations/m3-validation.md) and
+[recovery procedure](docs/operations/m3-recovery.md) identify executed behavior
+and remaining integration/review gates. Existing Settings/session, legacy TQR,
+MIME, transport and storage paths below have not been replaced or migrated.
+
 ## Actual execution flows
 
 Each row follows input → processing/cryptography → storage → network → output.

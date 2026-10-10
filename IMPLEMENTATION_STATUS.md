@@ -1,14 +1,60 @@
 # QuMail 1.0 implementation status
 
-Updated: 2026-10-05 (Asia/Calcutta). Target: first proper QuMail 1.0.
+Updated: 2026-10-06 (Asia/Calcutta). Target: first proper QuMail 1.0.
 
 ## Current milestone and exit decision
 
-**M1: COMPLETE at baseline scope. M2: PARTIAL.**
+**M1: COMPLETE at baseline scope. M2: PARTIAL. M3: PARTIAL.**
 **M2 engineering proof complete; M2 exit pending external expert review.**
-M3–M8 have not begun. No production release is approved.
+M3 development proceeds under the owner's explicit ordering exception in
+[ADR 004](docs/adrs/004-m3-development-exception.md). Independent review remains
+required before production cryptographic enablement or a security release; it
+may require corrections to M2 and dependent M3 work. No AI assessment substitutes
+for independent review. M4–M8 have not begun. No production release is approved.
 
-Current local branch: `codex/m2-provider-proof`. At test execution, HEAD was
+Current local branch: `codex/m3-identity-vault`, created from preserved M2 checkpoint
+`1fc4e55f09e173cec7634d0b2dc776097b552063`. The local M3 checkpoint records only the
+isolated source/locks/tests/scripts, redacted evidence and documentation. Exact
+input correspondence is in `docs/operations/evidence/m3/input-hashes.json`; results
+belong to the tested working-tree bytes, not the unchanged M2 parent. M1/M2
+branches, canonical specification and M2 reviewer draft are preserved. Nothing
+was pushed, merged, deployed or released; no real mail or user-data migration.
+
+## M3 bounded implementation and acceptance (2026-10-05–06)
+
+[Full acceptance table and exact outputs](docs/operations/m3-validation.md),
+[owner exception and design](docs/adrs/004-m3-development-exception.md),
+[recovery instructions](docs/operations/m3-recovery.md) and
+[source/reproduction](experiments/m3/README.md) describe this isolated boundary.
+
+| Requirement / criterion | Implemented and executed evidence | Remaining gate |
+|---|---|---|
+| §54 M2 prerequisite | M2 engineering preserved; explicit owner-authorized ordering exception | M2 remains PARTIAL; independent crypto/protocol review before production enablement/security release |
+| QM-ID-001/002, T06 | Distinct account/device/root/handle types; two same-provider accounts; maintained Google signature verifier with synthetic issuer; state/nonce/issuer/audience/subject/expiry/hosted-domain rejection | Live Gmail/Yahoo authorization, browser/PKCE, session/Settings integration pending; Yahoo fails closed |
+| QM-ID-003/004/005, QM-PQC-002, T04 | Recipient-owned root plus separate signing/encryption keys; public-only import/export; explicit fingerprint pin; changed/retired-key blocking; root-signed rotation/revocation; expiry/unbound foreign subkey rejection | Human ceremony and enrollment/root-reset threat-model review; simultaneous devices explicitly deferred |
+| QM-KEY-001/002/006, QM-SEC-004, T08 | Real Windows Credential Manager write/read/delete and cleanup; no file fallback; authenticated owned SQLite records; cross-account/tamper/hostile-ID rejection | Same-user malware/OS-store rollback/path races/installation ACLs not claimed addressed |
+| QM-KEY-003/004/005, T08 | Additive rotation/history retention; explicit encrypted transfer backup; clean archive-only restore decrypts actual historical envelope; new-root re-verification; destruction acknowledgment | Offline copies/backups are not remotely erased; independent recovery review pending |
+| §39 changed certificate interoperability | Sequoia/OpenSSL ↔ rPGP with separate signing subkey; rotated certificate sign/verify/decrypt checks | Common active-fingerprint selection is not independent policy selection; no multi-device/MUA/Linux claim |
+| T08 atomicity | Parallel real writes, abrupt child exit, SQLite FULL and commit-denied restore leave consistent records | Whole-database rollback resistance and OS-store/database joint transaction not provided |
+| QM-DOC-001/002, §54 | ADR 004, architecture, recovery, support limits and evidence updated | M3 stays PARTIAL pending provider-specific/live/integration and independent-review gates |
+
+Final tests: **2 native passed** (1.14 s); **32 Python passed** normal (14.80 s)
+and the **same 32 distinct tests passed** reverse (14.74 s), zero skips/warnings.
+Legacy regression: **37 passed, 5 existing warnings**, 2.68 s, zero skips.
+Real OS-store tests required the normal Windows logon session because the sandbox
+denied access; mocked storage denial and synthetic OAuth are labeled separately.
+All 15 M2 input hashes remain unchanged; M3 third-party Cargo inputs match M2.
+OpenPGP still uses native OpenSSL 3.5.9; storage uses cryptography 50.0.2's separate
+OpenSSL 4.0.3 backend. Neither is substituted silently for the other.
+
+Next bounded work remains M3: complete and validate external-browser authorization
+and session/Settings integration using explicitly provisioned test accounts;
+obtain independent enrollment/recovery and M2 cryptographer/protocol review.
+No production cryptographic enablement, M4, push, merge or release is approved.
+
+## Preserved M2 handoff provenance
+
+Preserved M2 branch: `codex/m2-provider-proof`. At test execution, HEAD was
 `5880dd4d6bc15a2e111c49d929432e6ed2419f33` and M2 was working-tree content,
 identified by the experiment source/input hashes in
 `docs/operations/evidence/m2/20261005-input-audit.json`. The local review checkpoint
@@ -200,11 +246,12 @@ https --web --scopes workflow`, then `gh auth setup-git --hostname github.com` a
 `gh auth status` in a local terminal. Do not paste tokens into chat. The review
 branch publication remains authorized once normal authentication is available.
 
-## Next authorized bounded step
+## Historical M2 handoff next step (superseded only for development ordering)
 
 Obtain the §54 external human cryptographer/protocol review of the local M2
 package and exact input hashes. Address any requested corrections within M2.
-Do not begin M3, integrate production sending, push, merge or release. The package
+That handoff did not authorize M3, production sending, push, merge or release. ADR
+004 now authorizes bounded M3 development while retaining the review gate. The package
 has not been sent or published; this task does not claim independent approval.
 
 ## Hosted continuation completed (2026-10-03)

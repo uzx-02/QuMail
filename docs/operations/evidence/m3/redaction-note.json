@@ -1,0 +1,9 @@
+{
+  "only_redaction": "Local repository/ancestor/user-profile paths replaced with placeholders; no test outcomes removed",
+  "counts": {
+    "native.txt": 12,
+    "normal.txt": 0,
+    "reverse.txt": 0,
+    "legacy.txt": 4
+  }
+}
