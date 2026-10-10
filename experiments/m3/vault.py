@@ -145,7 +145,7 @@ class Vault:
         data['active_key']=handle.value
         return handle
 
-    def enroll(self,identity:VerifiedProviderIdentity,address:EmailAddress,user:UserId):
+    def enroll(self,identity:VerifiedProviderIdentity,address:EmailAddress,user:UserId,tokens=None):
         if (type(identity) is not VerifiedProviderIdentity or identity.expires<=int(time.time()) or
             address not in identity.addresses or not identity.subject or identity.issuer != "https://accounts.google.com" or type(user) is not UserId):
             raise BoundaryError(Code.IDENTITY)
@@ -156,6 +156,9 @@ class Vault:
             issuer=identity.issuer,subject=identity.subject,addresses=[a.value for a in identity.addresses],
             address=address.value,state='active',keys={},contacts={},events=[],root=material['fingerprint'])
         handle=self.key_record(data,material)
+        if tokens is not None:
+            self.validate_tokens(tokens)
+            data['oauth']=tokens
         with self.connection() as db:
             db.execute('BEGIN IMMEDIATE')
             try:
@@ -184,6 +187,7 @@ class Vault:
         return bytes(self.provider.call('public',certificate=bytes(key['secret']))['public'])
 
     def store_oauth(self,ctx,identity,tokens):
+        self.validate_tokens(tokens)
         if (type(identity) is not VerifiedProviderIdentity or identity.expires<=int(time.time()) or
             (identity.issuer,identity.subject)!=(ctx.issuer,ctx.subject) or
             not isinstance(tokens,dict) or set(tokens)-{'access_token','refresh_token','expiry','scopes'} or
@@ -193,6 +197,35 @@ class Vault:
             if not set(data['addresses'])<={a.value for a in identity.addresses}:
                 raise BoundaryError(Code.IDENTITY)
             data['oauth']=tokens
+
+    @staticmethod
+    def validate_tokens(tokens):
+        if (not isinstance(tokens,dict) or set(tokens)-{'access_token','refresh_token','expiry','scopes'} or
+            not isinstance(tokens.get('access_token'),str) or not tokens['access_token'] or
+            len(encode(tokens))>32768):
+            raise BoundaryError(Code.IDENTITY)
+
+    def summaries(self):
+        """OS-authorized, secret-free account views; never route through legacy Session."""
+        master=self.store.get(self.ident)
+        with self.connection() as db:
+            rows=[]
+            for (ident,) in db.execute('SELECT id FROM accounts ORDER BY id').fetchall():
+                _,d=self.load(db,AccountId(ident),master)
+                rows.append((AccountContext(AccountId(ident),DeviceId(d['device']),d['issuer'],d['subject']),
+                    KeyHandle(d['active_key']),d['address'],d['root'],d['state']))
+            return rows
+
+    def contact_summaries(self,ctx):
+        data=self._read(ctx)
+        result=[]
+        for address,contact in data['contacts'].items():
+            state=contact['state']
+            if state not in (Trust.CHANGED.value,Trust.REVOKED.value):
+                info=self.provider.call('status',certificate=bytes(contact['public']))
+                if info['state']!='active': state=info['state']
+            result.append((address,contact['fingerprint'],state))
+        return result
 
     def oauth(self,ctx):
         # Only an authenticated account context may resolve this protected record.
@@ -306,14 +339,39 @@ class Vault:
         if explicit is not True: raise BoundaryError(Code.INVALID)
         recovery=secrets.token_bytes(32)
         with self.transaction(ctx) as data:
-            data['state']='suspended_for_transfer'
-            data['events'].append('explicit_recovery_export_source_suspended')
+            data['events'].append('explicit_recovery_backup')
             snapshot={k:v for k,v in data.items() if k!='oauth'}
             backup=BACKUP+protect(recovery,encode(snapshot),BACKUP)
         # Commit must succeed before bytes are returned. User stores both separately.
         return backup,recovery
 
-    def restore(self,backup,recovery,identity,explicit=False):
+    def transfer(self,ctx,persist,explicit=False):
+        """Persist encrypted package first; only successful local commit suspends source.
+
+        If database commit fails after persistence, package exists but source remains
+        active. All restores are archive-only, so this cannot activate a clone.
+        """
+        if explicit is not True: raise BoundaryError(Code.INVALID)
+        recovery=secrets.token_bytes(32)
+        with self.transaction(ctx,active=True) as data:
+            snapshot={k:v for k,v in data.items() if k!='oauth'}
+            backup=BACKUP+protect(recovery,encode(snapshot),BACKUP)
+            persist(backup)
+            data['state']='suspended_for_transfer'
+            data['events'].append('explicit_device_transfer_persisted')
+        return recovery
+
+    def activate_restored_root(self,ctx,prior_device_retired=False):
+        if prior_device_retired is not True: raise BoundaryError(Code.LIFECYCLE)
+        with self.transaction(ctx) as data:
+            if data['state']!='archive_only': raise BoundaryError(Code.LIFECYCLE)
+            key=self.key(data,ctx,KeyHandle(data['active_key']))
+            self.provider.call('secret_info',certificate=bytes(key['secret']))
+            if key['expires']<=int(time.time()) or key['state']!='retired': raise BoundaryError(Code.LIFECYCLE)
+            key['state']='active'; data['state']='active'
+            data['events'].append('unchanged_root_reactivated_explicit_prior_device_retired')
+
+    def restore(self,backup,recovery,identity,explicit=False,tokens=None):
         if explicit is not True or len(recovery)!=32 or not backup.startswith(BACKUP):
             raise BoundaryError(Code.INVALID)
         master=self.store.get(self.ident)
@@ -336,7 +394,10 @@ class Vault:
                 key['account']=account.value; key['device']=device.value
                 if key['state']=='active': key['state']='retired'
             data.update(account=account.value,device=device.value,state='archive_only')
-            data['events'].append('restored_archive_only_new_root_required')
+            data['events'].append('restored_archive_only_explicit_activation_required')
+            if tokens is not None:
+                self.validate_tokens(tokens)
+                data['oauth']=tokens
             with self.connection() as db:
                 db.execute('BEGIN IMMEDIATE')
                 try:

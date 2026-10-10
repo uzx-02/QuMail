@@ -1,6 +1,6 @@
 # ADR 004: owner-authorized M3 development before external M2 review
 
-Date: 2026-10-05. Status: accepted **for bounded local development only**, at the
+Date: 2026-10-05; development integration amendment 2026-10-10. Status: accepted **for bounded local development only**, at the
 owner's explicit request. No independent reviewer, certification, production
 cryptographic approval or security-release approval is represented by this ADR.
 
@@ -61,11 +61,14 @@ QM-PQC-002, QM-PRIV-001, QM-DOC-001/002 and T04/T06/T08 govern this boundary.
   Revocation blocks new operations; explicit archive-key destruction requires
   acknowledgment of loss and does not erase ciphertext, offline backups or media.
 - Recovery v1 encrypts one selected account locally with a fresh random 256-bit
-  recovery secret. Export suspends the source account before returning bytes;
-  restore is transactional into a clean vault and creates a new local account/
-  device in **archive-only** state. Active messaging requires a fresh root and
-  contact re-verification. OAuth tokens are excluded and reauthorization is
-  required. No hosted recovery, directory or private-key escrow.
+  recovery secret. Ordinary backup does not suspend or revoke the source. Explicit
+  device transfer first persists the package and only then commits local suspension.
+  A failed persistence/commit leaves the account active; persisted orphan packages
+  still restore archive-only. Restore is transactional into a clean vault with new
+  local account/device IDs. Activation of an unchanged root requires explicit prior-
+  device retirement acknowledgment. Replacement roots require contact re-verification.
+  OAuth tokens are excluded from backup and require fresh authorization. No hosted
+  recovery, directory or private-key escrow.
 
 ## Windows API evidence and limitations
 
@@ -90,8 +93,12 @@ and requires explicit cleanup. No secret is written unwrapped as a workaround.
 
 ## Assurance and integration boundary
 
-The modules/helper are under `experiments/m3`, with no production imports or UI/
-send activation. Helpers use bounded anonymous pipes, generic failure codes,
+The provisional vault/helper remain under `experiments/m3`. The explicit
+`--dev-identity --dev-vault PATH` application branch now connects them to separate
+account-session/service and Settings interfaces. It is disabled by default and
+never constructs legacy inbox/compose, TQR, simulator or portal components. No
+sending is available. Immutable context installation precedes notification; worker
+generation tickets prevent stale persistence/display updates. Helpers use bounded anonymous pipes, generic failure codes,
 30-second timeout and no forwarded native diagnostics. Keys necessarily cross
 the private helper pipe into Python for encrypted storage; opaque IDs prevent
 external path construction, not access by malicious code in this process.
@@ -105,18 +112,30 @@ expiry and explicit state/nonce/subject/address checks. Following Google's
 email_verified alone is not authoritative for third-party mail. The prototype
 accepts gmail.com or a matching verified hosted-domain claim; unproven aliases
 fail closed pending provider API evidence. Local signed issuer
-fixtures are synthetic, not Google approval. External-browser PKCE callback,
-real Gmail/alias evidence and Yahoo verification are pending; Yahoo enrollment
-fails closed. Existing legacy OAuth/session modules remain unchanged and unsafe
+fixtures are synthetic, not Google approval. External-browser PKCE/loopback,
+state/nonce validation, reauthorization and refresh are implemented. Refresh
+authenticates identity at the fixed Google TLS userinfo endpoint; it does not
+assume initial-token nonce semantics. Actual Google test-account authorization/
+refresh acceptance remains pending; unproven aliases and Yahoo enrollment fail
+closed. Only an explicit provisioned Desktop-client configuration is read. Existing legacy OAuth/session modules remain unchanged and unsafe
 for the new boundary; none is claimed remediated by this isolated work.
 
 Source suspension cannot revoke a copy of an offline old vault or a compromised
-device. Recovery therefore never reactivates the recovered device keys. Repeated
-restores remain archive-only; explicit fresh-root replacement requires contact
-re-verification. Do not claim remote device erasure or global enforcement.
+device. Repeated restores default to archive-only. Explicit unchanged-root
+activation requires acknowledgment that previous devices are retired; no automatic
+activation occurs. A changed root still requires contact re-verification. Do not claim remote device erasure or global enforcement.
 
 The M2 native panic, allocation-context fallback, lack of default-provider FIPS
 self-test, compiler warnings and constant-time limitations remain in ADR 003 and
 the review package. This decision neither fixes nor approves them. Licensing,
 historical-provider compatibility, distribution, platform and release gates
 remain separate and unresolved. M4 is not authorized here.
+
+## Bounded integration authorization (2026-10-10)
+
+The owner explicitly authorized account/session, Settings, identity, vault and OAuth
+integration without another routine review-order stop. The exception above remains
+in force; independent review is deferred to before production enablement/security
+release. UI/service implementation and tests are not independent approval. See
+[m3-development-settings.md](../operations/m3-development-settings.md) for exact
+setup and live acceptance, and the current integration section of M3 validation.

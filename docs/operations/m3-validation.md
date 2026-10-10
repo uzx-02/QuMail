@@ -1,5 +1,103 @@
 # M3 bounded development validation
 
+## Current bounded integration decision — 2026-10-10
+
+**Bounded M3 development integration engineering is complete and locally tested.**
+M3 remains **PARTIAL for milestone acceptance** because real provider acceptance
+is unavailable and independent cryptographic/enrollment/recovery review is deferred
+until before production enablement/security release. ADR 004 authorizes continued
+development in the meantime; no independent approval is claimed or required to
+finish this bounded engineering work. Sending remains disabled; M4 has not begun.
+
+At handoff, actual HEAD was M2 checkpoint
+`1fc4e55f09e173cec7634d0b2dc776097b552063`, with 27 uncommitted M3 files. Their
+retained input hashes matched. They were explicitly staged and locally preserved
+as **`ef4b3086d8eac16fd65a3a34f107e75ad4966ec4`** before integration. This corrects
+any assumption that a prior M3 checkpoint already existed. Branch remains
+`codex/m3-identity-vault`. M1/M2 branches, evidence, canonical specification,
+legacy data, reference PDF and uncommitted M2 reviewer request are preserved.
+The final integration checkpoint is a descendant of ef4b308; its actual SHA is
+reported with the local Git commit receipt. Tests below belong to the exact
+[working-tree input manifest](evidence/m3/integration/input-hashes.json), not to
+unchanged parent HEAD or the earlier 32-case snapshot.
+
+### Acceptance separation
+
+| Remaining M3 criterion | Executable evidence / disposition | Status |
+|---|---|---|
+| Explicit development application boundary; §54 M3, QM-SEC-004 | Opt-in `--dev-identity`, separate Settings/service/session; default and mutual-exclusion tests; no send API or legacy account installation | Engineering satisfied; no production enablement |
+| Coherent account context and same-provider isolation; QM-ID-001/002, T06 | Immutable snapshot installed before notifications; selection/lock/cancel generation checks; two-account and stale-success/error scenarios; no tokens in views | Engineering satisfied |
+| Settings creation/selection, lock/unlock, trust, recovery; §54 M3 | Real offscreen Qt controls; account selection and late worker test; unverified/verified/changed/revoked display; expired UI fixture plus actual native expired-certificate status test | Engineering satisfied on Windows; no broad accessibility/platform qualification claimed |
+| Google authorization and refresh implementation; QM-ID-002, T06 | Maintained S256 PKCE flow; actual loopback listener; strict path/Host/port/state/code cases; maintained synthetic signature tests; nonce/issuer/audience/subject/expiry/authority rejection; refreshed userinfo identity binding | Engineering satisfied with controlled fixtures; **real Google acceptance pending**, Yahoo unavailable |
+| Atomic enrollment / account-scoped credential persistence; QM-KEY-001/002, T08 | Credentials included in enrollment/restore transaction; real Windows credential access; simulated commit denial and unavailable store leave no partial account; stale results cannot persist | Engineering satisfied |
+| Backup versus transfer; QM-KEY-004/005, T08 | Ordinary export retains lifecycle; explicit transfer persists before suspension; fsync and SQLite commit failure keep source active; post-commit display failure still returns recovery secret; actual Settings controls tested | Engineering satisfied |
+| Safe restore, unchanged/replaced roots; §§39–40, T04/T08 | Historical decrypt retained; archive-only default; unchanged-root explicit retirement acknowledgment retains fingerprint; replacement changes root and contact verification required | Engineering satisfied for one-device local policy; cannot detect/erase offline clones |
+| Existing provider/interop and lifecycle proof | Three native tests include prior fresh/rotated separate-signing-subkey exchanges plus real active/revoked/expired statuses; wrong-key and malformed cases retained | Satisfied for measured provisional Windows provider |
+| Live-provider acceptance | No explicitly provisioned Google client/test account was supplied; no existing caches/configurations searched; no human browser interaction attempted | Unavailable evidence; precise setup/acceptance steps supplied |
+| Independent M2 crypto and M3 enrollment/recovery review | ADR 004 exception retained; no AI/test result labeled expert approval | Deferred before production enablement/security release; **not an engineering stop** |
+
+[Usable workflows and exact Google setup/acceptance](m3-development-settings.md),
+[backup/transfer/recovery policy](m3-recovery.md) and amended ADR 004 are current.
+Only an explicitly selected Google Desktop-client JSON is read. Authorization
+requests identity scopes, not Gmail SMTP/IMAP access; no transport support is claimed.
+
+### Exact integrated execution and attribution
+
+Same Windows/Rust/Python/provider/lock inputs as the preserved baseline below.
+Third-party Cargo versions/source/checksums and native libcrypto hash still match
+M2. No new dependency, provider substitution or native library rebuild occurred.
+The helper is rebuilt from the changed M3 source; its binary hash is recorded but
+its generated binary is excluded from Git. Python storage crypto remains a separate
+backend from Sequoia/OpenSSL. Original M2 native warnings/assurance limits remain.
+
+```powershell
+./experiments/m3/build-provider.ps1
+./.venv-m1-clean/Scripts/python.exe -m experiments.m3.run_tests
+./.venv-m1-clean/Scripts/python.exe -m experiments.m3.run_tests --reverse
+$env:OQS_INSTALL_PATH = Join-Path $PWD 'tmp/oqs-install'
+./.venv-m1-clean/Scripts/python.exe -m pytest -q
+./.venv-m1-clean/Scripts/python.exe -m experiments.m3.audit_integration
+```
+
+| Retained execution | Exact final result |
+|---|---|
+| [Native](evidence/m3/integration/native.txt) | 3 passed, 0 failed/ignored/measured/filtered, 1.16 s |
+| [Normal](evidence/m3/integration/normal.txt) | 54 passed, 11.23 s; zero skips/warnings; discovered and executed identities match |
+| [Reverse](evidence/m3/integration/reverse.txt) | Same 54 distinct tests in reverse, 54 passed, 11.42 s; zero skips/warnings |
+| [Legacy](evidence/m3/integration/legacy.txt) | 37 passed, 5 existing datetime warnings, 1.14 s; zero skips |
+| [Audit](evidence/m3/integration/input-hashes.json) | M2 15-input preservation; ordinary Cargo equality; same native libcrypto; source/script/lock/test/helper hashes; same distinct normal/reverse identities |
+
+Credential Manager checks used the normal Windows logon session outside the
+restricted sandbox with random disposable M3 entries and cleanup. OAuth HTTP
+callbacks were real **loopback-only** fixtures; issuer/token/userinfo responses
+were synthetic or mocked, labeled in tests. Signature verification also retains
+its real maintained-library synthetic signed-token fixture. No live Google/Yahoo
+claim follows. Native output retains path-canonicalization/hard-link-cache warnings;
+no warnings were suppressed. Only local filesystem paths were redacted in retained
+text. Final app/library/test source was unchanged after execution; subsequent
+changes were documentation and the separately executed read-only audit tools.
+
+The first 49-case integration run passed with a warning because the mocked HTTP
+session lacked close(); fixture cleanup was corrected. Expanded runs added real
+transfer/commit failure boundaries and a post-commit display-failure correction.
+Explicit Desktop-client URI allowlist compatibility was tested before the final
+54-case run. Prior 32-case evidence is preserved, not relabeled as these results.
+The old audit_snapshot command now rejects changed inputs instead of attributing
+historical test output to new code.
+
+No M4, mail sending, migration, push, merge, deployment or release. Next bounded
+step: provision a Google Desktop test client and two owner-controlled test accounts,
+then have the user complete the documented browser/refresh/cancellation acceptance.
+Deferred expert review remains required before production/security release; it
+need not halt additional explicitly authorized development.
+
+## Preserved isolated baseline record (ef4b308; superseded integration state)
+
+The following is historical evidence and assessment from 2026-10-05–06. Its
+statements about missing Settings/browser integration and transfer-only backup
+have been superseded by the current section and ADR 004 amendment above.
+
+
 Updated 2026-10-06 (Asia/Calcutta); work began 2026-10-05.
 **M3 PARTIAL: isolated Windows engineering implemented; live authorization,
 application integration and independent review remain pending.**

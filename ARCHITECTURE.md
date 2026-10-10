@@ -5,42 +5,51 @@ root-level research Markdown, §§3–18 and 38–54 (PDF is a reference copy).
 See IMPLEMENTATION_STATUS.md and ADRs.
 The original “100% complete” and “v2” narrative did not establish release evidence.
 
-## Provisional M3 boundary (2026-10-06)
+## M3 development integration (2026-10-10)
 
-[ADR 004](docs/adrs/004-m3-development-exception.md) records the owner's exception
-allowing M3 development while M2 independent review remains pending. M2 is not
-unconditionally complete. Production crypto enablement and security release still
-require independent review. No production entry point imports this new boundary.
+[ADR 004](docs/adrs/004-m3-development-exception.md) permits bounded development
+while independent cryptographic/enrollment review remains deferred until before
+production enablement/security release. It is not independent approval.
 
-`experiments/m3/identity.py` verifies Google token signatures through maintained
-google-auth and validates provider/account/address claims. Synthetic tests do not
-establish live Gmail/Yahoo support. New Yahoo enrollment fails closed; existing
-legacy OAuth flows below are unchanged. Typed account/device/root/key-handle
-records are distinct; two accounts at the same provider have separate state.
+`main --dev-identity --dev-vault PATH` lazily opens only `IdentitySettings` through
+`IdentityService`. Default startup is unchanged. The development option rejects
+simulator startup and does not construct legacy MainWindow, global Session,
+inbox, compose, TQR, portal or SMTP. Sending remains disabled.
 
-`Vault` uses Windows Credential Manager for a random master key and SQLite for
-AES-GCM authenticated account aggregates. Account/device ownership, key purpose,
-lifecycle, pinned recipients and OAuth records are protected together. Opaque
-IDs select database records, never filesystem paths. Missing OS storage blocks
-enrollment/access. Public exports are provider-serialized public certificates.
+`DevelopmentSession` holds one immutable account snapshot: complete account/device
+context, opaque key handle and public display metadata. It installs all fields
+before emitting changes. Selection, lock, cancellation and replacement authorization
+invalidate worker tickets. Workers produce transient OAuth results; only a current
+ticket can commit account/credentials and update the display. Tokens/private keys
+are never placed in the view or legacy session. The vault owns encrypted records.
 
-The separate Rust helper uses provisional Sequoia/OpenSSL to generate a
-certification-only root with separate signing/encryption subkeys; rPGP exchanges
-this changed certificate shape in the isolated tests. Additive rotation retains
-historical decryption material. Manual fingerprint verification controls first
-contact/root replacement. One active device per local account is supported;
-simultaneous devices are deferred. No directory or escrow backend exists here.
+Google external-browser authorization uses maintained libraries, random state/
+nonce, S256 PKCE and an ephemeral IPv4 loopback callback with strict path/Host/
+port checks. Token signature, issuer, audience, nonce, subject, expiry and authorized
+address are checked before a single enrollment transaction. Refresh authenticates
+the fresh access token at Google's fixed TLS userinfo endpoint and validates an
+ID token if supplied. Only an explicit test-client file is read; no legacy cache
+is consulted. Real provider acceptance remains unexecuted; Yahoo is unavailable.
 
-Recovery export locally encrypts one account under a random recovery secret and
-suspends the source. Clean restore authenticates ownership and commits all records
-transactionally in archive-only state. Fresh-root activation requires contacts
-to reverify. No remote erasure of old copies, full-database rollback protection,
-secure memory erasure or production helper qualification is claimed.
+Windows Credential Manager protects the random master key. Authenticated SQLite
+records bind account/device ownership, keys, lifecycle, trust and credentials.
+Explicit public certificate import and independent fingerprint pinning control
+trust; changed roots, observed old subkeys, expiry and revocation block use.
+Separate root/signing/encryption certificate keys and additive rotation retain
+the independent rPGP tests. Native provider/version/flags remain provisional.
 
-[M3 validation/acceptance](docs/operations/m3-validation.md) and
-[recovery procedure](docs/operations/m3-recovery.md) identify executed behavior
-and remaining integration/review gates. Existing Settings/session, legacy TQR,
-MIME, transport and storage paths below have not been replaced or migrated.
+Ordinary encrypted backup leaves source lifecycle unchanged. Confirmed transfer
+persists a new encrypted file before committing local suspension. Restore is
+transactional and archive-only by default. Unchanged-root activation requires
+explicit prior-device retirement acknowledgment; replacement creates a new
+fingerprint requiring renewed contact verification. Offline clones cannot be
+detected/erased; whole-database rollback and same-user compromise remain limitations.
+
+[Settings/setup](docs/operations/m3-development-settings.md),
+[validation](docs/operations/m3-validation.md) and
+[recovery](docs/operations/m3-recovery.md) separate tested development behavior,
+live acceptance and deferred review. No existing data or legacy flow below is
+migrated. No M4 durable sending work is included.
 
 ## Actual execution flows
 

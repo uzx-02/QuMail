@@ -1,6 +1,6 @@
 # QuMail 1.0 implementation status
 
-Updated: 2026-10-06 (Asia/Calcutta). Target: first proper QuMail 1.0.
+Updated: 2026-10-10 (Asia/Calcutta). Target: first proper QuMail 1.0.
 
 ## Current milestone and exit decision
 
@@ -11,6 +11,59 @@ M3 development proceeds under the owner's explicit ordering exception in
 required before production cryptographic enablement or a security release; it
 may require corrections to M2 and dependent M3 work. No AI assessment substitutes
 for independent review. M4–M8 have not begun. No production release is approved.
+
+Current branch: `codex/m3-identity-vault`. Actual handoff HEAD was M2 checkpoint
+`1fc4e55f09e173cec7634d0b2dc776097b552063`; previous M3 changes were uncommitted.
+After verifying their tested hashes, they were preserved in local M3 checkpoint
+**`ef4b3086d8eac16fd65a3a34f107e75ad4966ec4`**. The current integration checkpoint
+is its descendant; exact tested source/output hashes are recorded in
+`docs/operations/evidence/m3/integration/input-hashes.json`. Results belong to that
+working-tree snapshot, not to unchanged parent HEAD. The local Git receipt records
+the final checkpoint SHA. M1/M2 branches/evidence, canonical specification, user
+changes, reference PDF and uncommitted reviewer draft are preserved.
+
+## Current M3 development integration — 2026-10-10
+
+**Bounded M3 integration engineering complete; M3 milestone acceptance PARTIAL.**
+Independent cryptographic/enrollment/recovery review is deferred until before
+production enablement/security release under ADR 004. It is not an engineering
+stop and no independent approval is claimed. Real provider acceptance remains
+unavailable, not inferred from fixtures. M4 has not begun; sending remains disabled.
+
+| Criterion | Current evidence / status |
+|---|---|
+| Development path / §54 M3 | `--dev-identity --dev-vault PATH` opens separate Settings/services; default unchanged; no legacy Session/TQR/simulator/portal/mail path is constructed |
+| Account/session / QM-ID-001/002 | Complete immutable contexts precede notifications; two same-provider accounts; stale/cancelled/switch/lock worker results cannot install credentials or display state |
+| Settings identity/vault / QM-ID-003/005, QM-KEY-001/002 | Creation/selection, OS-backed lock/unlock, public import/export, independent fingerprint pinning, accurate lifecycle display, rotation/revocation and recovery controls tested |
+| Google implementation / T06 | Maintained state/S256-PKCE/loopback, signature/issuer/audience/nonce/subject/expiry/address checks; refresh userinfo binding; atomic vault-only credentials; reauthorization supported. Live acceptance pending; Yahoo unavailable |
+| Recovery / QM-KEY-004/005, T08 | Ordinary backup does not suspend. Confirmed transfer persists before local suspension; write/commit failures do not deactivate. Restore archive-only; unchanged-root activation explicit, replacement root requires re-verification |
+| Interoperability / §§39–41 | Prior actual separate signing-subkey and rotated-certificate exchange retained; actual provider active/revoked/expired statuses added |
+| Owner exception / review gate | ADR 004 preserved and amended for integration/backup semantics; independent review deferred before production/security release; M2 still PARTIAL |
+
+Final execution: **3 native passed** (1.16 s); **54 Python passed** normal (11.23 s)
+and the **same 54 distinct tests passed** reverse (11.42 s), zero warnings/skips.
+Legacy: **37 passed, 5 existing warnings** (1.14 s), zero skips. Actual Windows
+Credential Manager entries were disposable and cleaned up; OAuth provider responses
+were controlled fixtures, with actual local loopback and offscreen Qt tests.
+No Google client/test-account configuration was provided or searched for, so no
+live authorization was attempted. No provider/dependency substitution occurred.
+
+[Current acceptance/evidence](docs/operations/m3-validation.md),
+[usable development workflows and Google acceptance setup](docs/operations/m3-development-settings.md),
+[recovery policy](docs/operations/m3-recovery.md) and
+[ADR 004](docs/adrs/004-m3-development-exception.md) are current.
+
+Next bounded step: provision a Google Desktop test client and two owner-controlled
+test accounts, then complete the documented live browser/refresh/cancellation
+acceptance. Deferred independent review is still required before production or
+security release, without repeatedly stopping authorized development for its absence.
+No M4, migration, mail send, push, merge, deployment or release occurred.
+
+## Preserved isolated M3 baseline (historical, ef4b308)
+
+The following assessment and 32-test counts describe the prior isolated snapshot,
+not the current integrated tree. Settings/browser and transfer-only backup statements
+are superseded by the current section, recovery instructions and ADR 004 amendment.
 
 Current local branch: `codex/m3-identity-vault`, created from preserved M2 checkpoint
 `1fc4e55f09e173cec7634d0b2dc776097b552063`. The local M3 checkpoint records only the

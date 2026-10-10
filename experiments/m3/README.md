@@ -1,8 +1,9 @@
 # Isolated M3 identity/vault development
 
 Owner exception: [ADR 004](../../docs/adrs/004-m3-development-exception.md).
-M2 is still pending independent expert review. Nothing here is imported by the
-desktop or production sender. No real mail, user keys or credentials are used.
+M2 is still pending independent expert review. The disabled-by-default
+`--dev-identity` Settings path now uses this boundary. The default desktop and
+production sender do not import it. No real mail, user keys or credentials are used.
 
 Use the M1 locked Python environment and M2 pinned Windows native inputs. See
 [M2 reproduction](../m2/README.md) for exact Rust/native prerequisites. M3's
@@ -42,8 +43,9 @@ generated vault databases, recovery packages/secrets, binaries or private logs.
 - `types.py`: distinct user/account/device/SAE/email/root/opaque-handle concepts.
   All external record IDs are validated UUID hex strings, never paths.
 - `identity.py`: google-auth signature verification plus binding checks; synthetic
-  issuer tests do not establish real OAuth acceptance. No browser/PKCE callback
-  flow is enabled. Yahoo explicitly fails. Authorized aliases are not invented.
+  issuer tests do not establish real OAuth acceptance. The development Google
+  external-browser/PKCE implementation is in transport/development_google.py.
+  Yahoo explicitly fails. Authorized aliases are not invented.
 - `secure_store.py`: direct Windows Cred APIs only. No cache/file fallback.
 - `vault.py`: authenticated account aggregates and transactional lifecycle/trust.
   AccountContext is a trusted in-process authorization input, not an IPC login or
@@ -70,3 +72,14 @@ and purposes remain distinct metadata.
 
 Test evidence and limitations: [M3 validation](../../docs/operations/m3-validation.md).
 Recovery procedure: [M3 recovery](../../docs/operations/m3-recovery.md).
+
+## Current development application integration
+
+See [Settings and Google setup](../../docs/operations/m3-development-settings.md).
+Account session/service interfaces are in core/account_session.py and
+core/identity_service.py; the separate Settings view is ui/identity_settings.py.
+No send service is exposed. Backup and explicitly confirmed transfer are separate;
+restore defaults to archive-only and unchanged-root activation is an explicit
+prior-device-retirement acknowledgment. Root replacement requires re-verification.
+The original 32-case snapshot is historical at ef4b308; use the current integration
+audit/evidence for changed sources. Do not attribute its old hashes to this tree.

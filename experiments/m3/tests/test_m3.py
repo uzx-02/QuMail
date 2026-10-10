@@ -132,7 +132,7 @@ def test_clean_restore_actual_historical_keys_and_one_device(vault,tmp_path,prov
     expected=vault.open_for_test(b,bk,ap,cipher)
     with pytest.raises(BoundaryError): vault.export_recovery(b)
     backup,recovery=vault.export_recovery(b,explicit=True)
-    with pytest.raises(BoundaryError): vault.seal_for_test(b,bk,addr,b'fixture')
+    assert vault._read(b)['state']=='active'  # Ordinary backup no longer suspends source.
     restored=Vault.create(tmp_path/'clean.sqlite',vault.store,provider)
     try:
         ident=synthetic_identity('bob','bob@example.invalid')

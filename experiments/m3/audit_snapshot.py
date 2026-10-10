@@ -14,6 +14,9 @@ def packages(path):
         for p in tomllib.loads(path.read_text())['package'] if not p['name'].startswith('qumail-')}
 
 if __name__=='__main__':
+    baseline=json.loads((ROOT/'docs/operations/evidence/m3/input-hashes.json').read_text())
+    if any(sha(ROOT/i['path'])!=i['sha256'] for i in baseline['experiment_inputs']):
+        raise SystemExit('Historical ef4b308 snapshot differs; use audit_integration for current results.')
     old=json.loads((ROOT/'docs/operations/evidence/m2/20261005-input-audit.json').read_text())
     for item in old['experiment_inputs']: assert sha(ROOT/item['path'])==item['sha256'],item['path']
     assert packages(ROOT/'experiments/m2/Cargo.lock')==packages(ROOT/'experiments/m3/provider/Cargo.lock')

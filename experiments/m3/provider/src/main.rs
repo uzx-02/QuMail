@@ -58,6 +58,14 @@ fn dispatch(v: &Value) -> Result<Value> {
     let raw=bytes(v,"certificate")?;
     let c=Cert::from_bytes(&raw)?;
     match op {
+        "status" => {
+            ensure!(!c.is_tsk(),"public only");
+            let p=StandardPolicy::new(); let vc=c.with_policy(&p,None)?;
+            let revoked=matches!(vc.revocation_status(),sq::types::RevocationStatus::Revoked(_));
+            let expired=vc.alive().is_err() || vc.keys().subkeys().alive().revoked(false).for_signing().count()!=1 ||
+                vc.keys().subkeys().alive().revoked(false).for_transport_encryption().count()!=1;
+            Ok(json!({"state":if revoked {"revoked"} else if expired {"expired"} else {check_certificate(&c)?; "active"}}))
+        }
         "inspect" => { ensure!(!c.is_tsk(),"public only"); info(&c) }
         "revocation" => {
             ensure!(!c.is_tsk(),"public only");
@@ -93,6 +101,22 @@ fn main() {
 #[cfg(test)]
 mod m3_tests {
     use super::*;
+    #[test]
+    fn public_lifecycle_status() -> Result<()> {
+        let active=generate("status@example.invalid")?;
+        let revoked=revoke(&active)?;
+        let expired=CertBuilder::new().set_profile(sq::Profile::RFC9580)?
+            .set_cipher_suite(CipherSuite::MLDSA65_Ed25519)
+            .set_primary_key_flags(sq::types::KeyFlags::empty().set_certification())
+            .set_creation_time(std::time::SystemTime::now()-std::time::Duration::from_secs(4*365*86400))
+            .set_validity_period(std::time::Duration::from_secs(365*86400))
+            .add_userid("expired@example.invalid").add_signing_subkey().add_transport_encryption_subkey().generate()?.0;
+        for (cert,state) in [(active,"active"),(revoked,"revoked"),(expired,"expired")] {
+            let response=dispatch(&json!({"version":1,"op":"status","certificate":public(&cert)?}))?;
+            ensure!(response["state"]==state,"lifecycle status");
+        }
+        Ok(())
+    }
     #[test]
     fn separate_signing_subkey_independent_exchange() -> Result<()> {
         let a=generate("a@example.invalid")?; let b=generate("b@example.invalid")?;

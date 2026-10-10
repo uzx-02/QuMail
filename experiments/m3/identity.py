@@ -7,11 +7,11 @@ from .types import BoundaryError,Code,EmailAddress,VerifiedProviderIdentity
 
 
 def google_identity(token: str, client_id: str, expected_nonce: str,
-                    expected_state: str, received_state: str, expected_subject=None):
+                    expected_state: str, received_state: str, expected_subject=None,request=None):
     if not client_id or len(expected_nonce)<32 or len(expected_state)<32 or not secrets.compare_digest(expected_state,received_state):
         raise BoundaryError(Code.IDENTITY)
     try:
-        claims=id_token.verify_oauth2_token(token,Request(),audience=client_id)
+        claims=id_token.verify_oauth2_token(token,request or Request(),audience=client_id)
         return validated_google_claims(claims,client_id,expected_nonce,expected_subject)
     except Exception:
         raise BoundaryError(Code.IDENTITY) from None
