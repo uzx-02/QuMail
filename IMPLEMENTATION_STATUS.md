@@ -1,6 +1,61 @@
 # QuMail 1.0 implementation status
 
-Updated: 2026-10-10 (Asia/Calcutta). Target: first proper QuMail 1.0.
+Updated: 2026-10-11 (Asia/Calcutta). Target: first proper QuMail 1.0.
+
+## Current M4 development decision — 2026-10-11
+
+**M1 COMPLETE at baseline scope; M2 PARTIAL; M3 PARTIAL; M4 PARTIAL.**
+**Bounded M4 durable-outbox engineering proof complete.** Full M4 acceptance
+still needs actual transport/TLS and application integration qualification.
+[ADR 005](docs/adrs/005-m4-development-ordering-and-outbox.md) records the owner's
+explicit permission to use controlled identities and injected transports before
+M3 live Google acceptance. ADR 004's independent-review exception is preserved;
+review remains required before production cryptographic enablement/security
+release, not a recurring development stop. No independent approval is claimed.
+M5–M8 have not begun; production and real sending remain disabled in this path.
+
+Verified starting branch/HEAD: `codex/m3-identity-vault` /
+`1af13a1ee8a58016bdca2dfa25055eb689ec7fd8`. No tracked changes existed; only the
+reference PDF and reviewer draft were untracked. M3 source/evidence hashes matched.
+New local branch: `codex/m4-durable-outbox`, directly from that M3 checkpoint.
+The final local checkpoint contains the tested source identified by
+`docs/operations/evidence/m4/input-hashes.json`; its SHA is in the Git receipt.
+No test result is attributed to unchanged M3 HEAD. M1/M2/M3 branches, sources,
+locks, retained evidence, canonical specification, legacy data and reviewer draft
+are preserved. No user-data migration, push, merge, deployment or release.
+
+| M4 criterion | Evidence / disposition |
+|---|---|
+| §§47/54 typed services | Immutable prepared envelope/binding; explicit account/key/credential handles and repository/builder/transport Protocols; no Qt/concrete network in application logic |
+| §46 protected persistence | Existing OS-protected AES-GCM account aggregate; encrypted drafts, exact envelope, immutable recipients/profile/root/subkeys/archive refs and attempts committed atomically |
+| QM-MAIL-004 / I09 ordering | Prepared before submit; Submitting before transport; retries load identical bytes; changed capabilities block without regeneration |
+| §50 / QM-REL-001 uncertainty | Accepted/Unknown/Failed honest results; ten actual child-kill boundaries; SQLite FULL/COMMIT failure; restart never resends automatically |
+| T07/T09 concurrency/cancel | One worker claims operation; active recovery serializes; stale/cross-account/cancel/deadline/three-attempt limits tested |
+| Receipt isolation | Optional export error and process death preserve Accepted |
+| QM-MAIL-001 real TLS/SMTP | Not executed: simulation only; requires later bounded M4 transport qualification |
+| §54 M5 boundary | Raw existing-provider fixture only; comprehensive MIME/header/archive integration deferred to M5 by explicit scope |
+| Review/live gates | Google acceptance remains pending; M2 crypto and M3 recovery/enrollment independent review deferred before production/security release |
+
+Final runs: **40 M4 passed normal (35.98 s); the same 40 passed reverse (34.87 s)**,
+zero skips/warnings. **54 M3 passed (12.26 s)**, zero skips/warnings.
+**37 legacy passed (2.40 s), five existing datetime warnings**, zero skips.
+The opt-in disposable harness passed; actual SQLite/process failures are separated
+from synthetic identity/transport observations in the validation record.
+
+[Acceptance table and exact evidence](docs/operations/m4-validation.md),
+[interfaces and reproduction](experiments/m4/README.md),
+[ordering/storage ADR](docs/adrs/005-m4-development-ordering-and-outbox.md).
+F07 is not fixed across unchanged legacy entry points. No production security,
+original-provider reproduction, historical compatibility or license approval follows.
+
+Next bounded task: opt-in M4 SMTP/TLS adapter qualification against controlled
+loopback fixtures, with no real credentials/mail and no M5 integration. Separately,
+complete M3 user-driven Google test-account acceptance once explicitly provisioned.
+
+## Preserved M3 handoff assessment (2026-10-10)
+
+The following M3/M2/M1 record is preserved as historical evidence. Statements that
+M4 has not begun describe that checkpoint and are superseded by the section above.
 
 ## Current milestone and exit decision
 

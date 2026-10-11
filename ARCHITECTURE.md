@@ -5,6 +5,30 @@ root-level research Markdown, §§3–18 and 38–54 (PDF is a reference copy).
 See IMPLEMENTATION_STATUS.md and ADRs.
 The original “100% complete” and “v2” narrative did not establish release evidence.
 
+## M4 isolated durable outbox (2026-10-11)
+
+[ADR 005](docs/adrs/005-m4-development-ordering-and-outbox.md) authorizes this
+bounded development while M3 live acceptance remains pending. `experiments/m4`
+provides Qt-independent PrepareMessage/SubmitOutbox services through typed vault,
+builder and transport interfaces. Nothing imports it from default startup. Only
+`python -m experiments.m4.harness --simulate` runs the disposable demonstration.
+
+The adapter stores encrypted drafts, immutable provider payload bytes, recipients,
+profile/root/subkey references, stable operation/Message-ID and attempt records
+inside the existing authenticated M3 account aggregate. Preparation commits before
+submission; Submitting commits before a transport call. A second writer transaction
+serializes the injected transport and result persistence. Interrupted Submitting
+recovers to Unknown, never an automatic resend. Explicit duplicate-risk retry
+reuses the same bytes; optional receipt failure cannot alter Accepted.
+
+The one-recipient provider fixture is raw standard OpenPGP, not complete MIME;
+M5 owns production MIME/header/archive integration. Actual SMTP/TLS/provider
+acceptance and scalable scheduling remain unvalidated. All supplied transports
+are simulations and receive only scoped handles, not real credentials. M4 is
+PARTIAL for full acceptance; [validation](docs/operations/m4-validation.md) records
+40 normal/reverse tests, preserved M3 and legacy regressions, actual SQLite/process
+failures and the precise limits. F07 remains in the unchanged legacy flow below.
+
 ## M3 development integration (2026-10-10)
 
 [ADR 004](docs/adrs/004-m3-development-exception.md) permits bounded development
@@ -49,7 +73,7 @@ detected/erased; whole-database rollback and same-user compromise remain limitat
 [validation](docs/operations/m3-validation.md) and
 [recovery](docs/operations/m3-recovery.md) separate tested development behavior,
 live acceptance and deferred review. No existing data or legacy flow below is
-migrated. No M4 durable sending work is included.
+migrated. No M4 service is wired into this Settings path.
 
 ## Actual execution flows
 

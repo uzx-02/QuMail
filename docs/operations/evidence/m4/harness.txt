@@ -1,0 +1,12 @@
+{
+  "mode": "simulation only; synthetic authorization; real Windows vault/provider",
+  "prepared": true,
+  "interruption": "simulated after durable intent; no transport call",
+  "restart": "Unknown",
+  "explicit_duplicate_risk_retry": true,
+  "final": "Accepted",
+  "meaning": "simulated server acceptance, not delivery",
+  "byte_identical_retry": true,
+  "optional_export_failure_preserves_acceptance": true,
+  "disposable_credentials_cleaned": true
+}
