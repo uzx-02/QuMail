@@ -1,6 +1,5 @@
 """Explicit disposable development demonstration; never imports an SMTP adapter."""
 import argparse
-import gc
 from contextlib import contextmanager
 import json
 from pathlib import Path
@@ -71,11 +70,6 @@ def demo():
                 disposable_credentials_cleaned=True)
         finally:
             store.delete(vault.ident)
-            # M3 Vault.create uses a sqlite connection context manager, which
-            # commits but does not close the now-unreachable creation connection.
-            # Collect that cycle before Windows removes our disposable directory.
-            # Existing M3 proof bytes are preserved; this is harness cleanup only.
-            gc.collect()
 
 
 if __name__ == '__main__':

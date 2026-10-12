@@ -10,7 +10,7 @@ if __name__ == '__main__':
     parser.add_argument('--reverse', action='store_true')
     args = parser.parse_args()
     results = Results(args.reverse)
-    code = pytest.main(['experiments/m4/tests', '-q', '--tb=short',
+    code = pytest.main(['experiments/m4/tests', '-q', '--tb=short', '-rP',
                        '--basetemp=tmp/m4-pytest-'+uuid.uuid4().hex], plugins=[results])
     if code or results.skipped or len(set(results.discovered)) != len(results.discovered) or set(results.passed) != set(results.discovered):
         raise SystemExit(code or 1)

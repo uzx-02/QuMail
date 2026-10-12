@@ -45,7 +45,7 @@ class PrepareMessage:
             if type(raw) is not bytes or not raw or len(raw) > MAX_ENVELOPE: raise Failure(Error.LIMIT)
             if lease.cancelled.is_set() or time.monotonic() >= until: raise Failure(Error.CANCELLED)
             row['prepared'] = dict(bytes=pack(raw), digest=hashlib.sha256(raw).hexdigest(), key=key.value,
-                recipients=[a.value for a in binding.recipients], roots=list(binding.roots), profile=profile,
+                recipients=[a.value for a in binding.recipients], roots=list(binding.roots), profile=profile, sender=account.sender.value,
                 recipient_keys=[list(k) for k in binding.recipient_keys],
                 archive=account.archive_references(binding))
             row.update(state=State.PREPARED.value, reason='durably_prepared')
@@ -56,7 +56,7 @@ class PrepareMessage:
 
 class SubmitOutbox:
     def __init__(self, repository: OutboxRepository, transport: Transport):
-        if transport.simulation_only is not True: raise Failure(Error.TRANSPORT)
+        if not (transport.simulation_only is True or getattr(transport, 'loopback_only', False) is True): raise Failure(Error.TRANSPORT)
         self.repository, self.transport = repository, transport
 
     def inspect(self, lease: Lease, operation: OperationId) -> DeliveryResult:
@@ -69,65 +69,64 @@ class SubmitOutbox:
 
     def submit(self, lease: Lease, operation: OperationId, *, until: float | None = None) -> DeliveryResult:
         until = deadline() if until is None else until
-        # Phase one is independently committed BEFORE credentials reach any
-        # transport. Concurrent callers cannot both claim the Prepared record.
-        with self.repository.transaction(lease, until) as account:
-            row = account.row(operation)
-            if row['state'] != State.PREPARED.value: raise Failure(Error.TRANSITION)
-            if len(row['attempts']) >= MAX_ATTEMPTS: raise Failure(Error.LIMIT)
-            envelope = account.envelope(operation)
-            account.check_prepared(envelope)
-            account.credential()
-            row['attempts'].append(dict(number=len(row['attempts']) + 1, state=State.SUBMITTING.value,
-                                        reason='submission_intent_committed', digest=envelope.digest))
-            row.update(state=State.SUBMITTING.value, reason='submission_intent_committed')
-            attempt = len(row['attempts'])
-        # Phase two holds SQLite's writer lock through bounded transport/result
-        # commit. Recovery waits/fails busy rather than stealing an active worker.
-        # If recovery wins the gap before this lock, the state check blocks sending.
-        try:
+        with self.repository.ownership(lease.context, operation):
             with self.repository.transaction(lease, until) as account:
                 row = account.row(operation)
-                if row['state'] != State.SUBMITTING.value or len(row['attempts']) != attempt:
-                    raise Failure(Error.TRANSITION)
+                if row['state'] != State.PREPARED.value: raise Failure(Error.TRANSITION)
+                if len(row['attempts']) >= MAX_ATTEMPTS: raise Failure(Error.LIMIT)
                 envelope = account.envelope(operation)
-                try:
-                    account.check_prepared(envelope)
-                    credential = account.credential()
-                    if lease.cancelled.is_set() or time.monotonic() >= until:
-                        raise Failure(Error.CANCELLED)
-                except Failure as error:
-                    state, reason = State.FAILED, error.code.value
-                else:
-                    try:
-                        outcome = self.transport.submit(envelope, credential, lease.cancelled, until)
-                    except Exception:
-                        outcome = Outcome.UNKNOWN  # Never infer 'not sent' from an exception.
-                    if type(outcome) is not Outcome: outcome = Outcome.UNKNOWN
-                    state, reason = {
-                        Outcome.ACCEPTED: (State.ACCEPTED, 'server_accepted_not_delivered'),
-                        Outcome.REJECTED: (State.FAILED, 'definitive_rejection'),
-                        Outcome.UNKNOWN: (State.UNKNOWN, 'acceptance_unknown_duplicate_risk'),
-                    }[outcome]
-                row.update(state=state.value, reason=reason)
-                row['attempts'][-1].update(state=state.value, reason=reason)
-                delivered = result(operation, row)
-            return delivered
-        except Failure:
-            # Durable Submitting survives any credential/lock/result-commit failure.
-            # Recovery must conservatively classify it Unknown, even if this caller
-            # happens to know a transport was not invoked. Never return Accepted.
-            return DeliveryResult(operation, State.UNKNOWN, 'recover_durable_submission_intent', attempt)
+                account.check_prepared(envelope)
+                if self.transport.simulation_only:
+                    account.credential()  # Historical simulation prerequisite only.
+                from .model import CredentialHandle
+                credential = CredentialHandle(lease.context)
+                identity = OperationId.new().value
+                row['attempts'].append(dict(number=len(row['attempts'])+1, identity=identity,
+                    state=State.SUBMITTING.value, reason='submission_intent_committed', digest=envelope.digest))
+                row.update(state=State.SUBMITTING.value, reason='submission_intent_committed')
+                attempt = len(row['attempts'])
+            # No SQLite connection/transaction spans network I/O. OS ownership
+            # remains until durable result or conservative recovery is possible.
+            if lease.cancelled.is_set() or time.monotonic() >= until:
+                return DeliveryResult(operation, State.UNKNOWN, 'recover_durable_submission_intent', attempt)
+            try:
+                outcome = self.transport.submit(envelope, credential, lease.cancelled, until)
+            except Exception:
+                outcome = Outcome.UNKNOWN
+            if type(outcome) is not Outcome: outcome = Outcome.UNKNOWN
+            state, reason = {
+                Outcome.ACCEPTED: (State.ACCEPTED, 'server_accepted_not_delivered'),
+                Outcome.REJECTED: (State.FAILED, 'definitive_rejection_or_stopped_before_data'),
+                Outcome.UNKNOWN: (State.UNKNOWN, 'acceptance_unknown_duplicate_risk'),
+            }[outcome]
+            try:
+                with self.repository.completion(lease.context) as account:
+                    row = account.row(operation)
+                    if row['state'] != State.SUBMITTING.value or row['attempts'][-1]['identity'] != identity:
+                        raise Failure(Error.TRANSITION)
+                    row.update(state=state.value, reason=reason)
+                    row['attempts'][-1].update(state=state.value, reason=reason)
+                    delivered = result(operation, row)
+                return delivered
+            except Failure:
+                return DeliveryResult(operation, State.UNKNOWN, 'recover_durable_submission_intent', attempt)
 
     def recover(self, lease: Lease) -> tuple[OperationId, ...]:
         recovered = []
         with self.repository.transaction(lease, deadline()) as account:
-            for ident, row in account.records.items():
-                if row['state'] == State.SUBMITTING.value:
-                    row.update(state=State.UNKNOWN.value, reason='interrupted_acceptance_unknown')
-                    row['attempts'][-1].update(state=State.UNKNOWN.value, reason=row['reason'])
-                    recovered.append(OperationId(ident))
-        return tuple(recovered)  # Never calls transport or automatically retries.
+            pending = [OperationId(i) for i, r in account.records.items() if r['state'] == State.SUBMITTING.value]
+        for operation in pending:
+            try:
+                with self.repository.ownership(lease.context, operation):
+                    with self.repository.transaction(lease, deadline()) as account:
+                        row = account.row(operation)
+                        if row['state'] == State.SUBMITTING.value:
+                            row.update(state=State.UNKNOWN.value, reason='interrupted_acceptance_unknown')
+                            row['attempts'][-1].update(state=State.UNKNOWN.value, reason=row['reason'])
+                            recovered.append(operation)
+            except Failure as error:
+                if error.code is not Error.BUSY: raise
+        return tuple(recovered)  # No timeout-based stealing or automatic resubmission.
 
     def retry(self, lease: Lease, operation: OperationId, *, acknowledge_duplicate_risk: bool = False) -> None:
         with self.repository.transaction(lease, deadline()) as account:

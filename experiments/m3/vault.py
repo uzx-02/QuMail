@@ -1,6 +1,6 @@
 """Transactional isolated development vault; production mail never calls this module."""
 import base64
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 import json
 from pathlib import Path
 import secrets
@@ -71,10 +71,11 @@ class Vault:
         try:
             if store.get(ident)!=master: raise BoundaryError(Code.STORE)
             with path.open('xb'): pass
-            with sqlite3.connect(path) as db:
-                db.executescript('PRAGMA synchronous=FULL; CREATE TABLE vault(id TEXT PRIMARY KEY);'
-                    'CREATE TABLE accounts(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, blob BLOB NOT NULL);')
-                db.execute('INSERT INTO vault VALUES(?)',(ident,))
+            with closing(sqlite3.connect(path)) as db:
+                with db:
+                    db.executescript('PRAGMA synchronous=FULL; CREATE TABLE vault(id TEXT PRIMARY KEY);'
+                        'CREATE TABLE accounts(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, blob BLOB NOT NULL);')
+                    db.execute('INSERT INTO vault VALUES(?)',(ident,))
             return cls(path,store,provider)
         except BaseException:
             store.delete(ident)
@@ -85,10 +86,11 @@ class Vault:
     def connection(self):
         safe_path(self.path)
         db=sqlite3.connect(self.path,timeout=5,isolation_level=None)
-        db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,LIMIT+4096)
-        db.execute('PRAGMA synchronous=FULL')
-        db.execute('PRAGMA busy_timeout=5000')
-        try: yield db
+        try:
+            db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,LIMIT+4096)
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('PRAGMA busy_timeout=5000')
+            yield db
         except sqlite3.Error: raise BoundaryError(Code.CONFLICT) from None
         finally: db.close()
 

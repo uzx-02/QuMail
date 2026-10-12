@@ -1,3 +1,17 @@
+# Current M4 qualification
+
+Updated 2026-10-12. [Controlled SMTP/TLS validation and acceptance](m4-smtp-tls-validation.md)
+is the current record, with a new tested-source manifest under `evidence/m4/tls/`.
+The bounded transport/development integration is complete. Full M4 remains PARTIAL
+while legacy compose still uses F07 ordering; live Google and independent review
+retain ADR 004/005's exceptions and release gates.
+
+## Preserved b833e8b baseline report
+
+The report below describes the earlier 40-case simulation-only snapshot. Its
+claims about no SMTP adapter, coarse writer locking and GC cleanup are historical.
+It is preserved with its original input/output evidence, not overwritten.
+
 # M4 durable outbox validation
 
 Date: 2026-10-11 (Asia/Calcutta). **Bounded engineering proof complete; M4 PARTIAL

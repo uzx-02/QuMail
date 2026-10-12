@@ -1,7 +1,7 @@
 """M3 adapter: versioned outbox inside the existing authenticated account aggregate.
 
-No schema migration or adjacent key. BEGIN IMMEDIATE serializes proof transports;
-this coarse lock is a bounded development tradeoff, not production throughput design.
+No schema migration or adjacent key. Short SQLite transactions and OS-released
+operation ownership keep network waits outside account-wide writer transactions.
 """
 from contextlib import contextmanager
 import hashlib
@@ -11,12 +11,14 @@ from experiments.m3.vault import PROFILE
 from .model import (Binding, CredentialHandle, Error, Failure, PreparedEnvelope,
                     OperationId, MAX_ENVELOPE)
 from .codec import pack, unpack
+from .ownership import worker_lock
 
 
 class AccountTransaction:
     def __init__(self, vault, context, data):
         self._vault, self.context, self._data = vault, context, data
         self.records = data.setdefault('m4_outbox_v1', {})
+        self.sender = EmailAddress(data['address'])
 
     def binding(self, key, recipients, profile):
         if profile != PROFILE or not 1 <= len(recipients) <= 32 or len(set(recipients)) != len(recipients):
@@ -72,7 +74,8 @@ class AccountTransaction:
             raise Failure(Error.STORAGE)
         binding = Binding(KeyHandle(value['key']), tuple(EmailAddress(a) for a in value['recipients']),
                           tuple(value['roots']), value['profile'], tuple(tuple(k) for k in value['recipient_keys']))
-        return PreparedEnvelope(operation, self.context, row['message_id'], binding, raw, value['digest'])
+        return PreparedEnvelope(operation, self.context, row['message_id'], binding, raw, value['digest'],
+                                EmailAddress(value['sender']))
 
     def row(self, operation):
         if type(operation) is not OperationId or operation.value not in self.records:
@@ -86,6 +89,18 @@ class AccountTransaction:
 class VaultOutbox:
     def __init__(self, vault, access):
         self.vault, self.access = vault, access
+
+    def ownership(self, context, operation):
+        return worker_lock(self.vault.path, context.account, operation)
+
+    @contextmanager
+    def completion(self, context):
+        # Persist an observed side effect for its original account even after UI
+        # selection/lock changes. No credential resolution or UI publication here.
+        try:
+            with self.vault.transaction(context) as data:
+                yield AccountTransaction(self.vault, context, data)
+        except BoundaryError: raise Failure(Error.STORAGE) from None
 
     @contextmanager
     def transaction(self, lease, deadline):

@@ -1,6 +1,57 @@
 # QuMail 1.0 implementation status
 
-Updated: 2026-10-11 (Asia/Calcutta). Target: first proper QuMail 1.0.
+Updated: 2026-10-12 (Asia/Calcutta). Target: first proper QuMail 1.0.
+
+## Current M4 SMTP/TLS decision — 2026-10-12
+
+**M1 COMPLETE at baseline scope; M2 PARTIAL; M3 PARTIAL; M4 PARTIAL for the full
+application milestone. Bounded M4 SMTP/TLS and development integration engineering
+complete.** The full milestone still needs deliberate integration at the eventual
+compose boundary: legacy F07 remains open. Production MIME belongs to M5, which
+has not begun. Live Google/provider acceptance and independent review remain
+separate gates under the preserved ADR 004/005 development exceptions, not a
+recurring engineering stop. No independent or production approval is claimed.
+
+Verified/resumed local parent: `b833e8b38892ba84bc0be3e0ab5cf29607c6d479`, branch
+`codex/m4-durable-outbox`. Baseline input/output hashes matched. Current results
+belong to the new tested working-tree snapshot recorded in
+`docs/operations/evidence/m4/tls/input-hashes.json`; the final local Git receipt
+identifies the checkpoint containing those bytes. Prior checkpoints and retained
+evidence are preserved. One M3 file explicitly changes: `experiments/m3/vault.py`,
+to close SQLite creation/setup connections deterministically. Its regressions
+were rerun. No native input, canonical specification, legacy path or user data changed.
+
+| Criterion | Evidence / disposition |
+|---|---|
+| QM-MAIL-001 / T07 | Real loopback STARTTLS, verified certificate/hostname, fresh EHLO; zero resolver/AUTH on TLS failures; identity scopes rejected for mail |
+| QM-MAIL-004 / I09 | Frozen sender/recipients/profile/bytes; all required recipients accepted before DATA; actual server byte-digest equality across retry |
+| QM-REL-001 / T09 | OS-released operation ownership, short claim/result commits, durable attempt UUID; competing process blocked; account/vault writes work during I/O |
+| §50 uncertainty | Real final-response loss, child kill, result-commit denial recover Unknown; no auto-resend; final acceptance survives cleanup/export errors |
+| Development interface | Opt-in fixture panel/harness; network off GUI thread; coherent M3 context and stale selection/lock rejection; deterministic shutdown |
+| Existing proof / legacy | M1–M3 evidence preserved; 54 M3 regressions and 37 legacy regressions pass; legacy F07 not globally fixed |
+| Remaining full integration | Future compose routing to durable service; real provider account acceptance remains unexecuted; M5 protected MIME deferred |
+
+Final runs: **85 M4 passed normal (91.35 s); the same 85 passed reverse (90.53 s)**,
+zero skips/warnings. **54 M3 passed (12.56 s)**; **37 legacy passed (1.94 s)**
+with five existing datetime warnings. A reverse-run TLS cancellation failure was
+fixed using nonblocking handshake polling; the failed run is retained and both
+final orders passed on the corrected source.
+Dependency consistency: 47 packages compatible. Real socket/TLS/process/SQLite
+observations are retained separately from synthetic identities/credentials.
+
+[Current acceptance and exact evidence](docs/operations/m4-smtp-tls-validation.md),
+[development workflows](experiments/m4/README.md),
+[ADR 005 amendment](docs/adrs/005-m4-development-ordering-and-outbox.md).
+Next bounded step: review the local checkpoint and scope opt-in compose routing
+to the durable service. M3 Google test-account acceptance can proceed separately
+when explicitly provisioned; it is not an engineering stop. Full MIME integration
+needs its own M5 scope; M5 was not started. No external mail, migration,
+push, merge, deployment or release occurred.
+
+## Preserved initial M4 assessment (b833e8b, 2026-10-11)
+
+The simulation-only and coarse-lock statements below describe that historical
+checkpoint; current behavior is documented above.
 
 ## Current M4 development decision — 2026-10-11
 

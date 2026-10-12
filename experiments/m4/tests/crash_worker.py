@@ -30,6 +30,13 @@ if __name__ == '__main__':
                 yield account
                 boundary(f'{self.count}-before')
             boundary(f'{self.count}-after')
+        @contextmanager
+        def completion(self, *args):
+            self.count += 1
+            with super().completion(*args) as account:
+                yield account
+                boundary(f'{self.count}-before')
+            boundary(f'{self.count}-after')
     class ObservedTransport(SimulatedTransport):
         def submit(self, *args):
             boundary('transport-before')
@@ -42,7 +49,22 @@ if __name__ == '__main__':
     lease = access.select(AccountContext(AccountId(request['account']), DeviceId(request['device']),
                                          request['issuer'], request['subject']))
     repo = CrashRepository(v, access); op = OperationId(request['operation'])
-    if request['mode'] == 'prepare':
+    if request['mode'] == 'probe':
+        from experiments.m4.model import Failure, Error
+        submit = SubmitOutbox(repo, SimulatedTransport())
+        recovered = submit.recover(lease)
+        try: submit.submit(lease, op)
+        except Failure as error: busy = error.code is Error.BUSY
+        else: busy = False
+        print(json.dumps(dict(recovered=len(recovered), busy=busy)))
+    elif request['mode'] == 'smtp':
+        import ssl
+        from experiments.m4.smtp_transport import LoopbackSMTP
+        from experiments.m4.smtp_fixture import SyntheticResolver
+        context = ssl.create_default_context(cafile=request['ca'])
+        adapter = LoopbackSMTP('127.0.0.1', request['port'], SyntheticResolver(lease.context), fixture_context=context)
+        SubmitOutbox(repo, adapter).submit(lease, op)
+    elif request['mode'] == 'prepare':
         PrepareMessage(repo, ProviderFixtureBuilder()).prepare(lease, op, KeyHandle(request['key']),
             (EmailAddress(request['recipient']),), PROFILE)
     elif request['mode'] == 'export':

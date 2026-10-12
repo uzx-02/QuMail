@@ -4,6 +4,57 @@ Date: 2026-10-11 (Asia/Calcutta). Status: accepted for local development only.
 Canonical references: §§43, 46–47, 50–51 T07/T09, 54 M4; QM-MAIL-001/004,
 QM-REL-001/003 and invariants I03/I06/I09. The specification is unchanged.
 
+## Current SMTP/TLS qualification amendment — 2026-10-12
+
+The owner explicitly authorizes loopback-only SMTP/TLS qualification, short
+storage transactions and bounded development integration while live Google and
+independent review remain pending. ADR 004 and the development-ordering exception
+below remain unchanged. This is not live-provider or production approval.
+
+The earlier coarse-lock/simulation-only decision below describes b833e8b and is
+superseded for the new controlled path by these decisions:
+
+- `LoopbackSMTP` uses Python smtplib/ssl facilities with bounded response parsing,
+  absolute deadlines, cancellation-aware socket reads/writes, required STARTTLS,
+  certificate and hostname validation, fresh EHLO and TLS-before-resolution/AUTH.
+  Only numeric IPv4 loopback is accepted. Fixture trust roots never enter OS trust.
+- Frozen sender joins recipients/profile/root/subkey/byte identity in the prepared
+  record. Reject invalid SMTP framing rather than rewriting persisted bytes. Reject
+  any required recipient refusal before DATA. Retrying never rebuilds the envelope.
+- A stable per-operation OS file lock spans the attempt; SQLite claim/result
+  transactions are short. Persist a random durable attempt identity. Recovery
+  cannot steal an active worker on elapsed time; kernel release after process death
+  permits conservative Unknown recovery. Other account/vault writes remain possible.
+- Result persistence belongs to the original account even after UI selection changes.
+  The small opt-in outbox panel uses coherent M3 snapshots, off-thread work and
+  generation checks; stale results cannot update another account's display.
+- Fix the creation-connection leak at M3 Vault.create with deterministic closure,
+  also close setup failures in Vault.connection, and remove the GC workaround.
+  This is an explicit M3 source change with affected regressions rerun. Earlier
+  M3 checkpoint/evidence is preserved rather than asserted to match changed bytes.
+- Accepted derives from an observed final successful DATA response. Later cleanup
+  or optional receipt failures cannot change it. Possible acceptance without a
+  final response remains Unknown; explicit duplicate-risk retry is still required.
+
+The fixture envelope is a standard MIME/base64 test container around existing
+provider-generated ciphertext. It is not the M5 protected-header mail profile.
+Private fixture certificate files exist only in ignored disposable paths. Synthetic
+credential resolvers live in fixtures; a vault resolver refuses identity-only
+Google scopes. No live credentials/caches or external mail servers are used.
+
+The full [qualification report](../operations/m4-smtp-tls-validation.md) records
+real socket/TLS, process, SQLite and Qt observations separately from synthetic
+identity/credential data and source inspection. The bounded engineering criteria
+pass; M4 remains PARTIAL for the full application milestone because unchanged
+legacy compose still has F07 and is not yet wired to this service. Full MIME is
+M5, not an invented M4 blocker. Review, live-provider, licensing and release gates
+remain separate. No independent approval, push, merge, deployment or release.
+
+## Preserved b833e8b design record (2026-10-11)
+
+Its coarse SQLite lock, simulation-only transport and missing qualification
+statements are historical and superseded by the amendment above.
+
 ## Explicit development ordering exception
 
 The owner authorizes bounded M4 while M3 live Google acceptance remains pending.

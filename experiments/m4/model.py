@@ -31,6 +31,7 @@ class Error(str, Enum):
     CANCELLED = 'cancelled_before_submission'
     LIMIT = 'resource_limit'
     TRANSPORT = 'transport_failure'
+    BUSY = 'operation_owned_by_active_worker'
 
 
 class Failure(Exception):
@@ -68,6 +69,7 @@ class PreparedEnvelope:
     binding: Binding
     serialized: bytes
     digest: str
+    sender: EmailAddress
 
 
 class Outcome(str, Enum):
@@ -118,9 +120,12 @@ class AccountAccess:
 
 class OutboxRepository(Protocol):
     def transaction(self, lease: Lease, deadline: float) -> ContextManager['AccountUnit']: ...
+    def ownership(self, context: AccountContext, operation: OperationId) -> ContextManager[None]: ...
+    def completion(self, context: AccountContext) -> ContextManager['AccountUnit']: ...
 
 
 class AccountUnit(Protocol):
+    sender: EmailAddress
     records: dict[str, Any]
     def row(self, operation: OperationId) -> dict: ...
     def binding(self, key: KeyHandle, recipients: tuple[EmailAddress, ...], profile: str) -> Binding: ...

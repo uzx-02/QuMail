@@ -5,29 +5,36 @@ root-level research Markdown, §§3–18 and 38–54 (PDF is a reference copy).
 See IMPLEMENTATION_STATUS.md and ADRs.
 The original “100% complete” and “v2” narrative did not establish release evidence.
 
-## M4 isolated durable outbox (2026-10-11)
+## M4 controlled loopback outbox (2026-10-12)
 
-[ADR 005](docs/adrs/005-m4-development-ordering-and-outbox.md) authorizes this
-bounded development while M3 live acceptance remains pending. `experiments/m4`
-provides Qt-independent PrepareMessage/SubmitOutbox services through typed vault,
-builder and transport interfaces. Nothing imports it from default startup. Only
-`python -m experiments.m4.harness --simulate` runs the disposable demonstration.
+[ADR 005](docs/adrs/005-m4-development-ordering-and-outbox.md) now includes
+controlled SMTP/TLS qualification. Qt-independent PrepareMessage/SubmitOutbox
+services persist exact provider fixture bytes, frozen sender/recipients/profile/
+keys and durable attempt identity. Short claim/result SQLite transactions surround
+network work; per-operation OS ownership prevents competing submission or recovery
+from stealing a live worker. Account/vault writes proceed during network waits.
 
-The adapter stores encrypted drafts, immutable provider payload bytes, recipients,
-profile/root/subkey references, stable operation/Message-ID and attempt records
-inside the existing authenticated M3 account aggregate. Preparation commits before
-submission; Submitting commits before a transport call. A second writer transaction
-serializes the injected transport and result persistence. Interrupted Submitting
-recovers to Unknown, never an automatic resend. Explicit duplicate-risk retry
-reuses the same bytes; optional receipt failure cannot alter Accepted.
+`LoopbackSMTP` accepts only numeric IPv4 loopback and an explicit port. Required
+STARTTLS, certificate/hostname verification and fresh EHLO precede scoped credential
+resolution and AUTH. The default trust context validates normally; disposable roots
+are passed only by fixtures. Absolute deadlines, bounded replies and cancellation
+apply across protocol stages. Any required recipient rejection prevents DATA.
+Final DATA success means server acceptance, not delivery; possible acceptance stays
+Unknown. Retry reuses exact bytes. Cleanup/receipt failure cannot undo Accepted.
 
-The one-recipient provider fixture is raw standard OpenPGP, not complete MIME;
-M5 owns production MIME/header/archive integration. Actual SMTP/TLS/provider
-acceptance and scalable scheduling remain unvalidated. All supplied transports
-are simulations and receive only scoped handles, not real credentials. M4 is
-PARTIAL for full acceptance; [validation](docs/operations/m4-validation.md) records
-40 normal/reverse tests, preserved M3 and legacy regressions, actual SQLite/process
-failures and the precise limits. F07 remains in the unchanged legacy flow below.
+`python -m experiments.m4.loopback_demo --loopback` opens the small development
+outbox with generated fixture accounts/server; `--smoke` exercises it headlessly.
+The panel consumes coherent M3 snapshots, uses workers for network waits and rejects
+stale display results after selection/lock. It offers inspection, submission,
+restart recovery, explicit duplicate-risk retry and separate receipt export.
+Default startup, real provider configuration and legacy paths below are unchanged.
+
+The only changed M3 source is deterministic SQLite connection closure in vault.py;
+the old GC workaround is removed. Previous proof remains historical and the affected
+M3 suite is rerun. No native/provider inputs change. Test MIME is not M5 protected
+mail. [Current acceptance/evidence](docs/operations/m4-smtp-tls-validation.md)
+separates real loopback observations from synthetic identities and release gates.
+F07 remains in the unchanged legacy entry point; no production enablement follows.
 
 ## M3 development integration (2026-10-10)
 

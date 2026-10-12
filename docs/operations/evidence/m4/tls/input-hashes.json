@@ -1,0 +1,226 @@
+{
+  "parent_checkpoint": "b833e8b38892ba84bc0be3e0ab5cf29607c6d479",
+  "attribution": "Final working-tree source; audit script/docs completed after runtime tests; not results on unchanged parent",
+  "historical_m4_manifest_matches_parent_commit": true,
+  "changed_m3_source": "experiments/m3/vault.py: deterministic connection closure; affected suite rerun",
+  "reviewer_draft_sha256": "9da71cac40f75a9c4fcf8bfd5f84dcf5364c95c5264e1d307309b5451049df47",
+  "helper_executable_sha256": "f0b3c683d8afcbafb4b0043e46fb11d88fa98780fd3ffe2477afd1b9e03ca516",
+  "native_libcrypto_sha256": "5ceb47b86bec9b3b8d6e666e718947391c59f8763be1347b0e3c2a692e022241",
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "sqlite": "3.53.1",
+    "smtp_tls": "OpenSSL 3.5.8 25 Aug 2026",
+    "packages": {
+      "cryptography": "50.0.2",
+      "google-auth": "2.49.1",
+      "google-auth-oauthlib": "1.3.0",
+      "pytest": "8.4.2",
+      "PyQt6": "6.10.2",
+      "liboqs-python": "0.16.0.1"
+    }
+  },
+  "executed_python_tests": [
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[export-receipt-after-Accepted]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[export-receipt-before-Accepted]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[prepare-1-after-Prepared]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[prepare-1-before-Draft]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-1-after-Unknown]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-1-before-Prepared]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-2-after-Accepted]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-2-before-Unknown]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-transport-after-Unknown]",
+    "experiments/m4/tests/test_outbox.py::test_abrupt_child_termination_restart_exact_bytes[submit-transport-before-Unknown]",
+    "experiments/m4/tests/test_outbox.py::test_account_switch_cancel_deadline_and_cross_account",
+    "experiments/m4/tests/test_outbox.py::test_cancellation_during_preparation_and_after_intent",
+    "experiments/m4/tests/test_outbox.py::test_changed_contact_after_prepare_blocks_submission_and_retry",
+    "experiments/m4/tests/test_outbox.py::test_concurrent_submission_and_active_recovery_no_duplicate",
+    "experiments/m4/tests/test_outbox.py::test_delivery_semantics_explicit_retry_and_receipt_failure[definitive_rejection]",
+    "experiments/m4/tests/test_outbox.py::test_delivery_semantics_explicit_retry_and_receipt_failure[final_server_acceptance]",
+    "experiments/m4/tests/test_outbox.py::test_delivery_semantics_explicit_retry_and_receipt_failure[possible_acceptance]",
+    "experiments/m4/tests/test_outbox.py::test_draft_encrypted_and_no_submit_before_preparation",
+    "experiments/m4/tests/test_outbox.py::test_every_recipient_verified_single_recipient_fixture_limit",
+    "experiments/m4/tests/test_outbox.py::test_no_real_transport_no_multi_recipient_format_and_bounds",
+    "experiments/m4/tests/test_outbox.py::test_opt_in_harness_and_disposable_cleanup",
+    "experiments/m4/tests/test_outbox.py::test_preparation_commit_denied_no_ready_record",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[bad-profile]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[changed]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[expired]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[locked]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[revoked]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[unknown]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[unverified]",
+    "experiments/m4/tests/test_outbox.py::test_prerequisites_fail_closed_zero_transport[wrong-key]",
+    "experiments/m4/tests/test_outbox.py::test_provider_and_output_failure_retains_encrypted_draft",
+    "experiments/m4/tests/test_outbox.py::test_provider_generated_persisted_envelope_and_restart",
+    "experiments/m4/tests/test_outbox.py::test_real_sqlite_full_draft_has_no_operation",
+    "experiments/m4/tests/test_outbox.py::test_reconciliation_never_resubmits",
+    "experiments/m4/tests/test_outbox.py::test_same_root_rotated_recipient_subkeys_block_old_envelope",
+    "experiments/m4/tests/test_outbox.py::test_submission_failure_boundaries[credential]",
+    "experiments/m4/tests/test_outbox.py::test_submission_failure_boundaries[intent_commit]",
+    "experiments/m4/tests/test_outbox.py::test_submission_failure_boundaries[result_commit]",
+    "experiments/m4/tests/test_outbox.py::test_switch_during_transport_preserves_original_account_uncertainty",
+    "experiments/m4/tests/test_outbox.py::test_transport_exception_invalid_result_and_retry_limit",
+    "experiments/m4/tests/test_panel.py::test_close_waits_for_worker_before_disposable_storage_cleanup",
+    "experiments/m4/tests/test_panel.py::test_opt_in_loopback_workflows[auth-reject-Failed]",
+    "experiments/m4/tests/test_panel.py::test_opt_in_loopback_workflows[final-loss-Unknown]",
+    "experiments/m4/tests/test_panel.py::test_opt_in_loopback_workflows[success-Accepted]",
+    "experiments/m4/tests/test_panel.py::test_panel_network_worker_account_switch_and_lock",
+    "experiments/m4/tests/test_smtp.py::test_accepted_survives_cleanup_exception",
+    "experiments/m4/tests/test_smtp.py::test_all_recipients_required_and_smtp_dot_framing",
+    "experiments/m4/tests/test_smtp.py::test_deterministic_vault_creation_and_exception_close",
+    "experiments/m4/tests/test_smtp.py::test_real_process_ownership_network_unlock_and_kill[network]",
+    "experiments/m4/tests/test_smtp.py::test_real_process_ownership_network_unlock_and_kill[result-commit]",
+    "experiments/m4/tests/test_smtp.py::test_real_retry_exact_bytes_and_result_commit_failure",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-auth]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-data]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-ehlo-tls]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-ehlo]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-final]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-greeting]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-mail]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-rcpt]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[cancel-tls]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-auth]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-data]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-ehlo-tls]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-ehlo]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-final]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-greeting]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-mail]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-rcpt]",
+    "experiments/m4/tests/test_smtp.py::test_real_stage_deadline_and_cancellation[timeout-tls]",
+    "experiments/m4/tests/test_smtp.py::test_scope_account_and_destination_guards",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[auth-reject-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[close-after-accept-valid-Accepted]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[data-reject-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[disconnect-data-valid-Unknown]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[final-loss-valid-Unknown]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[final-reject-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[missing-starttls-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[oversized-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[recipient-reject-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[success-expired-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[success-untrusted-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[success-valid-Accepted]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[success-wrong-host-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_socket_tls_observed_outcomes[tls-reject-valid-Failed]",
+    "experiments/m4/tests/test_smtp.py::test_tls_before_vault_mail_scope_resolution"
+  ],
+  "inputs": [
+    {
+      "path": "experiments/m3/vault.py",
+      "sha256": "a9daccf80bd07eef64278d4e573dd03ee70b41b309fda443fb25c83351606471"
+    },
+    {
+      "path": "experiments/m4/__init__.py",
+      "sha256": "1dd0cd792cde00337371d6718054098735f5169bdc8163e24f754c759cbd99f9"
+    },
+    {
+      "path": "experiments/m4/audit_snapshot.py",
+      "sha256": "33cae017703478bfed709495d2722ea180fea502fb895213e65f72a908962633"
+    },
+    {
+      "path": "experiments/m4/audit_tls.py",
+      "sha256": "453d33275ba80f374f7376b09f28d11b47fbb676a7c1326fa81615d2087076bf"
+    },
+    {
+      "path": "experiments/m4/codec.py",
+      "sha256": "e8878b586df61d51508b7bac6610b3cbcae1c313e9233cbf3ab7c8f38afdb6aa"
+    },
+    {
+      "path": "experiments/m4/harness.py",
+      "sha256": "6a92ed74000a9c4700c6e8974daadd8b00e66db8dfbf3e2b60c5ffd747fc3e39"
+    },
+    {
+      "path": "experiments/m4/loopback_demo.py",
+      "sha256": "ae231705f97f00b9bbf7c63148c1ebd8a1845dafc76e9228205ec9171d0ef29a"
+    },
+    {
+      "path": "experiments/m4/model.py",
+      "sha256": "73d22b205e81e55e579df9f21ae52b03f05debba1839e1a4ddb32b01114c6f3f"
+    },
+    {
+      "path": "experiments/m4/outbox_panel.py",
+      "sha256": "f75efbda1f4bacccf1c540b851f792db4e22e80ab756605c32bc04256d7c45bf"
+    },
+    {
+      "path": "experiments/m4/ownership.py",
+      "sha256": "eb0152048cf39f0ba11b4e2bfb855801c8fe1fd24cdf3564cc25f257a41b614b"
+    },
+    {
+      "path": "experiments/m4/README.md",
+      "sha256": "c25a5f5c8adf578fe1fea8cf1a83e41dec53f585e3c71c9545a1088ce99bfcd8"
+    },
+    {
+      "path": "experiments/m4/run_tests.py",
+      "sha256": "388d1242b7878bd25c4bce272cf83fc52bb40c137895f8e49ae5a59aae1197de"
+    },
+    {
+      "path": "experiments/m4/services.py",
+      "sha256": "46acd953f848e1a95cda1255200d9270540d54bfc17060bd82ab1c76831029eb"
+    },
+    {
+      "path": "experiments/m4/smtp_fixture.py",
+      "sha256": "b373700368e41d594dea2efbef507038707a8f70b056f1f342230438ad6f041a"
+    },
+    {
+      "path": "experiments/m4/smtp_transport.py",
+      "sha256": "e876758fb6de81974b27173e077dded295d6873ccd432a3c089a0d69b8018e9d"
+    },
+    {
+      "path": "experiments/m4/tests/crash_worker.py",
+      "sha256": "20041be47937cf691f06b39007a6d9affcb10f921ac58226160065caa1fe80ad"
+    },
+    {
+      "path": "experiments/m4/tests/test_outbox.py",
+      "sha256": "4dfe58638802f3e96e5f7d0ef0bf8263037ffc9ffa0ccc020e2b38ab66468167"
+    },
+    {
+      "path": "experiments/m4/tests/test_panel.py",
+      "sha256": "6b681f4981800a3c1ec1f19aefc40e71b81c26548e2a59aeb43c2f0876a524ba"
+    },
+    {
+      "path": "experiments/m4/tests/test_smtp.py",
+      "sha256": "20ccaa18e50a8eab731081971497174ea025ca15c1ea574084cde0262b420680"
+    },
+    {
+      "path": "experiments/m4/transports.py",
+      "sha256": "f4ea5c004d335644cbcc20054a6955713ebf842f063815154ad6642e32294a19"
+    },
+    {
+      "path": "experiments/m4/vault_adapter.py",
+      "sha256": "a26951aed51291277d632d1bf829dc0d98e3fe8330cff3b09fd88258c430f834"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "docs/operations/evidence/m4/tls/dependencies.txt",
+      "sha256": "c67ad86e676b057d068d957fddeb6aa3ee5134f1d98778ccdd3497377f2785ee"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/handshake-focused.txt",
+      "sha256": "ce89ac0c6f3c805166025cd3c55c3f1e83d129d5eb61cf040db3255ce472d1ea"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/legacy.txt",
+      "sha256": "ca668707b5f91f1abcd9e548def2bb508fd130c18b9d2fe0a588c1c72f6d2318"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/m3.txt",
+      "sha256": "47dc070dab281e3f97f636496b31e66ac4c8e020249aeece9ee8927a46965484"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/normal.txt",
+      "sha256": "274760f9f188e77d2d03eccb755c187f10e4a254db3e9f956eb24785a24b3868"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/reverse-before-handshake-fix.txt",
+      "sha256": "9c30048cc9b52adabd32583fa2443bf14d0b624a185b33fc315aa664761dfd95"
+    },
+    {
+      "path": "docs/operations/evidence/m4/tls/reverse.txt",
+      "sha256": "9c5abd24c11682a7fdfe9a0ffe94d5bd0ed20a9f71f59b9e60f6a1b65193945b"
+    }
+  ]
+}
