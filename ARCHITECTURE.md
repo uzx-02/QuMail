@@ -1,3 +1,49 @@
+# M5 opt-in protected-message boundary — 2026-10-14
+
+The new `experiments/m5` path composes RFC 3156 PGP/MIME with RFC 9788 direct
+protected headers over the provisional M2/M3 standard OpenPGP profile. It is
+disabled by default and uses disposable accounts and loopback-only TLS. The
+historical architecture below and all earlier runtime paths remain unchanged.
+[ADR 006](docs/adrs/006-m5-development-message-boundary.md) authorizes this bounded
+development ordering, without independent or production approval.
+
+`Compose` uses coherent M3 account leases and M3 current verified-recipient checks.
+Its repository adapter reuses M4's encrypted draft/outbox transaction, binding and
+submission services; only public recipient certificates enter encryption. M3-owned
+key handles resolve private signing/decryption material inside the service and
+private helper pipes. No directory/backend receives private keys. Sender archival
+encryption is explicit; Bcc is unavailable. No TQR/simulator/portal routing exists.
+
+`MessageBuilder` fixes protected metadata in bounded inner MIME, asks the provider
+for complete signed/encrypted standard packets, wraps provider ASCII armor, and
+commits the exact serialized envelope before SMTP. M4 preserves those bytes on
+retry, honest acceptance uncertainty and independent receipt export. The native
+helper includes unchanged M3 crypto source with a separate root package/lock;
+an explicit worker stack fixes the measured Windows peer stack overflow.
+
+`OpenMessage` bounds outer MIME, requires complete provider integrity/signature
+verification, validates signed profile/author/intended recipient/metadata, then
+commits account-scoped replay state before returning a frozen result. Identity
+trust and outer-header discrepancies are separate from signature validity. Conflicts
+cannot be labeled verified-confidential. Legacy classification preserves original
+bytes and never serves as fallback for failed modern verification.
+
+`ComposePanel` uses a worker and generation/lease checks for prepare/open/network
+work. The explicit demo offers encrypted draft, prepare, inspect, submit, controlled
+failure/recovery/retry, recipient copy and sender archive open. It has a plain-text
+test display, no IMAP inbox or active-content renderer. Cancellation/switch/lock
+prevents late publication; process pipes have deadline/output bounds. SQLite waits
+and preparation writer-lock duration remain documented development limits.
+
+[M5 validation](docs/operations/m5-validation.md) distinguishes real native/storage/
+TLS evidence from synthetic identities and shared MIME wrappers. Independent crypto
+exchange is demonstrated both ways; independent mail-client interoperability is not.
+Actual smaller limits and launch instructions are in [M5 README](experiments/m5/README.md).
+Legacy F07 remains open in unchanged compose. Full M5 and production/review/licensing/
+live-provider gates remain pending. M6 is not begun.
+
+## Preserved architecture through the M4 checkpoint
+
 # QuMail 1.0 architecture — actual development baseline
 
 Status: prototype, not approved for confidential production use. Specification:

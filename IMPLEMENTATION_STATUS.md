@@ -1,3 +1,52 @@
+# Current M5 development decision — 2026-10-14
+
+**Bounded M5 protected-message and compose engineering complete; full M5 PARTIAL.**
+M1 remains COMPLETE at baseline scope; M2/M3/M4 retain their scoped earlier
+assessments. ADR 006 preserves the owner's development exception while live-provider
+acceptance and independent review remain required before production/security release.
+No independent approval or production readiness is claimed. M6 has not begun.
+
+Verified local parent: `b00693cbaba92037b3dec8c9e35d866650a5018f` (preserved M4
+branch). New local branch: `codex/m5-protected-compose`. Runtime results belong to
+the M5 source identified by `docs/operations/evidence/m5/input-hashes.json`, not
+unchanged parent HEAD; the local Git receipt identifies the commit containing it.
+Earlier source/evidence/locks, canonical specification, reviewer draft and reference
+PDF are preserved. Only new M5 files and these current architecture/status additions
+are included. No keys, credentials, generated binaries or private evidence.
+
+| Requirement / criterion | Evidence and decision |
+|---|---|
+| §§41–43/54 M5; QM-MAIL-002/003 | Genuine armored RFC 3156 combined sign/encrypt with direct RFC 9788 hp=cipher protected MIME; experimental marker only; protected author/recipients/subject/date/ID/references/attachments |
+| T01/T02/QM-INT-001 | Sequoia 2.4.1/OpenSSL 3.5.9 ↔ rPGP 0.21.0; two recipient keys plus real sender archive decryption using unchanged M3 subkey model; shared MIME wrapper is not independent mail-client evidence |
+| T04/I05/I06 | All recipients require existing M3 verified state/current certificate; unknown/changed/expired/revoked blocks all; Bcc unavailable |
+| T02/T05/I07/I18 | Immutable results separate crypto/identity/mismatch/replay; malformed/forbidden/tampered/truncated/wrong-key rejection; persisted duplicates/conflicts; read-only legacy classification without fallback |
+| QM-MAIL-004/I09/T07/T09 | Off-GUI compose prepares complete persisted MIME before loopback TLS; identical retry bytes; Accepted/Failed/Unknown; receipt isolation; cancel/switch/lock discard stale work |
+| Limits | Smaller explicit experimental caps qualified; no 25 MiB product claim, hard OS heap cap or hard 30-second whole-operation guarantee |
+| Full milestone/release | Independent protocol/parser review, independent-client evidence and production transition remain pending; live Google, licensing, platform and historical compatibility gates retained separately |
+
+Final results: **55 M5 passed normal (84.17 s); same 55 passed reverse (82.23 s)**;
+**2 native passed (1.41 s)**; **85 M4 passed (87.20 s)**; **54 M3 passed (11.11 s)**;
+**37 legacy passed (3.10 s), five existing datetime warnings**. Zero skips;
+no M5/M4/M3 warnings. All 47 Python packages compatible. Local Windows evidence,
+not new hosted/Linux validation. The executable peer stack-overflow failure and
+corrected SQLite fault-fixture targeting are retained as development history.
+
+[Acceptance table, exact commands, profile and evidence](docs/operations/m5-validation.md),
+[opt-in workflows and actual limits](experiments/m5/README.md),
+[ADR 006](docs/adrs/006-m5-development-message-boundary.md).
+
+Legacy F07 remains open at unchanged entry points; durable ordering is demonstrated
+in the new opt-in compose path. Exact next bounded task: review this local checkpoint
+and qualify the exact RFC 9788/3156 experimental profile against a separately
+implemented peer, without expanding into M6 or enabling production. Live-provider
+acceptance can proceed separately with explicit provisioned test configuration.
+No external mail, data migration, push, merge, deployment or release occurred.
+
+## Preserved earlier milestone status
+
+The earlier dated assessments below are historical snapshots. Their statements
+that M5 has not begun describe those checkpoints; the current assessment is above.
+
 # QuMail 1.0 implementation status
 
 Updated: 2026-10-12 (Asia/Calcutta). Target: first proper QuMail 1.0.

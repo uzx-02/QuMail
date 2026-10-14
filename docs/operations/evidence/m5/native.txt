@@ -1,0 +1,12 @@
+   Compiling qumail-m5-provider v0.1.0 (<REPO>\experiments\m5\provider)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.14s
+   Compiling qumail-m5-provider v0.1.0 (<REPO>\experiments\m5\provider)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.92s
+     Running unittests src\main.rs (tmp\m2\target\debug\deps\qumail_m5_provider-3df835a7e8cbb463.exe)
+
+running 2 tests
+test tests::forbidden_content_suite_unsigned_and_truncated_rejected ... ok
+test tests::independent_multi_recipient_archive_and_failures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+

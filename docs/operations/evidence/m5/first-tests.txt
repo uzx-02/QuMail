@@ -1,0 +1,26 @@
+.FF.......................                                               [100%]
+================================== FAILURES ===================================
+______ test_independent_exchange_exact_m3_subkey_model[sequoia-to-rpgp] _______
+experiments\m5\tests\test_message.py:96: in test_independent_exchange_exact_m3_subkey_model
+    result=native.call('peer_open',budget(lease),certificate=bytes(secret['secret']),sender=sender,data=armor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+experiments\m5\provider.py:49: in call
+    if p.returncode: raise Failure(Code.PROVIDER)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   experiments.m5.model.Failure: provider_failed_no_verified_output
+______ test_independent_exchange_exact_m3_subkey_model[rpgp-to-sequoia] _______
+experiments\m5\tests\test_message.py:90: in test_independent_exchange_exact_m3_subkey_model
+    wire=crafted(setup,inner,op='seal' if direction=='sequoia-to-rpgp' else 'peer_seal')
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+experiments\m5\tests\test_message.py:54: in crafted
+    armor=native.call(op,budget(lease),certificate=bytes(signer['secret']),recipients=publics,data=raw)['data']
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+experiments\m5\provider.py:49: in call
+    if p.returncode: raise Failure(Code.PROVIDER)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   experiments.m5.model.Failure: provider_failed_no_verified_output
+=================================== PASSES ====================================
+___________ test_multi_recipient_archive_loopback_retry_and_replay ____________
+---------------------------- Captured stdout call -----------------------------
+E2E_OBSERVATION two recipients + sender archive decrypted; TLS payload matched on retry; replay persisted
+2 failed, 24 passed in 56.75s

@@ -1,0 +1,18 @@
+..................F..........................                            [100%]
+================================== FAILURES ===================================
+_________ test_replay_capacity_and_storage_failure_no_verified_return _________
+experiments\m5\tests\test_limits.py:71: in test_replay_capacity_and_storage_failure_no_verified_return
+    with pytest.raises(Failure): OpenMessage(v,access,native).open(local,bk,envelope.serialized,sender,budget(local))
+         ^^^^^^^^^^^^^^^^^^^^^^
+E   Failed: DID NOT RAISE <class 'experiments.m5.model.Failure'>
+=================================== PASSES ====================================
+___________ test_multi_recipient_archive_loopback_retry_and_replay ____________
+---------------------------- Captured stdout call -----------------------------
+E2E_OBSERVATION two recipients + sender archive decrypted; TLS payload matched on retry; replay persisted
+______ test_independent_exchange_exact_m3_subkey_model[sequoia-to-rpgp] _______
+---------------------------- Captured stdout call -----------------------------
+INDEPENDENT_CRYPTO_OBSERVATION sequoia-to-rpgp three decryptors; shared MIME/armor/policy, not independent mail clients
+______ test_independent_exchange_exact_m3_subkey_model[rpgp-to-sequoia] _______
+---------------------------- Captured stdout call -----------------------------
+INDEPENDENT_CRYPTO_OBSERVATION rpgp-to-sequoia three decryptors; shared MIME/armor/policy, not independent mail clients
+1 failed, 44 passed in 58.22s
