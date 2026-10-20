@@ -1,3 +1,41 @@
+# Current M6 mail workflow decision — 2026-10-21
+
+**Requested bounded workflows implemented and locally validated; full M6 PARTIAL.**
+Continued from actual clean tracked HEAD `2c0eed635bb66740f8365ee89b81e04470a7f515`
+on `codex/m6-gmail-inbox`. Untracked user launcher, reference PDF and reviewer draft
+remain excluded. M1 COMPLETE baseline and M2 engineering checkpoint `1fc4e55…`
+remain preserved; no milestone restart or independent approval claim.
+
+| Requirement / scope | Implemented and tested |
+|---|---|
+| M3/M5/M4 integration, §54 M6 | Real account context/vault, encrypted draft save/edit, current-recipient validation, frozen preparation, durable outbox, explicit cancel/retry, sender archive |
+| Explicit Gmail development transport | Disabled-by-default `--dev-gmail-submit`; fixed verified STARTTLS endpoint; owned mail-scoped OAuth after TLS; no passwords/identity-scope fallback; loopback fixtures remain restricted |
+| Attachments, QM-MAIL-006/PERF-001 | Existing qualified limits; verified Save As; unsafe/overwrite/unverified export rejected; partial export cleaned up; never auto-open/execute |
+| Reply/forward/threading, §43 | Inner author/references for verified protected reply; explicit forward recipients, attachments re-encrypted without endorsement claim; conventional identity unverified, recipients confirmed; authenticated page-local thread grouping |
+| Inbox/session invariants, T07/T12 | PEEK/unread/UID isolation retained; local signer hint still requires full verification; account switch/lock/cancel rejects late results and clears plaintext |
+| Evidence / disposition | 52 M6 tests normal and exact reverse; M4 85, M5 55, M3 54, legacy 37 pass; zero skips; five existing legacy warnings only |
+
+[Validation and acceptance table](docs/operations/m6-validation.md),
+[controls and live acceptance](docs/operations/m6-gmail-inbox.md),
+[ADR 008](docs/adrs/008-m6-mail-workflows.md),
+[hash-identified snapshot](docs/operations/evidence/m6-workflows/input-hashes.json).
+The final runtime source is identified by those hashes and its local Git receipt;
+results are not attributed to unchanged parent HEAD. Existing dependencies/helpers,
+M3/M5 code and prior evidence are preserved. Narrow M4 adapter/fixture changes are
+recorded separately; no crypto or storage redesign.
+
+Remaining M6: live Google OAuth/IMAP/SMTP acceptance, usable-security/accessibility
+walkthrough and supported-platform/connection-phase cancellation qualification.
+Small experimental limits, INBOX manual paging, page-local threads and 16-operation
+outbox retention remain explicit limits. Independent MIME-peer/expert review,
+historical compatibility, native assurance and licensing/distribution/release gates
+remain pending under ADR 004/006 exceptions. No M7/M8 or production acceptance.
+Next bounded task is M6 walkthrough/platform qualification; live test-account work
+only when provisioned and externally sending is separately authorized. No mail was
+sent externally, no credentials searched, no migration, push, merge or release.
+
+## Preserved prior assessment at 2c0eed6
+
 # Current M6 Gmail-first development decision — 2026-10-20
 
 **Bounded Gmail-first inbox engineering implemented and locally tested; full M6

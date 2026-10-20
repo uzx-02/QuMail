@@ -1,6 +1,7 @@
 """Account-scoped mailbox operations. Header cache is inside the existing vault."""
 from email.parser import BytesParser, BytesHeaderParser
 from email.policy import default
+from email.utils import parseaddr
 import time
 from experiments.m5.legacy import classify, Kind
 from experiments.m5.services import OpenMessage
@@ -15,6 +16,7 @@ class Credentials:
     def resolve(self, lease, budget):
         self.access.check(lease, budget.deadline); budget.check()
         data = self.vault._read(lease.context)
+        self.vault.check(data, lease.context, active=True)
         tokens = data.get('oauth')
         if lease.context.issuer != 'https://accounts.google.com' or not tokens or MAIL_SCOPE not in tokens.get('scopes', ()):
             raise Failure(Code.AUTH)
@@ -53,7 +55,8 @@ def conventional(raw, key, seen):
         body = '\n\n'.join(bodies)
         if len(body.encode('utf-8')) > MAX_WIRE: raise Failure(Code.LIMIT)
         return Display(key, field(message, 'Subject'), body or '[No plain-text body. HTML and attachments are not rendered.]',
-                       'Conventional mail: author and content are not cryptographically verified.', seen)
+                       'Conventional mail: author and content are not cryptographically verified.', seen,
+                       author_claim=parseaddr(field(message, 'From'))[1])
     except Failure: raise
     except Exception: raise Failure(Code.PROTOCOL) from None
 
@@ -98,7 +101,10 @@ class MailboxService:
             kind = classify(raw).kind
         if kind is Kind.MODERN:
             data = self.vault._read(lease.context)
-            # Explicit local certificate selection, not trust in an outer From header.
+            # Outer From is a lookup hint ONLY. The local certificate still must
+            # verify the full signature and authenticated inner author through M5.
+            if signer_address is None:
+                signer_address = parseaddr(field(headers, 'From'))[1]
             if signer_address == data['address']:
                 public = bytes(self.vault.key(data, lease.context, key_handle)['public'])
             else:
@@ -108,7 +114,7 @@ class MailboxService:
             opened = self.opener.open(lease, key_handle, raw, public, budget)
             result = Display(key, opened.subject, opened.body,
                 f'Signature valid; identity: {opened.identity_trust}; replay: {opened.replay.value}; '
-                f'outer mismatches: {", ".join(opened.mismatches) or "none"}; archive: {opened.archive}', seen)
+                f'outer mismatches: {", ".join(opened.mismatches) or "none"}; archive: {opened.archive}', seen, opened)
         elif kind is Kind.LEGACY:
             result = Display(key, 'Legacy encrypted message', '[Original bytes retained on server; use the isolated legacy reader.]',
                              'Legacy: unverified compatibility; no modern verification claim.', seen)

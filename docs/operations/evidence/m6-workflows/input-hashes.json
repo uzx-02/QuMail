@@ -1,0 +1,491 @@
+{
+  "parent": "2c0eed635bb66740f8365ee89b81e04470a7f515",
+  "attribution": "Executed on the final runtime working-tree bytes recorded below; not on unchanged parent HEAD. Audit and documentation written after tests.",
+  "preserved_paths": [
+    "experiments/m3",
+    "experiments/m5",
+    "core/account_session.py",
+    "core/identity_service.py",
+    "transport/development_google.py",
+    "packaging",
+    "QuMail-1.0-Research-Audit-Specification.md",
+    "docs/operations/evidence/m6",
+    "docs/operations/evidence/m5"
+  ],
+  "helper_hashes": {
+    "tmp/m2/target/debug/qumail-m5-provider.exe": "a07bec89fa06a172688f7565911554256b82c5db4d048900dd6d91643fc699f8",
+    "tmp/m2/target/debug/qumail-m3-provider.exe": "f0b3c683d8afcbafb4b0043e46fb11d88fa98780fd3ffe2477afd1b9e03ca516",
+    "tmp/m2/openssl-install/lib/libcrypto.lib": "5ceb47b86bec9b3b8d6e666e718947391c59f8763be1347b0e3c2a692e022241"
+  },
+  "preserved_m1": "023c941ec2ef284f6be28b5a9605f1dca9c28787",
+  "preserved_m2": "1fc4e55f09e173cec7634d0b2dc776097b552063",
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "tls": "OpenSSL 3.5.8 25 Aug 2026",
+    "sqlite": "3.53.1",
+    "packages": {
+      "PyQt6": "6.10.2",
+      "pytest": "8.4.2",
+      "google-auth": "2.49.1",
+      "google-auth-oauthlib": "1.3.0"
+    }
+  },
+  "tests": [
+    "experiments/m6/test_mailbox.py::test_cancel_blocked_socket_no_cache",
+    "experiments/m6/test_mailbox.py::test_literal_and_message_limits",
+    "experiments/m6/test_mailbox.py::test_mailbox_entry_point_is_opt_in",
+    "experiments/m6/test_mailbox.py::test_no_content_type_conventional_fetch_and_empty_inbox",
+    "experiments/m6/test_mailbox.py::test_paging_and_deleted_uid",
+    "experiments/m6/test_mailbox.py::test_plain_text_only[Content-Type: text/html\\r\\n\\r\\n<img src=\"https://example.invalid/tracker\"><script>alert(1)</script>-No plain-text]",
+    "experiments/m6/test_mailbox.py::test_plain_text_only[Subject: <b>untrusted</b>\\r\\nContent-Type: text/plain\\r\\n\\r\\n<script>literal text</script>-<script>literal]",
+    "experiments/m6/test_mailbox.py::test_real_m5_protected_message_through_imap",
+    "experiments/m6/test_mailbox.py::test_scope_gate_and_cancelled_refresh",
+    "experiments/m6/test_mailbox.py::test_synthetic_google_mail_scope_authorization[False]",
+    "experiments/m6/test_mailbox.py::test_synthetic_google_mail_scope_authorization[True]",
+    "experiments/m6/test_mailbox.py::test_tls_failure_before_auth[expired]",
+    "experiments/m6/test_mailbox.py::test_tls_failure_before_auth[untrusted]",
+    "experiments/m6/test_mailbox.py::test_tls_failure_before_auth[wrong-host]",
+    "experiments/m6/test_mailbox.py::test_tls_peek_explicit_flags_and_uid_rollover",
+    "experiments/m6/test_mailbox.py::test_two_accounts_same_uid_no_cross_account_cache",
+    "experiments/m6/test_mailbox.py::test_ui_header_first_plain_display_explicit_flags",
+    "experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[account]",
+    "experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[cancel]",
+    "experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[lock]",
+    "experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[selection]",
+    "experiments/m6/test_workflows.py::test_attachment_limits_no_clobber_and_unverified_rejection",
+    "experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[../escape.txt]",
+    "experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[CON.txt]",
+    "experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[file:stream]",
+    "experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[folder./bad]",
+    "experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[trailing.]",
+    "experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[account]",
+    "experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[cancel]",
+    "experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[lock]",
+    "experiments/m6/test_workflows.py::test_cancel_saved_draft_and_interrupted_intent",
+    "experiments/m6/test_workflows.py::test_conventional_forward_cannot_assert_verified_thread",
+    "experiments/m6/test_workflows.py::test_disabled_submission_and_changed_recipient_block",
+    "experiments/m6/test_workflows.py::test_export_failure_cleanup_and_cancelled_budget",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[auth-challenge-valid-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[final-loss-valid-Unknown]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[missing-starttls-valid-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[recipient-reject-valid-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-expired-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-untrusted-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-valid-Accepted]",
+    "experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-wrong-host-Failed]",
+    "experiments/m6/test_workflows.py::test_gmail_identity_scope_and_external_opt_in_gate",
+    "experiments/m6/test_workflows.py::test_integrated_ui_compose_archive_clear_account_boundary",
+    "experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[account]",
+    "experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[cancel]",
+    "experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[lock]",
+    "experiments/m6/test_workflows.py::test_real_compose_outbox_archive_and_recipient_open",
+    "experiments/m6/test_workflows.py::test_reply_forward_policy_and_authenticated_thread",
+    "experiments/m6/test_workflows.py::test_ui_groups_only_verified_opened_references",
+    "experiments/m6/test_workflows.py::test_ui_submit_dispatch_uses_durable_protocol_and_explicit_confirmation",
+    "experiments/m6/test_workflows.py::test_unknown_retry_retains_bytes_and_requires_ack"
+  ],
+  "inputs": [
+    {
+      "path": "core/account_session.py",
+      "sha256": "738a4b9cd27033c4e4473a66d097ad16205753e1735b8c6a39a39431dc6a9b4e"
+    },
+    {
+      "path": "core/identity_service.py",
+      "sha256": "dc2df2fb030d0cb52382fe9384404e70104e4550d34086cb7c68d4abb337ded3"
+    },
+    {
+      "path": "experiments/m3/.gitignore",
+      "sha256": "c699d21712651199c8d64dd2d810d71a4ba9ced5c6f4ee3f56379a32c3d344d5"
+    },
+    {
+      "path": "experiments/m3/README.md",
+      "sha256": "469ad2137a6af30d55882ab11d813604c9a1181ab8052250f3700a682ffe415c"
+    },
+    {
+      "path": "experiments/m3/__init__.py",
+      "sha256": "6c5f7d3ae89dc976ba296c874de8f882e1ddc99a71ab509bccfdbf8c1709a1be"
+    },
+    {
+      "path": "experiments/m3/audit_integration.py",
+      "sha256": "2a13446c74459b0ee73ce2f442000637f49a4fe2c2707b633517849dd90e1918"
+    },
+    {
+      "path": "experiments/m3/audit_snapshot.py",
+      "sha256": "df7bd025cbebcef93c0c8347047044c0f7f72f9c8d6f9cf0604dd751416ce60a"
+    },
+    {
+      "path": "experiments/m3/build-provider.ps1",
+      "sha256": "0775023abc7bbe9c0dab210ca519bba543ad1106f2d01f7542ad9108d52e2988"
+    },
+    {
+      "path": "experiments/m3/identity.py",
+      "sha256": "eab4160aa0ac6530cc17c7075d83b1fadc675bfe20b0933003f39ef8fa9ca105"
+    },
+    {
+      "path": "experiments/m3/provider.py",
+      "sha256": "12167168a7e775b50d3f780feca068e7a6b1e57681d19e9a67dcbf716b9cbdc7"
+    },
+    {
+      "path": "experiments/m3/provider/Cargo.lock",
+      "sha256": "9700a6e0b9f8dd6915807de3d790d3a80e1b6c9eead0c45de3e7d5900616890a"
+    },
+    {
+      "path": "experiments/m3/provider/Cargo.toml",
+      "sha256": "0b7b235be50223f7751c57bffc6d0d9c8f704a96e95edabde7266c18f0da367c"
+    },
+    {
+      "path": "experiments/m3/provider/src/main.rs",
+      "sha256": "648d0a6de1e2ca56ef7f383869a0922f004e8fc3f791ce8701e0e77d2664cfb1"
+    },
+    {
+      "path": "experiments/m3/provider/src/provider.rs",
+      "sha256": "80d0ed7b2d1f7f283163ed3ab894182e601b8761069310c45b211381774a5e92"
+    },
+    {
+      "path": "experiments/m3/run_tests.py",
+      "sha256": "d150e5a4d2c73e14c4161beab6b3ebaba4c0552b82d908b71c74ac531b553e19"
+    },
+    {
+      "path": "experiments/m3/secure_store.py",
+      "sha256": "fc53145634f6bb2b0b3bab3a9651dd8ccac2a17511f2a7a523363fb4c5b1fb36"
+    },
+    {
+      "path": "experiments/m3/tests/conftest.py",
+      "sha256": "6b8276ccd571d67d0a06aa73b952eb807b16106ab99a43bcca6606a3cd862995"
+    },
+    {
+      "path": "experiments/m3/tests/test_integration.py",
+      "sha256": "74afa04b7dd8a57f11a9201d8b8eb996b978ca3a275784a7ad2b388b00d407d1"
+    },
+    {
+      "path": "experiments/m3/tests/test_m3.py",
+      "sha256": "ebd6a4807712c4bf3ffe19716460f6f68cf4172e2c5473e6464c21b8a8ffa658"
+    },
+    {
+      "path": "experiments/m3/types.py",
+      "sha256": "4b07884ffec94811ab1ae967b132389e3d6551b07671715e109ab7ff37831fdc"
+    },
+    {
+      "path": "experiments/m3/vault.py",
+      "sha256": "a9daccf80bd07eef64278d4e573dd03ee70b41b309fda443fb25c83351606471"
+    },
+    {
+      "path": "experiments/m4/README.md",
+      "sha256": "c25a5f5c8adf578fe1fea8cf1a83e41dec53f585e3c71c9545a1088ce99bfcd8"
+    },
+    {
+      "path": "experiments/m4/__init__.py",
+      "sha256": "1dd0cd792cde00337371d6718054098735f5169bdc8163e24f754c759cbd99f9"
+    },
+    {
+      "path": "experiments/m4/audit_snapshot.py",
+      "sha256": "33cae017703478bfed709495d2722ea180fea502fb895213e65f72a908962633"
+    },
+    {
+      "path": "experiments/m4/audit_tls.py",
+      "sha256": "453d33275ba80f374f7376b09f28d11b47fbb676a7c1326fa81615d2087076bf"
+    },
+    {
+      "path": "experiments/m4/codec.py",
+      "sha256": "e8878b586df61d51508b7bac6610b3cbcae1c313e9233cbf3ab7c8f38afdb6aa"
+    },
+    {
+      "path": "experiments/m4/harness.py",
+      "sha256": "6a92ed74000a9c4700c6e8974daadd8b00e66db8dfbf3e2b60c5ffd747fc3e39"
+    },
+    {
+      "path": "experiments/m4/loopback_demo.py",
+      "sha256": "ae231705f97f00b9bbf7c63148c1ebd8a1845dafc76e9228205ec9171d0ef29a"
+    },
+    {
+      "path": "experiments/m4/model.py",
+      "sha256": "73d22b205e81e55e579df9f21ae52b03f05debba1839e1a4ddb32b01114c6f3f"
+    },
+    {
+      "path": "experiments/m4/outbox_panel.py",
+      "sha256": "f75efbda1f4bacccf1c540b851f792db4e22e80ab756605c32bc04256d7c45bf"
+    },
+    {
+      "path": "experiments/m4/ownership.py",
+      "sha256": "eb0152048cf39f0ba11b4e2bfb855801c8fe1fd24cdf3564cc25f257a41b614b"
+    },
+    {
+      "path": "experiments/m4/run_tests.py",
+      "sha256": "388d1242b7878bd25c4bce272cf83fc52bb40c137895f8e49ae5a59aae1197de"
+    },
+    {
+      "path": "experiments/m4/services.py",
+      "sha256": "966aa256185c7def330079210dc1d7e2cf63dd1884be13a092704feb2abeaa44"
+    },
+    {
+      "path": "experiments/m4/smtp_fixture.py",
+      "sha256": "43a4afca714efc6bac92fabf97eba03c166ccf70296ad8fc95e672c9ea8edc87"
+    },
+    {
+      "path": "experiments/m4/smtp_transport.py",
+      "sha256": "f2bd0c8284038efd82ff734f35eaac91911e91537c5f6c51e75e94a1c0561b93"
+    },
+    {
+      "path": "experiments/m4/tests/crash_worker.py",
+      "sha256": "20041be47937cf691f06b39007a6d9affcb10f921ac58226160065caa1fe80ad"
+    },
+    {
+      "path": "experiments/m4/tests/test_outbox.py",
+      "sha256": "4dfe58638802f3e96e5f7d0ef0bf8263037ffc9ffa0ccc020e2b38ab66468167"
+    },
+    {
+      "path": "experiments/m4/tests/test_panel.py",
+      "sha256": "6b681f4981800a3c1ec1f19aefc40e71b81c26548e2a59aeb43c2f0876a524ba"
+    },
+    {
+      "path": "experiments/m4/tests/test_smtp.py",
+      "sha256": "20ccaa18e50a8eab731081971497174ea025ca15c1ea574084cde0262b420680"
+    },
+    {
+      "path": "experiments/m4/transports.py",
+      "sha256": "f4ea5c004d335644cbcc20054a6955713ebf842f063815154ad6642e32294a19"
+    },
+    {
+      "path": "experiments/m4/vault_adapter.py",
+      "sha256": "a26951aed51291277d632d1bf829dc0d98e3fe8330cff3b09fd88258c430f834"
+    },
+    {
+      "path": "experiments/m5/DEMO_GUIDE.md",
+      "sha256": "9b972195b698479996e581c0f7792206cc94bb443f9339bcaaf812c1e09f9d36"
+    },
+    {
+      "path": "experiments/m5/README.md",
+      "sha256": "bc031899d03e84a8dd05e2f791bf939da2a2a7985431c10c950e014f1b617be5"
+    },
+    {
+      "path": "experiments/m5/__init__.py",
+      "sha256": "4715ed206c736bc340ed51584878a47623bc86944688e80bc5d7a8c68ab30837"
+    },
+    {
+      "path": "experiments/m5/audit_snapshot.py",
+      "sha256": "8140583e2668eb6e7dcade442fb0ccd7defb27814d3ff3139018ddba38ca40bb"
+    },
+    {
+      "path": "experiments/m5/build-provider.ps1",
+      "sha256": "02e682f07d11fc113de61a371368520b7222be9dd2a567ec0fddf6a1c8fd5165"
+    },
+    {
+      "path": "experiments/m5/demo.py",
+      "sha256": "9e2bad9babc8ec3106c47ae4bfde616147ba1db8b989892d074baf9f102719ce"
+    },
+    {
+      "path": "experiments/m5/legacy.py",
+      "sha256": "5ddf9db725c36b9314de723550e7b2067bad856b32c7a2ff24d24a36c95897a0"
+    },
+    {
+      "path": "experiments/m5/mime.py",
+      "sha256": "d364ab44a613bd989dc42460d8367d313115b02fc5687432294907ebeab431d4"
+    },
+    {
+      "path": "experiments/m5/model.py",
+      "sha256": "8784ea11254ede28b2a6336b86c7f9d165e7b773c76ee8c30e5bdf96a1ce4f25"
+    },
+    {
+      "path": "experiments/m5/panel.py",
+      "sha256": "e91419bc241d709a760483bbb13ce03793b4cac9e687429e54dbc43e413c9c06"
+    },
+    {
+      "path": "experiments/m5/provider.py",
+      "sha256": "2e210ebbbd3e44064fd33034f1e8a5f79efd84715b921009c0b614a1daedcbf3"
+    },
+    {
+      "path": "experiments/m5/provider/Cargo.lock",
+      "sha256": "eed2a3850f8f83ca8fcf9ba7a84dde236d2d9cc4c7de366d08de29748d8a8dee"
+    },
+    {
+      "path": "experiments/m5/provider/Cargo.toml",
+      "sha256": "1f148ec3440f15add15e2e308d7734534ae7db97c42d62baf5f9adf7f666af80"
+    },
+    {
+      "path": "experiments/m5/provider/src/main.rs",
+      "sha256": "64f48f10162966c173c61f7681fb4ce7ecf155d258dd909e61ec52aa83174071"
+    },
+    {
+      "path": "experiments/m5/run_tests.py",
+      "sha256": "2c39d710027d16f77643d48e16143aa651abd87d3fb4b7149b68310147edb9bd"
+    },
+    {
+      "path": "experiments/m5/services.py",
+      "sha256": "d2b0abe13d318a1e58a9ad96c72b55e6f69f7003970b3c9f71ac34c38052b2b7"
+    },
+    {
+      "path": "experiments/m5/tests/test_limits.py",
+      "sha256": "a2be1f3c9255dfb3a65b0b0535a54db4b0f02019ff87969c9565a54a350aeab3"
+    },
+    {
+      "path": "experiments/m5/tests/test_message.py",
+      "sha256": "59bf636d415879c3a91cc288bfc64a26faceccf005dae691ebcdf5510713a584"
+    },
+    {
+      "path": "experiments/m5/tests/test_panel.py",
+      "sha256": "8aa6d02406930e203f6ab6731835ea80837b8bde7873ac2852bb8d6639770cdf"
+    },
+    {
+      "path": "experiments/m6/__init__.py",
+      "sha256": "efb2c6aed8e9d247ac0bb49fa2c65d67263d08a8af24f4136affc80091b7e670"
+    },
+    {
+      "path": "experiments/m6/audit_snapshot.py",
+      "sha256": "98eac37357452d957926e56467a1d8d35ecea4f0f9385480ac58e61f635e3721"
+    },
+    {
+      "path": "experiments/m6/audit_workflows.py",
+      "sha256": "b523a67f29ca733efb3fc9f0ffb5d8526f5d4b59eb2653b8d3451a5315d45e1a"
+    },
+    {
+      "path": "experiments/m6/imap_fixture.py",
+      "sha256": "cf47cd2082b178e5a5850ecf200b0c1423dd56e8839fa26b3c6c4869a80b64a2"
+    },
+    {
+      "path": "experiments/m6/run_tests.py",
+      "sha256": "7088df202b5d3024e68e3a48e3ca822d774973caf17d018fe5be9b6c3ce01be3"
+    },
+    {
+      "path": "experiments/m6/test_mailbox.py",
+      "sha256": "e2b36298c480d363c62a54e69309a1f9a6bd663cc6aee20c90b6584a8b4bd12d"
+    },
+    {
+      "path": "experiments/m6/test_workflows.py",
+      "sha256": "0aea5d4b474e7d5d38ab09e5e69cf7d01ec93dc754ea1e91f72732b34b5ef960"
+    },
+    {
+      "path": "mailbox_client/__init__.py",
+      "sha256": "145e4fd3bbac307ea443bda338d97c55e1d14a3359e648b3680cfeff1aa065c6"
+    },
+    {
+      "path": "mailbox_client/gmail.py",
+      "sha256": "591925ede6c767c2bdc197de3b15c3d49154fbb9427c678c536ba9dabdada7df"
+    },
+    {
+      "path": "mailbox_client/model.py",
+      "sha256": "74af7079979bd2e92701092b235fd5063344de48e4c3d450d565b9b52b580ed6"
+    },
+    {
+      "path": "mailbox_client/service.py",
+      "sha256": "6007a9f93b47bc2b2cf5c8f38c3fcbc6742b9bab168b73fc85824bf3f1bd3b2e"
+    },
+    {
+      "path": "mailbox_client/smtp.py",
+      "sha256": "762eb48a8152ffd098b625441d6b03eeb915e6af271fe78b305491358b9772a4"
+    },
+    {
+      "path": "mailbox_client/workflows.py",
+      "sha256": "7e45df006b4a6db79ad0701a60fa8ddfeab32f6a9a939fb444055f8bbb96a618"
+    },
+    {
+      "path": "main.py",
+      "sha256": "4a0928ab1d28292020bc58c15a238d5fba27533c5bd10aeefb08674bb4cafb05"
+    },
+    {
+      "path": "packaging/native-research.json",
+      "sha256": "f2168ef2e555ea7e77d9941dea28eeb76f36004eea7fb5081b05ebf719cb6009"
+    },
+    {
+      "path": "packaging/requirements-dev.in",
+      "sha256": "4cfcc70843961aa652e38530565506201186b84390c73e778d497309e0f492bd"
+    },
+    {
+      "path": "packaging/requirements-dev.lock",
+      "sha256": "36f382c6d828d0ff66627347236a1f808e8bf159b39af846e88034502a1317f2"
+    },
+    {
+      "path": "packaging/requirements-original-provider.txt",
+      "sha256": "3e9175863c171635316797a3e62fdb2ca54119cf7e9a171e344680d9f4b7f321"
+    },
+    {
+      "path": "packaging/requirements-runtime.lock",
+      "sha256": "0abf6d5b5410e14638983aba3ed0496a474c905cffafcfd983f8df514e3efa63"
+    },
+    {
+      "path": "packaging/requirements.in",
+      "sha256": "399841613183ce48d38dd323a0ea03c468085ac665dd67197634201b45ba3212"
+    },
+    {
+      "path": "transport/development_google.py",
+      "sha256": "88768cb9501a42cf3fbe16ab660ea5fd70ea4b721df0b0ed4d4716af3c123056"
+    },
+    {
+      "path": "ui/identity_settings.py",
+      "sha256": "95a4b7b5fba0302fc27b48de6463b3a9a650b690eb14f92fc7f92e29fedb8152"
+    },
+    {
+      "path": "ui/mail_actions.py",
+      "sha256": "d1f18a7f0560d591a5578ec5e7c3d179de2c81d6d7590eed95427f665be07877"
+    },
+    {
+      "path": "ui/mailbox_window.py",
+      "sha256": "366f61304fab850616f7ba6abf6c3900162cda7ace5a91c6f0a7fff5113c9994"
+    }
+  ],
+  "documentation": [
+    {
+      "path": "IMPLEMENTATION_STATUS.md",
+      "sha256": "1224433567d70f59b310f2761ab30d5d5a0d4aabfc178a7fff4ac685eb9e0a85"
+    },
+    {
+      "path": "ARCHITECTURE.md",
+      "sha256": "b855119135ff9754c56a85741e362f6c69b13fcf8a5613161a2df5d811efd673"
+    },
+    {
+      "path": "README.md",
+      "sha256": "144ad089db892321346482acbc388591777f264aea42c97d22fe52530bdb9781"
+    },
+    {
+      "path": "docs/adrs/007-m6-gmail-mailbox-slice.md",
+      "sha256": "796ecd4162b508e8b5cf8a0ea206d201a8578cc4bd69fa6a0c76ba91194c0726"
+    },
+    {
+      "path": "docs/adrs/008-m6-mail-workflows.md",
+      "sha256": "9f4867346ddad9cf9bd29c11259a973605c3e389cc88ed069c4b4a07109b3088"
+    },
+    {
+      "path": "docs/operations/m6-validation.md",
+      "sha256": "0429b1153db13ccb0054d46ee64aaa64847efc159a2a7ca10cde98de823290d2"
+    },
+    {
+      "path": "docs/operations/m6-gmail-inbox.md",
+      "sha256": "8863ed7725ce2a1a080558a7294105dd49e1f35cda67762579d28f113c4c3dc3"
+    }
+  ],
+  "outputs": [
+    {
+      "path": "docs/operations/evidence/m6-workflows/initial-48.txt",
+      "sha256": "04cf754b2147a596179cf3039dfa96073e1bce2177a43df8c33a19861f85aedb"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/initial-order-assumption.txt",
+      "sha256": "fb78bdef9cae6f5394c1b8b3a713a62bcaff9fa6c5cfc168b2f2b2032bb7ef54"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/legacy.txt",
+      "sha256": "1020774c94be0594e714e5e88a3983ca1fb3080401a795fcf942d67461e95fac"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/m3.txt",
+      "sha256": "60024e930d75a5798a108fb0f721f2ed14dc6060b46e7421cac95cbb4518e507"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/m4.txt",
+      "sha256": "a0c1b3794990149b0135524d7cb9646be1e3926cc377966672b0c690575600df"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/m5.txt",
+      "sha256": "622b0da3b2c9b8c20cee25c8689cb26b68548db4531671281af5ef478c5eb2a8"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/normal.txt",
+      "sha256": "afa080695d5f203c02b070f504b1b9dcac50312eca56de7a340bddfc97d96856"
+    },
+    {
+      "path": "docs/operations/evidence/m6-workflows/reverse.txt",
+      "sha256": "5cbc674d71e9cf6e24a3f14da6a3f99d5317c356747aeb63e9317f4d00e3d9f1"
+    }
+  ],
+  "initial_results": "initial-48.txt predates final refinements; initial-order-assumption.txt is a retained 1-fail/50-pass development run, not final evidence."
+}

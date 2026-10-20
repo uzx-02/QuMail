@@ -1,0 +1,92 @@
+....................................................                     [100%]
+=================================== PASSES ====================================
+_____________ test_real_compose_outbox_archive_and_recipient_open _____________
+---------------------------- Captured stdout call -----------------------------
+Real M5 cryptography + account vault + local STARTTLS: frozen digest Accepted; sender archive and recipient verified.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[success-wrong-host-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: success wrong-host Failed ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[success-valid-Accepted] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: success valid Accepted ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[success-untrusted-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: success untrusted Failed ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[success-expired-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: success expired Failed ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[recipient-reject-valid-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: recipient-reject valid Failed ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[missing-starttls-valid-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: missing-starttls valid Failed ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[final-loss-valid-Unknown] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: final-loss valid Unknown ; socket redirected to loopback, not Google.
+_ test_gmail_adapter_actual_tls_protocol_no_external_connection[auth-challenge-valid-Failed] _
+---------------------------- Captured stdout call -----------------------------
+Gmail adapter protocol fixture: auth-challenge valid Failed ; socket redirected to loopback, not Google.
+_________________ test_real_m5_protected_message_through_imap _________________
+---------------------------- Captured stdout call -----------------------------
+Real M5 verify via TLS IMAP; no implicit Seen; malformed modern message never falls back.
+_____________________ test_mailbox_entry_point_is_opt_in ______________________
+---------------------------- Captured stderr call -----------------------------
+usage: run_tests.py [-h] [--dev-simulator] [--dev-identity] [--dev-mailbox]
+                    [--dev-gmail-submit] [--dev-vault DEV_VAULT]
+                    [--google-client GOOGLE_CLIENT]
+run_tests.py: error: --dev-mailbox requires --dev-vault and excludes other development modes
+52 passed in 58.97s
+IDENTITY CHECK: reverse 52 distinct tests passed; zero skips
+EXECUTED: experiments/m6/test_workflows.py::test_unknown_retry_retains_bytes_and_requires_ack
+EXECUTED: experiments/m6/test_workflows.py::test_ui_submit_dispatch_uses_durable_protocol_and_explicit_confirmation
+EXECUTED: experiments/m6/test_workflows.py::test_ui_groups_only_verified_opened_references
+EXECUTED: experiments/m6/test_workflows.py::test_reply_forward_policy_and_authenticated_thread
+EXECUTED: experiments/m6/test_workflows.py::test_real_compose_outbox_archive_and_recipient_open
+EXECUTED: experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[lock]
+EXECUTED: experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[cancel]
+EXECUTED: experiments/m6/test_workflows.py::test_late_composer_result_cannot_restore_plaintext[account]
+EXECUTED: experiments/m6/test_workflows.py::test_integrated_ui_compose_archive_clear_account_boundary
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_identity_scope_and_external_opt_in_gate
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-wrong-host-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-valid-Accepted]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-untrusted-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[success-expired-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[recipient-reject-valid-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[missing-starttls-valid-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[final-loss-valid-Unknown]
+EXECUTED: experiments/m6/test_workflows.py::test_gmail_adapter_actual_tls_protocol_no_external_connection[auth-challenge-valid-Failed]
+EXECUTED: experiments/m6/test_workflows.py::test_export_failure_cleanup_and_cancelled_budget
+EXECUTED: experiments/m6/test_workflows.py::test_disabled_submission_and_changed_recipient_block
+EXECUTED: experiments/m6/test_workflows.py::test_conventional_forward_cannot_assert_verified_thread
+EXECUTED: experiments/m6/test_workflows.py::test_cancel_saved_draft_and_interrupted_intent
+EXECUTED: experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[lock]
+EXECUTED: experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[cancel]
+EXECUTED: experiments/m6/test_workflows.py::test_cancel_or_switch_during_real_submission[account]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[trailing.]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[folder./bad]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[file:stream]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[CON.txt]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_unsafe_export_paths[../escape.txt]
+EXECUTED: experiments/m6/test_workflows.py::test_attachment_limits_no_clobber_and_unverified_rejection
+EXECUTED: experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[selection]
+EXECUTED: experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[lock]
+EXECUTED: experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[cancel]
+EXECUTED: experiments/m6/test_mailbox.py::test_ui_late_worker_never_displays_other_selection[account]
+EXECUTED: experiments/m6/test_mailbox.py::test_ui_header_first_plain_display_explicit_flags
+EXECUTED: experiments/m6/test_mailbox.py::test_two_accounts_same_uid_no_cross_account_cache
+EXECUTED: experiments/m6/test_mailbox.py::test_tls_peek_explicit_flags_and_uid_rollover
+EXECUTED: experiments/m6/test_mailbox.py::test_tls_failure_before_auth[wrong-host]
+EXECUTED: experiments/m6/test_mailbox.py::test_tls_failure_before_auth[untrusted]
+EXECUTED: experiments/m6/test_mailbox.py::test_tls_failure_before_auth[expired]
+EXECUTED: experiments/m6/test_mailbox.py::test_synthetic_google_mail_scope_authorization[True]
+EXECUTED: experiments/m6/test_mailbox.py::test_synthetic_google_mail_scope_authorization[False]
+EXECUTED: experiments/m6/test_mailbox.py::test_scope_gate_and_cancelled_refresh
+EXECUTED: experiments/m6/test_mailbox.py::test_real_m5_protected_message_through_imap
+EXECUTED: experiments/m6/test_mailbox.py::test_plain_text_only[Subject: <b>untrusted</b>\r\nContent-Type: text/plain\r\n\r\n<script>literal text</script>-<script>literal]
+EXECUTED: experiments/m6/test_mailbox.py::test_plain_text_only[Content-Type: text/html\r\n\r\n<img src="https://example.invalid/tracker"><script>alert(1)</script>-No plain-text]
+EXECUTED: experiments/m6/test_mailbox.py::test_paging_and_deleted_uid
+EXECUTED: experiments/m6/test_mailbox.py::test_no_content_type_conventional_fetch_and_empty_inbox
+EXECUTED: experiments/m6/test_mailbox.py::test_mailbox_entry_point_is_opt_in
+EXECUTED: experiments/m6/test_mailbox.py::test_literal_and_message_limits
+EXECUTED: experiments/m6/test_mailbox.py::test_cancel_blocked_socket_no_cache

@@ -1,3 +1,33 @@
+# Integrated M6 mail boundary — 2026-10-21
+
+The opt-in `--dev-mailbox` path now connects real mailbox retrieval to
+`mailbox_client.workflows.Workflows` and `ui.mail_actions`. M3 coherent contexts,
+leases and owned vault handles remain the account boundary. M5 Compose/OpenMessage
+owns protected MIME/crypto; M4 owns frozen outbox state and uncertain acceptance.
+No presentation fixture or shared demo ciphertext is imported into the application.
+
+Compose stores encrypted drafts; preparation rechecks all recipients. Submission is
+separate and disabled unless `--dev-gmail-submit` explicitly selects GmailSMTP.
+The shared SMTP engine retains verified STARTTLS, bounded replies, post-TLS scoped
+XOAUTH2 and exact DATA bytes. LoopbackSMTP retains numeric loopback-only policy;
+GmailSMTP fixes smtp.gmail.com:587 and system CA/hostname validation. External opt-in
+is explicit at the durable service boundary; offline inspection cannot submit.
+
+Attachment export follows completed M5 verification and explicit no-clobber Save As;
+there is no ordinary plaintext cache. Reply/forward produces new M5-protected mail,
+revalidates current recipient keys, and separates forwarded content from original
+endorsement. Only verified identity's inner references establish page-local thread
+groups. Outer From can hint at an existing local certificate but cannot grant trust.
+PEEK, UID identity, account generations and stale-worker clearing remain intact.
+
+The native cryptographic profile, legacy readers and core storage/session code are
+unchanged. No live provider acceptance, migration, M7/M8 or production approval.
+[ADR 008](docs/adrs/008-m6-mail-workflows.md) and
+[current validation](docs/operations/m6-validation.md) supersede the older feature
+exclusions below while preserving their historical context.
+
+## Preserved architecture at the inbox-only checkpoint
+
 # Gmail-first development inbox boundary — 2026-10-20
 
 `main.py --dev-mailbox --dev-vault <explicit-path> [--google-client <explicit-file>]`

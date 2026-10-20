@@ -38,7 +38,7 @@ class SMTPFixtureBuilder:
         return message.as_bytes()
 
 
-def certificates(directory, mode='valid'):
+def certificates(directory, mode='valid', dns_name=None):
     now = datetime.now(timezone.utc)
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Disposable M4 fixture root')])
@@ -51,7 +51,9 @@ def certificates(directory, mode='valid'):
     cert = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,host)]))
         .issuer_name(name).public_key(key.public_key()).serial_number(x509.random_serial_number())
         .not_valid_before(now-timedelta(days=2)).not_valid_after(now-timedelta(days=1) if mode=='expired' else now+timedelta(days=1))
-        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address(host))]),False)
+        .add_extension(x509.SubjectAlternativeName(
+            [x509.IPAddress(ipaddress.ip_address(host))]+
+            ([x509.DNSName(dns_name if mode!='wrong-host' else 'wrong.example.invalid')] if dns_name else [])),False)
         .sign(ca_key,hashes.SHA256()))
     directory=Path(directory); directory.mkdir(parents=True,exist_ok=True)
     (directory/'ca.pem').write_bytes(ca.public_bytes(serialization.Encoding.PEM))
@@ -65,8 +67,8 @@ def certificates(directory, mode='valid'):
 
 class SMTPServer:
     """Small deterministic server; observations never contain AUTH values/body bytes."""
-    def __init__(self, directory, mode='success', cert_mode='valid'):
-        self.server_context,self.client_context=certificates(directory,cert_mode)
+    def __init__(self, directory, mode='success', cert_mode='valid', dns_name=None):
+        self.server_context,self.client_context=certificates(directory,cert_mode,dns_name)
         self.mode=mode; self.events=[]; self.digests=[]; self.lengths=[]
         self.accepted=threading.Event(); self.paused=threading.Event(); self.release=threading.Event()
         self.done=threading.Event(); self.clients=[]
@@ -117,7 +119,14 @@ class SMTPServer:
                     send(b'220 negotiate\r\n'); pause('tls'); reader.close()
                     sock=self.server_context.wrap_socket(sock,server_side=True)
                     self.clients.append(sock); reader=sock.makefile('rb'); tls=True
-                elif command==b'AUTH': pause('auth'); send(b'535 rejected\r\n' if self.mode=='auth-reject' else b'235 authenticated\r\n')
+                elif command==b'AUTH':
+                    pause('auth')
+                    if self.mode=='auth-challenge':
+                        send(b'334 eyJzdGF0dXMiOiI0MDEifQ==\r\n')
+                        response=reader.readline(128)
+                        self.events.append('EMPTY-CHALLENGE' if response==b'\r\n' else 'INVALID-CHALLENGE')
+                        send(b'535 rejected\r\n')
+                    else: send(b'535 rejected\r\n' if self.mode=='auth-reject' else b'235 authenticated\r\n')
                 elif command==b'MAIL': pause('mail'); send(b'250 sender\r\n')
                 elif command==b'RCPT':
                     recipients+=1; pause('rcpt')

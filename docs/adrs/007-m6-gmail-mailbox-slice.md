@@ -1,3 +1,8 @@
+> Continuation 2026-10-21: [ADR 008](008-m6-mail-workflows.md) adds account-scoped
+> compose/outbox, attachment export, reply/forward and explicit Gmail submission.
+> Its tested workflow boundary supersedes the feature exclusions below. This ADR
+> remains the historical inbox-only decision at 2c0eed6; no approval is implied.
+
 # ADR 007: Gmail-first development mailbox slice
 
 Date: 2026-10-20. Accepted for bounded local development by the owner's instruction;

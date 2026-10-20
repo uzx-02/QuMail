@@ -109,19 +109,10 @@ class BoundedSMTP(smtplib.SMTP):
         self.esmtp_features = {}; self.does_esmtp = False
 
 
-class LoopbackSMTP:
+class SMTPSubmission:
+    """Shared bounded protocol; endpoint policy belongs to concrete adapters."""
     simulation_only = False
-    loopback_only = True
-
-    def __init__(self, host, port, resolver, *, fixture_context=None):
-        address = ipaddress.ip_address(host)
-        if address.version != 4 or not address.is_loopback or not 0 < port < 65536:
-            raise Failure(Error.TRANSPORT)
-        self.host, self.port, self.resolver = host, port, resolver
-        self.context = fixture_context or ssl.create_default_context()
-        if self.context.verify_mode != ssl.CERT_REQUIRED or not self.context.check_hostname:
-            raise Failure(Error.TRANSPORT)
-        self.context.minimum_version = ssl.TLSVersion.TLSv1_2
+    client_type = BoundedSMTP
 
     def submit(self, envelope, credential, cancel, deadline):
         if credential.context != envelope.account: return Outcome.REJECTED
@@ -134,7 +125,7 @@ class LoopbackSMTP:
         if (not raw or len(raw) > MAX_ENVELOPE or not raw.endswith(b'\r\n') or
             b'\x00' in raw or b'\n' in raw.replace(b'\r\n', b'') or b'\r' in raw.replace(b'\r\n', b'') or
             any(len(line) > 998 for line in raw.split(b'\r\n')) or not raw.isascii()): return Outcome.REJECTED
-        smtp = BoundedSMTP(cancel, deadline)
+        smtp = self.client_type(cancel, deadline)
         stopped = threading.Event(); possible = False
         def interrupt():
             while not stopped.wait(.02):
@@ -157,7 +148,13 @@ class LoopbackSMTP:
             if (resolved.address != envelope.sender.value or not resolved.token or len(resolved.token) > 8192 or
                 any(c in resolved.token for c in '\x00\x01\r\n')): return Outcome.REJECTED
             auth = base64.b64encode(f'user={resolved.address}\x01auth=Bearer {resolved.token}\x01\x01'.encode()).decode()
-            if smtp.docmd('AUTH', 'XOAUTH2 '+auth)[0] != 235: return Outcome.REJECTED
+            auth_code = smtp.docmd('AUTH', 'XOAUTH2 '+auth)[0]
+            if auth_code == 334:
+                # Google requires an empty response to an OAuth error challenge.
+                # Never log/decode its contents or retry with another credential.
+                smtp.docmd('')
+                return Outcome.REJECTED
+            if auth_code != 235: return Outcome.REJECTED
             if smtp.mail(envelope.sender.value)[0] != 250: return Outcome.REJECTED
             for recipient in envelope.binding.recipients:
                 if smtp.rcpt(recipient.value)[0] not in (250, 251): return Outcome.REJECTED
@@ -178,3 +175,17 @@ class LoopbackSMTP:
             try: smtp.close()
             except Exception: pass
             watchdog.join(timeout=1)
+
+
+class LoopbackSMTP(SMTPSubmission):
+    loopback_only = True
+
+    def __init__(self, host, port, resolver, *, fixture_context=None):
+        address = ipaddress.ip_address(host)
+        if address.version != 4 or not address.is_loopback or not 0 < port < 65536:
+            raise Failure(Error.TRANSPORT)
+        self.host, self.port, self.resolver = host, port, resolver
+        self.context = fixture_context or ssl.create_default_context()
+        if self.context.verify_mode != ssl.CERT_REQUIRED or not self.context.check_hostname:
+            raise Failure(Error.TRANSPORT)
+        self.context.minimum_version = ssl.TLSVersion.TLSv1_2

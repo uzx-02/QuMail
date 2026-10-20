@@ -1,85 +1,127 @@
-# Gmail-first M6 inbox: setup and development contract
+# M6 Gmail mail: controls and development acceptance
 
-Development only; production approval remains pending. This application path has
-no presentation accounts, sample inbox, local mail-server fallback or sending.
-M5's historical fixture harness remains separately runnable for regression evidence.
+Development only. Production approval and live Google acceptance remain pending.
+The application uses real account-scoped services; no presentation accounts, sample
+inbox, local-server fallback or existing credential-cache discovery.
 
 ## Launch and account setup
 
-From the repository root, using the existing environment/helpers:
+From the repository root with the existing environment and built helpers:
 
 ```powershell
 ./.venv-m1-clean/Scripts/python.exe main.py --dev-mailbox --dev-vault "C:\path\to\explicit-development-vault.sqlite" --google-client "C:\path\to\provisioned-desktop-client.json"
 ```
 
-Choose an explicit development vault location. No migration or automatic import
-from existing credential caches occurs. Without a client file, the application can
-open Settings but cannot enroll/reauthorize Google. Existing valid mail-scoped tokens
-in the explicitly selected vault can be used; expired tokens require configured
-refresh credentials. Missing configuration produces an actionable error, not samples.
+In **Settings**, **Create vault** or **Unlock**, enter the expected Google address,
+**Connect Google**, and complete the browser interaction yourself. Select the account.
+Previously identity-only accounts require **Reauthorize selected** with the mail
+scope. Public certificates are imported/exported and fingerprints verified in
+Settings; verification is separate from importing or validating a signature.
+New Yahoo enrollment remains unavailable. Without a client file, existing valid
+mail-scoped tokens can be used, but enrollment/refresh needing client configuration
+fails explicitly. No real credentials are supplied or searched for.
 
-1. Open **Settings**. **Create vault** for a new path or **Unlock** an existing M3
-   development vault. Enter the expected Google address and **Connect Google**.
-   Complete the external browser interaction yourself. Select the enrolled account.
-2. Previously identity-only accounts need **Reauthorize selected** from this mailbox
-   launch. Mail access is an explicit additional scope; identity authorization alone
-   is insufficient. New Yahoo enrollment remains unavailable.
-3. **Refresh headers** retrieves only INBOX header/flag/size data. **Older** scans
-   earlier bounded UID windows; a sparse window may be empty but have an Older page.
-4. Select a row and **Open selected** for an on-demand PEEK fetch. Conventional mail
-   is plain text and unverified. HTML-only mail shows a placeholder; no remote images,
-   scripts, embedded-message processing or attachment opening occurs.
-5. For modern protected mail, import the sender's public certificate in Settings and
-   select it in the inbox's signer control. Independent fingerprint verification is
-   separate. Successful signature validation does not automatically verify identity.
-   Failed modern verification releases no message; it never falls back to a legacy reader.
-6. Only **Mark read**/**Mark unread** changes the provider flag. Refresh, selection,
-   fetch and successful decryption do not. **Cancel**, account switch and **Lock**
-   clear displayed content and invalidate late results. After cancelling a flag change,
-   refresh to learn whether Gmail applied it. Closing locks the vault and stops work.
+Submission is disabled by default. A separately authorized live test can add
+`--dev-gmail-submit` to the command. This enables **Submit once** to fixed Gmail
+STARTTLS/XOAUTH2; it does not grant production approval. This implementation task
+sent no external mail and performed no live authorization or cloud configuration.
 
-## Provider setup and live acceptance (not executed here)
+## Inbox and protected content
 
-Use an explicitly provisioned Google Desktop OAuth client, a configured consent
-screen and approved test users. The mailbox launch requests OpenID/email identity
-scopes plus the full IMAP `https://mail.google.com/` scope. This restricted scope is
-broader than the read/flag functionality currently exposed; Google distribution
-verification/policy obligations are not resolved by local tests. Workspace policy
-may separately restrict IMAP or the client. No domain-wide delegation is implemented.
+- **Refresh headers** / **Older** list bounded INBOX UID windows without fetching
+  bodies. Selection does not fetch. **Open selected** uses BODY.PEEK and displays
+  plain text; HTML, scripts and remote resources remain blocked.
+- Protected mail uses a local signer-certificate lookup hint from outer From, or
+  the explicit signer selector. Full M5 verification still precedes any body or
+  attachment release. Missing keys require Settings import/selection; successful
+  verification does not grant contact trust. Changed/expired/revoked keys require
+  resolution and renewed verification, never a bypass. Modern failures cannot
+  fall back to conventional plaintext or the legacy reader.
+- **Save attachment as…** exports the selected verified attachment to an explicitly
+  chosen NEW local file. Existing files and unsafe paths are rejected, never
+  overwritten. Filenames/types are untrusted claims. Export deliberately leaves
+  plaintext at that location; nothing opens or executes it automatically.
+- **Reply** uses authenticated inner author/references for verified protected mail.
+  Conventional mail requires explicit recipient entry/confirmation and remains
+  labeled unverified. **Forward** always requires explicit recipients, re-encrypts
+  the quote and protected attachments, and does not imply original endorsement.
+  Replies do not automatically copy attachments; add them explicitly if intended.
+  Quoting over the qualified size limit fails explicitly; no silent truncation.
+- **Group opened threads** groups authenticated references from verified identities
+  opened on the current page. Outer references never establish a verified group.
+  Refresh/Older clears this in-memory grouping. References are signed author claims,
+  not proof of another message's existence or consent. This is basic page-local
+  threading, not a complete historical conversation index.
+- Only **Mark read** / **Mark unread** mutates Seen. Listing, refresh, open and
+  verification do not. **Cancel**, account switch and **Lock** invalidate late
+  results and clear plaintext. An interrupted flag change may already have reached
+  Gmail; refresh to confirm. Close locks the vault.
 
-With two provisioned Google test accounts, verify browser enrollment/reauthorization,
-same-provider switching, refresh after expiry, INBOX header pagination and on-demand
-open. Compare unread flags in Gmail before/after refresh and open; then verify explicit
-Mark read/unread. Cancel a slow request and switch accounts during retrieval. Deliver
-an independently authorized M5-compatible fixture through an external test process,
-then verify protected opening with the selected public certificate. Record provider
-responses as sanitized outcomes, never tokens or private message bodies. This session
-did not send mail, open live authorization or change any cloud configuration.
+## Compose, durable outbox and archive
 
-Official references consulted 2026-10-20:
-[Google XOAUTH2](https://developers.google.com/workspace/gmail/imap/xoauth2-protocol)
-defines the IMAP scope and authentication/error challenge; the adapter returns an
-empty response to Google's error challenge.
-[Python imaplib](https://docs.python.org/3.12/library/imaplib.html) provides TLS, UID
-commands and read-only selection. The implementation adds pre-allocation literal
-limits and cancellation polling; it never disables certificate/hostname verification.
+1. **Compose / outbox**, **New**; enter **To**, optional **Cc**, **Subject** and body.
+   Bcc is unavailable. **Add attachment** / **Remove attachment** manage bounded
+   files. **Include encrypted sender archive** is enabled by default.
+2. **Verify recipients** checks every current contact certificate. This is not a
+   trust bypass: use Settings to resolve missing, changed, expired or revoked keys.
+3. **Save encrypted draft**, then **Refresh outbox**, select its operation and
+   **Prepare saved**. **Edit draft** reloads a Draft; save edits before preparation.
+   Preparation rechecks all recipients and persists frozen signed/encrypted MIME.
+   It never sends. The editor is cleared on success.
+4. With explicit Gmail submission opt-in, select Prepared and **Submit once**;
+   confirm the action. **Refresh outbox** shows the durable state. **Accepted** means
+   server acceptance, not delivery/decryption. **Failed** is rejection/stopped before
+   DATA; **Unknown** may already be accepted. No automatic retries.
+5. **Explicit retry** revalidates keys and restores Prepared using exactly the
+   original bytes; acknowledge possible duplicates for Unknown. **Submit once** is
+   a separate action. Maximum three attempts. **Discard / cancel saved** discards a
+   draft or cancels Prepared. **Cancel active work / clear plaintext** stops local
+   work; it cannot recall mail and can leave Unknown. Refresh to inspect the result.
+6. **Open archive** verifies the saved frozen sender copy using its original local
+   key handle, independently of transport success. Archive must have been included;
+   otherwise opening fails. Restart, unlock the same vault and **Refresh outbox**
+   to recover saved operations; interrupted intent becomes Unknown, never a resend.
 
-## Qualified boundaries
+## Qualified limits and exposed metadata
 
-INBOX only; manual retrieval; up to 30 headers from each 200-UID search window;
-8 KiB fetched header literal; 256 KiB complete message (inherited M5 wire cap);
-1 MiB aggregate response bytes per connection; 16 KiB response line. Conventional
-MIME is bounded to 64 parts/depth eight; only text/plain renders. Existing M5's
-stricter protected MIME limits apply unchanged. The encrypted header cache contains
-one page per account, replaced on refresh/paging; no offline body cache or automatic
-resumption. The existing vault's 8 MiB account limit still applies.
+Current M5 limits: 3 To/Cc recipients plus optional sender archive, 8 KiB UTF-8 body,
+4 attachments / 16 KiB aggregate, 64 KiB inner MIME and 256 KiB complete wire message.
+Filenames are bounded ASCII; accepted claimed types are text/plain, image/png,
+application/pdf and application/octet-stream. These are lower experimental limits,
+not the full release-scale target. Up to 16 retained outbox operations per account;
+there is no automatic deletion/garbage collection. The vault's 8 MiB account cap
+also applies. Prepared/accepted history is not silently pruned.
 
-Worker budget is 30 seconds after dispatch, with 50 ms nonblocking TLS polling once
-connected. Initial DNS/TLS setup, OAuth HTTP requests and SQLite waits retain their
-documented limits; the complete lifecycle is not claimed to cancel within one second.
-No message/credential/subject is written to application logs. The UI shows outer
-metadata as transport claims and keeps cryptographic and identity results separate.
+Inbox: up to 30 headers per 200-UID window; sparse pages may be empty with Older
+available. Account + mailbox + UIDVALIDITY + UID identifies cache entries. One
+bounded encrypted header page is retained; bodies and opened attachments are not
+cached to ordinary files. Conventional MIME is bounded to 64 parts/depth eight;
+attachments in conventional mail are not exported by this verified-content flow.
+Outer routing addresses, timing, size and the generic encrypted subject remain
+visible; inner subject/author/references/attachments are protected by existing M5.
+No sensitive content, token or key is written to application logs.
 
-Tests: `python -m experiments.m6.run_tests` (or `--reverse`). These use only a local
-TLS IMAP server, synthetic identities and disposable Windows vaults. See
-[validation](m6-validation.md) and [ADR 007](../adrs/007-m6-gmail-mailbox-slice.md).
+Workers use a 30-second budget and post-connect cancellation polling. Initial DNS/
+connect, OAuth HTTP and SQLite waits retain documented limits; no universal
+sub-second completion/cancellation claim. Python memory is not securely zeroized.
+
+## Live acceptance, separately pending
+
+Provision a Google Desktop client, consent screen and approved test users through
+the normal Google setup. IMAP/SMTP needs `https://mail.google.com/`; identity-only
+scopes fail. Workspace restrictions and Google's restricted-scope app verification
+remain separate distribution gates. No domain-wide delegation is implemented.
+
+With explicitly authorized test accounts, qualify enrollment/refresh, two-account
+switching, header paging, PEEK flags, cancellation and protected opening. Then, only
+under separate permission to send, enable Gmail submission and verify one prepared
+message, Accepted, actual recipient retrieval/decryption and sender archive. Compare
+Gmail Seen before/after opening. Exercise expired credentials, controlled rejection
+and uncertain acceptance without blind retries. Record sanitized outcomes, versions
+and exact commit; never tokens/private bodies. Local fixtures are not live evidence.
+
+Primary references consulted 2026-10-20/21:
+[Google IMAP/SMTP endpoints](https://developers.google.com/workspace/gmail/imap/imap-smtp),
+[Google XOAUTH2 and mail scope](https://developers.google.com/workspace/gmail/imap/xoauth2-protocol),
+[Python imaplib](https://docs.python.org/3.12/library/imaplib.html).
+See [validation](m6-validation.md) and [ADR 008](../adrs/008-m6-mail-workflows.md).

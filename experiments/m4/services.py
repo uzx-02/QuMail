@@ -55,8 +55,10 @@ class PrepareMessage:
 
 
 class SubmitOutbox:
-    def __init__(self, repository: OutboxRepository, transport: Transport):
-        if not (transport.simulation_only is True or getattr(transport, 'loopback_only', False) is True): raise Failure(Error.TRANSPORT)
+    def __init__(self, repository: OutboxRepository, transport: Transport | None, *, allow_external=False):
+        # None permits offline inspection/recovery/retry; never submission.
+        if transport is not None and not (allow_external is True or transport.simulation_only is True or
+                getattr(transport, 'loopback_only', False) is True): raise Failure(Error.TRANSPORT)
         self.repository, self.transport = repository, transport
 
     def inspect(self, lease: Lease, operation: OperationId) -> DeliveryResult:
@@ -68,6 +70,7 @@ class SubmitOutbox:
             return account.envelope(operation)
 
     def submit(self, lease: Lease, operation: OperationId, *, until: float | None = None) -> DeliveryResult:
+        if self.transport is None: raise Failure(Error.TRANSPORT)
         until = deadline() if until is None else until
         with self.repository.ownership(lease.context, operation):
             with self.repository.transaction(lease, until) as account:

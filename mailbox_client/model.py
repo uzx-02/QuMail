@@ -62,8 +62,17 @@ class Page:
 
 @dataclass(frozen=True, repr=False)
 class Display:
-    key: MessageKey
+    key: MessageKey | None
     subject: str
     body: str
     security: str
     seen: bool
+    protected: object | None = None  # Immutable M5 OpenedMessage, only after verification.
+    author_claim: str = ''
+    owner: AccountContext | None = None
+
+    @property
+    def thread(self):
+        message = self.protected
+        if message is None or not message.verified_confidential: return ''
+        return (message.references or (message.in_reply_to or message.message_id,))[0]

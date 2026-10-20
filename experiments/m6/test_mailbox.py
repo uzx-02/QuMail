@@ -91,7 +91,8 @@ def test_real_m5_protected_message_through_imap(setup,tmp_path):
         service = MailboxService(v,access,None,GmailMailbox(server.factory),native)
         row = service.headers(local,budget()).headers[0]
         assert row.subject == 'Encrypted message'
-        with pytest.raises(Failure): service.open(local,row.key,bk,None,budget())
+        automatic = service.open(local,row.key,bk,None,budget())
+        assert automatic.protected.signature_valid and automatic.protected.sender=='alice@example.invalid'
         result = service.open(local,row.key,bk,'alice@example.invalid',budget())
         assert result.body == draft.body and 'independently_verified' in result.security
         assert not messages['bob@example.invalid'][12]['seen']

@@ -11,7 +11,19 @@ is a presentation/reference copy; the Markdown is canonical.
 [Implementation status](IMPLEMENTATION_STATUS.md) tracks requirements, findings,
 validation and remaining gates. Historical “v2” plans are superseded by this 1.0 work.
 
-## Current security boundary
+## Current opt-in mailbox development
+
+`main.py --dev-mailbox --dev-vault <explicit-path> [--google-client <explicit-file>]`
+opens the account-scoped Gmail client with encrypted drafts, protected preparation,
+durable outbox, verified attachments, reply/forward and sender archives. SMTP is
+disabled unless `--dev-gmail-submit` is explicitly supplied. No sample inbox or
+credential-cache discovery. Use only provisioned test accounts and nonsensitive
+content: live Google acceptance and independent review remain pending.
+See [controls, limits and acceptance steps](docs/operations/m6-gmail-inbox.md) and
+[M6 validation](docs/operations/m6-validation.md). Local fixture tests do not establish
+production approval or independent MIME interoperability.
+
+## Default / legacy security boundary
 
 - The key service is a **development CSPRNG simulator**, with a custom unauthenticated
   API. It is not real QKD or an ETSI-conformant KME. Keys vanish on restart.
