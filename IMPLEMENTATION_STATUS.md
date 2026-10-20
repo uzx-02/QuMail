@@ -1,3 +1,46 @@
+# Current M6 Gmail-first development decision — 2026-10-20
+
+**Bounded Gmail-first inbox engineering implemented and locally tested; full M6
+PARTIAL. Live Google acceptance remains unexecuted.** Production approval and
+independent review remain pending under ADR 004/006/007. No M7/M8 work.
+
+Actual parent: `b96abc45d975c208d37c03bed80e87f6b68c04c2`; local branch
+`codex/m6-gmail-inbox`. The M5 branch, known-good `219dc97…` checkpoint, user
+launcher, reviewer draft, reference PDF, earlier source and evidence are preserved.
+M1 remains COMPLETE at baseline scope: retained Windows/Ubuntu success at
+`023c941ec2ef284f6be28b5a9605f1dca9c28787` was verified, not reopened. M2's committed
+engineering proof is `1fc4e55f09e173cec7634d0b2dc776097b552063`; `5880dd4…` is its parent.
+
+| Bounded requirement | Current evidence / disposition |
+|---|---|
+| Provider-backed account-scoped INBOX | Fixed Gmail TLS/XOAUTH2 adapter, owned vault token resolution/refresh, explicit mail scope; no sample inbox or cloud configuration |
+| Header-first/on-demand | EXAMINE + UID header fetch; explicit BODY.PEEK open; bounded paging; encrypted per-account header cache |
+| Identity/read state | Account + mailbox + UIDVALIDITY + UID; rollover/deletion/cross-account rejection; refresh/open do not set Seen; explicit confirmed read/unread controls |
+| Safe protected opening | Unchanged M5 verifier, explicit imported signer certificate, no modern-failure fallback; conventional plain text is unverified; HTML/resources not rendered |
+| Worker boundaries | Account/message generations, late-result rejection, cancellation, immediate display clearing; initial DNS/connect/OAuth timing limits documented |
+| Presentation reconciliation | b96abc4 shell retained only in M5 fixture harness/history; actual inbox imports no presentation/server fixture, shared-copy shortcut or fabricated enrollment |
+| Acceptance gates | Live Google, independent review, other platforms, full M6 workflows/accessibility and existing licensing/release conditions remain pending |
+
+Final results: **21 M6 passed normal (9.76 s) and the same 21 reverse (8.61 s)**;
+**55 M5 passed (87.09 s)**; **85 M4 passed (92.33 s)**; **54 M3 passed (11.72 s)**;
+**37 legacy passed (2.30 s), five existing datetime warnings**. Zero skips; other
+suites have no warnings. A measured Windows blocked-TLS cancellation defect was
+fixed using nonblocking polling; initial failure evidence is retained separately.
+
+Runtime results are tied to `docs/operations/evidence/m6/input-hashes.json`, not
+unchanged parent HEAD. The local Git receipt identifies the checkpoint containing
+those bytes. Existing M3/M5 helpers and native library hashes are unchanged.
+
+[Setup and exact live acceptance steps](docs/operations/m6-gmail-inbox.md),
+[acceptance table and retained results](docs/operations/m6-validation.md),
+[ADR 007](docs/adrs/007-m6-gmail-mailbox-slice.md).
+Next bounded task: perform authorized Google test-account/client live acceptance
+when provisioned; no synthetic substitute. No push, merge, release or migration.
+
+## Preserved earlier milestone assessments
+
+Statements below about M6 not having begun are historical checkpoint descriptions.
+
 # Current M5 development decision — 2026-10-14
 
 **Bounded M5 protected-message and compose engineering complete; full M5 PARTIAL.**

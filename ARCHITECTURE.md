@@ -1,3 +1,32 @@
+# Gmail-first development inbox boundary — 2026-10-20
+
+`main.py --dev-mailbox --dev-vault <explicit-path> [--google-client <explicit-file>]`
+launches the bounded inbox with existing M3 Settings/session/vault interfaces.
+Default startup remains unchanged. No presentation accounts or sample mail are
+imported; the b96abc4 presentation shell remains an isolated M5 fixture harness.
+Production enablement and independent review are still pending.
+
+`mailbox_client.gmail` connects to fixed Gmail TLS IMAP with XOAUTH2. Every read uses
+EXAMINE and UID FETCH BODY.PEEK. Only explicit read/unread actions use UID STORE;
+no CLOSE/EXPUNGE. Credentials are account-scoped vault records, with existing Google
+identity-checked refresh and an explicit additional mail-scope authorization lane.
+`mailbox_client.service` keeps a bounded encrypted header page per account, keyed by
+mailbox/UIDVALIDITY/UID. Bodies are fetched on demand, not cached to plaintext files.
+
+Protected mail uses unchanged M5 OpenMessage with an explicitly selected imported
+public signer certificate. Signature/identity/replay/header discrepancy states remain
+separate. Conventional mail is unverified plain text; HTML and remote resources are
+not rendered. `ui.mailbox_window` clears content and rejects obsolete worker results
+after account/message selection, cancellation or lock. Initial connection/OAuth waits
+have documented limits; post-connect IMAP I/O polls cancellation at 50 ms.
+
+No changes to M5 cryptography, persistence, transport or core session sources.
+No inbox sample fallback, production SMTP, attachment workflow, reply/forward,
+M7/M8 or migration. [ADR 007](docs/adrs/007-m6-gmail-mailbox-slice.md),
+[validation](docs/operations/m6-validation.md), [setup](docs/operations/m6-gmail-inbox.md).
+
+## Preserved architecture through M5
+
 # M5 opt-in protected-message boundary — 2026-10-14
 
 The new `experiments/m5` path composes RFC 3156 PGP/MIME with RFC 9788 direct

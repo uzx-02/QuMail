@@ -112,8 +112,11 @@ class Loopback:
 
 
 class GoogleAuthorization:
-    def __init__(self,config):
+    def __init__(self,config,scopes=SCOPES):
         self.config=config
+        self.scopes=tuple(scopes)
+        if not set(SCOPES)<=set(self.scopes) or set(self.scopes)-set(SCOPES)-{'https://mail.google.com/'}:
+            raise BoundaryError(Code.IDENTITY)
         c=config['installed']
         if c['auth_uri']!=AUTH or c['token_uri']!=TOKEN: raise BoundaryError(Code.IDENTITY)
         self.client_id=c['client_id']
@@ -124,7 +127,7 @@ class GoogleAuthorization:
         flow=None
         try:
             if cancel.is_set(): raise BoundaryError(Code.IDENTITY)
-            flow=InstalledAppFlow.from_client_config(self.config,SCOPES,state=state,autogenerate_code_verifier=True)
+            flow=InstalledAppFlow.from_client_config(self.config,self.scopes,state=state,autogenerate_code_verifier=True)
             flow.redirect_uri=listener.redirect
             url,returned_state=flow.authorization_url(nonce=nonce,prompt='select_account consent',access_type='offline')
             if returned_state!=state or not flow.code_verifier: raise BoundaryError(Code.IDENTITY)
@@ -138,9 +141,9 @@ class GoogleAuthorization:
                                      expected_subject,request=BoundedRequest())
             if EmailAddress(expected_address) not in verified.addresses or cancel.is_set():
                 raise BoundaryError(Code.IDENTITY)
-            scopes=token.get('scope',SCOPES)
+            scopes=token.get('scope',SCOPES if self.scopes==SCOPES else ())
             if isinstance(scopes,str): scopes=scopes.split()
-            if not set(SCOPES)<=set(scopes): raise BoundaryError(Code.IDENTITY)
+            if not set(self.scopes)<=set(scopes): raise BoundaryError(Code.IDENTITY)
             tokens=dict(access_token=token['access_token'],refresh_token=token.get('refresh_token'),
                         expiry=int(token['expires_at']),scopes=list(scopes))
             return Authorization(verified,tokens)
@@ -155,8 +158,10 @@ class GoogleAuthorization:
             if cancel.is_set() or context.issuer!='https://accounts.google.com' or not tokens.get('refresh_token'): raise ValueError()
             c=self.config['installed']
             credentials=Credentials(tokens['access_token'],refresh_token=tokens['refresh_token'],
-                token_uri=TOKEN,client_id=self.client_id,client_secret=c['client_secret'],scopes=SCOPES)
+                token_uri=TOKEN,client_id=self.client_id,client_secret=c['client_secret'],scopes=self.scopes)
             credentials.refresh(BoundedRequest())
+            granted=getattr(credentials,'granted_scopes',None)
+            if granted is not None and not set(self.scopes)<=set(granted): raise ValueError()
             # Refresh responses need not supply an ID token/nonce. Authenticate the
             # fresh access token at Google's fixed TLS userinfo endpoint instead.
             with requests.Session() as session:
@@ -175,5 +180,5 @@ class GoogleAuthorization:
             identity=VerifiedProviderIdentity(context.issuer,context.subject,(EmailAddress(address),),expiry,
                 'Google TLS userinfo with refreshed token')
             return Authorization(identity,dict(access_token=credentials.token,refresh_token=credentials.refresh_token,
-                                               expiry=expiry,scopes=list(SCOPES)))
+                                               expiry=expiry,scopes=list(self.scopes)))
         except Exception: raise BoundaryError(Code.IDENTITY) from None

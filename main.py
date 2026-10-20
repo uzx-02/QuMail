@@ -50,15 +50,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dev-simulator", action="store_true",
                         help="start unauthenticated loopback CSPRNG simulator (not real QKD)")
     parser.add_argument('--dev-identity',action='store_true',help='isolated M3 Settings; all sending disabled')
+    parser.add_argument('--dev-mailbox',action='store_true',help='Gmail-first development inbox; all sending disabled')
     parser.add_argument('--dev-vault',help='explicit development SQLite vault path (no legacy migration)')
     parser.add_argument('--google-client',help='explicit provisioned Google Desktop test-client JSON')
     args = parser.parse_args(argv)
+    if args.dev_mailbox:
+        if args.dev_identity or args.dev_simulator or not args.dev_vault:
+            parser.error('--dev-mailbox requires --dev-vault and excludes other development modes')
+        return _launch_mailbox(args.dev_vault,args.google_client)
     if args.dev_identity:
         if args.dev_simulator or not args.dev_vault:
             parser.error('--dev-identity requires --dev-vault and cannot start the simulator')
         return _launch_identity(args.dev_vault,args.google_client)
     if args.dev_vault or args.google_client:
-        parser.error('--dev-vault and --google-client require --dev-identity')
+        parser.error('--dev-vault and --google-client require --dev-identity or --dev-mailbox')
     if args.dev_simulator:
         print("Development simulator enabled: CSPRNG keys, no caller authentication, no real QKD.")
         threading.Thread(target=_start_kme_server, daemon=True, name="qumail-dev-simulator").start()
@@ -74,6 +79,22 @@ def _launch_identity(vault,client):
     helper=Path(__file__).parent/'tmp/m2/target/debug/qumail-m3-provider.exe'
     service=IdentityService.configured(vault,helper,client)
     window=IdentitySettings(service); window.show()
+    return app.exec()
+
+
+def _launch_mailbox(vault,client):
+    from pathlib import Path
+    from PyQt6.QtWidgets import QApplication
+    from core.identity_service import IdentityService
+    from transport.development_google import GoogleAuthorization,client_configuration,SCOPES
+    from mailbox_client.gmail import MAIL_SCOPE
+    from ui.mailbox_window import MailboxWindow
+    app=QApplication([sys.argv[0]])
+    helper=Path(__file__).parent/'tmp/m2/target/debug/qumail-m3-provider.exe'
+    service=IdentityService.configured(vault,helper)
+    if client:
+        service.google=GoogleAuthorization(client_configuration(client),SCOPES+(MAIL_SCOPE,))
+    window=MailboxWindow(service); window.show()
     return app.exec()
 
 
