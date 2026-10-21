@@ -1,3 +1,18 @@
+# Windows connection/UI continuation — 2026-10-21
+
+Application DNS and Google OAuth run in bounded private child processes; fixed
+Gmail TCP/TLS setup is nonblocking and deadline-aware. The child uses the unchanged
+M3 verifier. Only owned results surviving session/cancel checks enter the vault.
+Secrets use private pipes, not argv/caches. Existing crypto/outbox boundaries remain.
+Settings hide/reopen differs from final disposal; mail controls have names/focus
+and busy/state guards. This is development qualification, not approval.
+
+Remaining engineering: Settings native/vault work, including post-OAuth commit,
+is synchronous. Finite 30 s helper/5 s SQLite waits are not a subsecond UI contract.
+Safely staged Settings preparation/commit is next; preserve account-generation,
+transaction and recovery-secret guarantees. See
+[current validation](docs/operations/m6-windows-validation.md) and ADR 008.
+
 # Integrated M6 mail boundary — 2026-10-21
 
 The opt-in `--dev-mailbox` path now connects real mailbox retrieval to

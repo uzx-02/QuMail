@@ -192,13 +192,14 @@ def test_reply_forward_policy_and_authenticated_thread(prepared):
 def test_gmail_adapter_actual_tls_protocol_no_external_connection(prepared,tmp_path,monkeypatch,mode,cert,state):
     (v,a,ak,b,bk,access,lease,native),work,draft,op=prepared
     envelope=work.prepare(lease,op,ak,budget())
-    original=socket.create_connection; destinations=[]
+    import mailbox_client.connection as connections
+    destinations=[]
     with SMTPServer(tmp_path/'gmail',mode=mode,cert_mode=cert,dns_name='smtp.gmail.com') as server:
-        def connect(address,timeout):
-            assert address==('smtp.gmail.com',587)
-            destinations.append(address)
-            return original(('127.0.0.1',server.port),timeout)
-        monkeypatch.setattr(socket,'create_connection',connect)
+        def resolve(request,cancel,deadline):
+            assert (request['host'],request['port'])==('smtp.gmail.com',587)
+            destinations.append((request['host'],request['port']))
+            return [(socket.AF_INET,socket.SOCK_STREAM,0,'',('127.0.0.1',server.port))]
+        monkeypatch.setattr(connections,'call',resolve)
         def factory(resolver):
             transport=GmailSMTP(resolver)
             assert transport.context.check_hostname

@@ -15,6 +15,7 @@ from mailbox_client.service import MailboxService
 from mailbox_client.model import Display, Failure, Code
 from .identity_settings import IdentitySettings
 from .mail_actions import MailActions
+from .mail_accessibility import configure,error_message
 
 
 class MailboxWindow(QWidget):
@@ -38,7 +39,8 @@ class MailboxWindow(QWidget):
         # Retain the presentation shell's restrained dark palette, not its fixture workflow.
         self.setStyleSheet('QWidget { background:#0B1220; color:#E5EDF6; } '
             'QPushButton,QComboBox { background:#17263B; padding:7px; } '
-            'QTableWidget,QPlainTextEdit { background:#111D2E; selection-background-color:#254B70; }')
+            'QTableWidget,QPlainTextEdit { background:#111D2E; selection-background-color:#254B70; } '
+            'QPushButton:disabled { color:#8290A3; } QPushButton:focus,QComboBox:focus,QLineEdit:focus,QPlainTextEdit:focus { border:2px solid #78B9FF; }')
         layout = QVBoxLayout(self)
         self.banner = QLabel('Development · production approval pending · '+
                              ('Gmail submission explicitly enabled' if gmail_enabled else 'Gmail submission disabled'))
@@ -67,6 +69,7 @@ class MailboxWindow(QWidget):
         self.security = QLabel(); self.security.setTextFormat(Qt.TextFormat.PlainText)
         self.security.setWordWrap(True); layout.addWidget(self.security)
         self.content = QPlainTextEdit(); self.content.setReadOnly(True); layout.addWidget(self.content)
+        self.content.setTabChangesFocus(True)
         self.attachments=QComboBox(); layout.addWidget(self.attachments)
         self.actions=MailActions(self,workflow_factory,gmail_enabled)
         bar=QHBoxLayout(); layout.addLayout(bar)
@@ -74,7 +77,13 @@ class MailboxWindow(QWidget):
                         ('Forward',lambda:self.actions.derive(self.display,True)),('Save attachment as…',self.export_attachment),
                         ('Group opened threads',self.group_threads)]:
             button=QPushButton(text); button.clicked.connect(lambda checked=False,action=fn:action()); bar.addWidget(button)
+            self.buttons[text]=button
         layout.addWidget(QLabel('PEEK preserves read state. HTML/resources are blocked. Attachments never auto-open. Routing, timing and size remain exposed.'))
+        configure(self,[(self.accounts,'Selected mailbox account'),(self.table,'Inbox headers — transport claims'),
+            (self.signers,'Local signer certificate; selection does not grant trust'),(self.content,'Opened message plain text'),
+            (self.attachments,'Verified attachments; file types are untrusted'),(self.security,'Signature and identity status'),
+            (self.status,'Mailbox operation status')],[self.accounts,*list(self.buttons.values())[:8],self.table,
+            self.signers,self.content,self.attachments,*list(self.buttons.values())[8:]])
         identity.session.changed.connect(self.session_changed)
         self.timer = QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(50)
         self.session_changed(identity.session.snapshot)
@@ -116,6 +125,7 @@ class MailboxWindow(QWidget):
                 self.signers.addItem(address+' · '+contact['state'], address)
         self.signers.blockSignals(False)
         self.status.setText('Selected account. Refresh headers explicitly.' if self.lease else 'Locked / no account. Open Settings.')
+        self.update_controls()
 
     def select_account(self, index):
         if index >= 0:
@@ -149,6 +159,7 @@ class MailboxWindow(QWidget):
             return service.set_seen(lease, key, action == 'read', budget)
         self.pending.append((epoch, generation, lease, cancel, action, key, self.pool.submit(work)))
         self.status.setText('Working…')
+        self.update_controls()
 
     def poll(self):
         for item in list(self.pending):
@@ -175,9 +186,25 @@ class MailboxWindow(QWidget):
                 self.content.clear(); self.security.clear()
                 self.display=None; self.attachments.clear()
                 code = getattr(error, 'code', None)
-                self.status.setText(code.value if code else 'Mailbox operation failed; no content released.')
+                self.status.setText(error_message(error))
                 if isinstance(error, Failure) and error.code in (Code.STALE, Code.MISSING):
                     self.rows = (); self.page = None; self.table.setRowCount(0)
+        self.update_controls()
+
+    def update_controls(self):
+        ready=self.lease is not None and not self.identity.session.snapshot.locked
+        idle=ready and not self.pending
+        selected=0<=self.table.currentRow()<len(self.rows)
+        for name in ('Refresh headers','Compose / outbox'): self.buttons[name].setEnabled(idle)
+        for name in ('Open selected','Mark read','Mark unread'): self.buttons[name].setEnabled(idle and selected)
+        self.buttons['Older'].setEnabled(idle and self.page is not None and self.page.before is not None)
+        self.buttons['Lock'].setEnabled(ready)
+        self.buttons['Reply'].setEnabled(idle and self.display is not None and
+            (self.display.protected is None or self.display.protected.verified_confidential))
+        self.buttons['Forward'].setEnabled(idle and self.display is not None)
+        self.buttons['Save attachment as…'].setEnabled(idle and self.display is not None and self.attachments.count()>0)
+        self.buttons['Group opened threads'].setEnabled(idle and bool(self.threads))
+        self.actions.update_controls()
 
     def show_display(self,result):
         self.display=result
@@ -224,6 +251,6 @@ class MailboxWindow(QWidget):
             self.table.item(index, 0).setText('Read' if row.seen else 'Unread')
 
     def closeEvent(self, event):
-        self.cancel(); self.identity.lock(); self.timer.stop(); self.settings.close(); self.actions.close(); self.actions.timer.stop()
+        self.cancel(); self.identity.lock(); self.timer.stop(); self.settings.close(); self.settings.dispose(); self.actions.close(); self.actions.timer.stop()
         self.pool.shutdown(wait=False, cancel_futures=True)
         event.accept()

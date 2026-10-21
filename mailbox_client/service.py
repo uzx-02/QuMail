@@ -7,6 +7,7 @@ from experiments.m5.legacy import classify, Kind
 from experiments.m5.services import OpenMessage
 from .model import *
 from .gmail import MAIL_SCOPE, field
+from transport.bounded_google import BoundedGoogleAuthorization
 
 
 class Credentials:
@@ -22,7 +23,8 @@ class Credentials:
             raise Failure(Code.AUTH)
         if tokens.get('expiry', 0) <= time.time()+60:
             if self.google is None or MAIL_SCOPE not in self.google.scopes: raise Failure(Code.AUTH)
-            result = self.google.refresh(budget.cancel, lease.context, data['address'], tokens)
+            options={'deadline':budget.deadline} if isinstance(self.google,BoundedGoogleAuthorization) else {}
+            result = self.google.refresh(budget.cancel, lease.context, data['address'], tokens,**options)
             self.access.check(lease, budget.deadline); budget.check()
             # Exact owned context; M3 checks subject/issuer/address. Never install another selection.
             self.vault.store_oauth(lease.context, result.identity, result.tokens)

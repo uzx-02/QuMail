@@ -11,6 +11,9 @@ import re
 import select
 import ssl
 import time
+import threading
+from experiments.m5.model import Budget
+from .connection import connect,secure
 from .model import *
 
 HOST = 'imap.gmail.com'
@@ -18,13 +21,19 @@ MAIL_SCOPE = 'https://mail.google.com/'
 
 
 class LimitedIMAP(imaplib.IMAP4_SSL):
-    def __init__(self, host, port, *, ssl_context, timeout):
+    def __init__(self, host, port, *, ssl_context, timeout, budget=None):
         self.remaining = 1024 * 1024
         self.literal_limit = MAX_WIRE
-        self.budget = None
+        self.budget = budget or Budget(threading.Event(),time.monotonic()+timeout)
         self.buffer = bytearray()
-        super().__init__(host, port, ssl_context=ssl_context, timeout=timeout)
+        try: super().__init__(host, port, ssl_context=ssl_context, timeout=timeout)
+        except BaseException:
+            if getattr(self,'sock',None): self.sock.close()
+            raise
         self.debug = 0
+
+    def _create_socket(self,timeout):
+        return secure(connect(self.host,self.port,self.budget),self.ssl_context,self.host,self.budget)
 
     def set_budget(self, budget):
         self.budget = budget
@@ -133,9 +142,10 @@ class GmailMailbox:
                 raise Failure(Code.AUTH)
             context = ssl.create_default_context()
             context.minimum_version = ssl.TLSVersion.TLSv1_2
-            # DNS/connect/handshake precedes polling; no credentials sent before TLS.
+            # DNS, connect, handshake and greeting share one cancellable setup budget.
+            setup=Budget(budget.cancel,min(budget.deadline,time.monotonic()+8))
             connection = self.factory(HOST, 993, ssl_context=context,
-                                      timeout=max(.1, min(8, budget.deadline-time.monotonic())))
+                                      timeout=8,budget=setup)
             connection.set_budget(budget)
             budget.check()
             def challenge(value):

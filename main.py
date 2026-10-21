@@ -81,7 +81,7 @@ def _launch_identity(vault,client):
     app=QApplication([sys.argv[0]])
     helper=Path(__file__).parent/'tmp/m2/target/debug/qumail-m3-provider.exe'
     service=IdentityService.configured(vault,helper,client)
-    window=IdentitySettings(service); window.show()
+    window=IdentitySettings(service); app.aboutToQuit.connect(window.dispose); window.show()
     return app.exec()
 
 
@@ -89,7 +89,8 @@ def _launch_mailbox(vault,client,gmail_enabled=False):
     from pathlib import Path
     from PyQt6.QtWidgets import QApplication
     from core.identity_service import IdentityService
-    from transport.development_google import GoogleAuthorization,client_configuration,SCOPES
+    from transport.development_google import client_configuration,SCOPES
+    from transport.bounded_google import BoundedGoogleAuthorization as GoogleAuthorization
     from mailbox_client.gmail import MAIL_SCOPE
     from ui.mailbox_window import MailboxWindow
     app=QApplication([sys.argv[0]])

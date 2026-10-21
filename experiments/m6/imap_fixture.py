@@ -19,10 +19,10 @@ class Server:
         self.socket.settimeout(.1); self.port = self.socket.getsockname()[1]
         self.thread = threading.Thread(target=self.run)
 
-    def factory(self, host, port, *, ssl_context, timeout):
+    def factory(self, host, port, *, ssl_context, timeout, budget=None):
         assert host == 'imap.gmail.com' and port == 993
         assert ssl_context.check_hostname
-        return LimitedIMAP('127.0.0.1', self.port, ssl_context=self.client_context, timeout=timeout)
+        return LimitedIMAP('127.0.0.1', self.port, ssl_context=self.client_context, timeout=timeout,budget=budget)
 
     def run(self):
         while not self.stop.is_set():

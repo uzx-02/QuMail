@@ -10,6 +10,7 @@ from experiments.m5.model import Draft, Budget
 from experiments.m5.provider import Provider
 from mailbox_client.model import Display
 from mailbox_client.workflows import Workflows, import_attachment
+from .mail_accessibility import configure,error_message
 
 
 class MailActions(QDialog):
@@ -17,6 +18,7 @@ class MailActions(QDialog):
         super().__init__(window)
         self.window, self.gmail_enabled = window, gmail_enabled
         self.factory = factory or self.service
+        self.submission_enabled=gmail_enabled or factory is not None
         self.epoch = 0; self.pending = []; self.cancel_event = None
         self.operation = None; self.attachments = (); self.references = (); self.in_reply_to = ''
         self.rows = ()
@@ -27,14 +29,17 @@ class MailActions(QDialog):
         self.notice.setWordWrap(True); layout.addWidget(self.notice)
         self.to = QLineEdit(); self.cc = QLineEdit(); self.subject = QLineEdit()
         for name, widget in [('To (comma separated)',self.to),('Cc',self.cc),('Subject',self.subject)]:
-            layout.addWidget(QLabel(name)); layout.addWidget(widget)
+            label=QLabel('&'+name); label.setBuddy(widget); layout.addWidget(label); layout.addWidget(widget)
         self.body = QPlainTextEdit(); layout.addWidget(self.body)
+        self.body.setTabChangesFocus(True)
         self.archive = QCheckBox('Include encrypted sender archive'); self.archive.setChecked(True); layout.addWidget(self.archive)
         self.files = QListWidget(); self.files.setMaximumHeight(80); layout.addWidget(self.files)
         bar = QHBoxLayout(); layout.addLayout(bar)
+        self.editor_buttons=[]
         for name, fn in [('New',self.new),('Add attachment',self.add_attachment),('Remove attachment',self.remove_attachment),
                          ('Verify recipients',lambda:self.start('verify')),('Save encrypted draft',lambda:self.start('save'))]:
             b=QPushButton(name); b.clicked.connect(lambda checked=False, action=fn:action()); bar.addWidget(b)
+            self.editor_buttons.append(b)
         layout.addWidget(QLabel('Saved outbox: preparation uses the saved draft; save edits first. Accepted means server acceptance, not delivery.'))
         self.table = QTableWidget(0,4)
         self.table.setHorizontalHeaderLabels(['Operation','State','Attempts','Reason'])
@@ -50,9 +55,15 @@ class MailActions(QDialog):
             b.clicked.connect(lambda checked=False,a=action:self.start(a)); bar.addWidget(b)
         self.buttons['Submit once'].setEnabled(gmail_enabled or factory is not None)
         stop=QPushButton('Cancel active work / clear plaintext'); stop.clicked.connect(lambda:self.stop(True)); layout.addWidget(stop)
+        self.stop_button=stop
         self.status=QLabel('Gmail submission disabled unless launched with --dev-gmail-submit. No automatic submission.')
         self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True); layout.addWidget(self.status)
         self.timer=QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(50)
+        configure(self,[(self.to,'To recipients, comma separated'),(self.cc,'Cc recipients, comma separated; Bcc unavailable'),
+            (self.subject,'Protected subject'),(self.body,'Message plain-text body, 8 KiB maximum'),(self.files,'Compose attachments'),
+            (self.table,'Durable outbox operations and delivery states'),(self.archive,'Include encrypted sender archive'),
+            (self.status,'Compose and outbox operation status')],
+            [self.to,self.cc,self.subject,self.body,self.archive,self.files,*self.editor_buttons,self.table,*self.buttons.values(),stop])
 
     def service(self):
         helper=Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
@@ -154,6 +165,7 @@ class MailActions(QDialog):
             return service.derive(lease,source,budget,forward=action=='forward',recipients=recipients,confirmed=confirmed)
         self.pending.append((epoch,parent_epoch,generation,lease,cancel,action,operation,self.window.pool.submit(work)))
         self.status.setText('Working…')
+        self.update_controls()
 
     def poll(self):
         for item in list(self.pending):
@@ -184,9 +196,24 @@ class MailActions(QDialog):
                     self.status.setText(f'{value.state.value}: {value.reason}. Refresh outbox. No automatic retry.')
                 else: self.status.setText(str(value))
             except Exception as error:
-                code=getattr(error,'code',None)
-                self.status.setText((code.value if code else 'Operation failed')+
-                    '. No plaintext fallback. For changed/expired/revoked keys, resolve and verify the contact in Settings.')
+                self.status.setText(error_message(error))
+        self.update_controls()
+
+    def update_controls(self):
+        ready=self.window.lease is not None and not self.window.identity.session.snapshot.locked
+        idle=ready and not self.pending
+        self.table.setEnabled(idle)  # A pending archive/submit stays bound to its selected operation.
+        for widget in (self.to,self.cc,self.subject,self.body,self.archive,self.files,*self.editor_buttons): widget.setEnabled(idle)
+        row=self.table.currentRow()
+        state=self.rows[row].state.value if 0<=row<len(self.rows) else None
+        for name,button in self.buttons.items():
+            allowed={'Refresh outbox':True,'Edit draft':state=='Draft','Prepare saved':state=='Draft',
+                'Submit once':self.submission_enabled and state=='Prepared','Explicit retry':state in ('Failed','Unknown'),
+                'Discard / cancel saved':state in ('Draft','Prepared'),'Open archive':state is not None and state!='Draft'}[name]
+            button.setEnabled(idle and allowed)
+
+    def reject(self):
+        self.close()  # Escape follows the same cancellation/plaintext-clearing path as X.
 
     def derive(self,source,forward=False):
         if source is None: return

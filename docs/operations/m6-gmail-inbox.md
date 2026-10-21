@@ -37,7 +37,7 @@ sent no external mail and performed no live authorization or cloud configuration
   verification does not grant contact trust. Changed/expired/revoked keys require
   resolution and renewed verification, never a bypass. Modern failures cannot
   fall back to conventional plaintext or the legacy reader.
-- **Save attachment as…** exports the selected verified attachment to an explicitly
+- **Save attachment asâ€¦** exports the selected verified attachment to an explicitly
   chosen NEW local file. Existing files and unsafe paths are rejected, never
   overwritten. Filenames/types are untrusted claims. Export deliberately leaves
   plaintext at that location; nothing opens or executes it automatically.
@@ -101,24 +101,19 @@ Outer routing addresses, timing, size and the generic encrypted subject remain
 visible; inner subject/author/references/attachments are protected by existing M5.
 No sensitive content, token or key is written to application logs.
 
-Workers use a 30-second budget and post-connect cancellation polling. Initial DNS/
-connect, OAuth HTTP and SQLite waits retain documented limits; no universal
-sub-second completion/cancellation claim. Python memory is not securely zeroized.
+Mail workers use a 30-second operation budget. IMAP DNS/TCP/TLS/greeting has an
+8-second shared setup cap; SMTP DNS/TCP is similarly bounded. DNS/Google HTTP run
+in cancellable private children, with 50 ms polling. Enrollment allows 210 s;
+refresh 30 s clamped to remaining caller budget. Cancellation cannot undo remote
+consent, flags or message acceptance; close leftover browser tabs explicitly.
+Settings native/vault work remains synchronous (30 s per native call; 5 s SQLite
+wait), an explicit engineering gap. No hard real-time or memory-zeroization claim.
 
 ## Live acceptance, separately pending
 
-Provision a Google Desktop client, consent screen and approved test users through
-the normal Google setup. IMAP/SMTP needs `https://mail.google.com/`; identity-only
-scopes fail. Workspace restrictions and Google's restricted-scope app verification
-remain separate distribution gates. No domain-wide delegation is implemented.
-
-With explicitly authorized test accounts, qualify enrollment/refresh, two-account
-switching, header paging, PEEK flags, cancellation and protected opening. Then, only
-under separate permission to send, enable Gmail submission and verify one prepared
-message, Accepted, actual recipient retrieval/decryption and sender archive. Compare
-Gmail Seen before/after opening. Exercise expired credentials, controlled rejection
-and uncertain acceptance without blind retries. Record sanitized outcomes, versions
-and exact commit; never tokens/private bodies. Local fixtures are not live evidence.
+Use the [single Google acceptance checklist](m6-google-acceptance.md) for client,
+two accounts, browser/refresh, retrieval, certificates, separately authorized sends,
+sanitized evidence and cleanup. Live/human/distribution/release gates remain pending.
 
 Primary references consulted 2026-10-20/21:
 [Google IMAP/SMTP endpoints](https://developers.google.com/workspace/gmail/imap/imap-smtp),

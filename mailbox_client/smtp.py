@@ -1,6 +1,9 @@
 """Explicit Gmail development adapter. No endpoint override or password fallback."""
 import socket
 import ssl
+import time
+from experiments.m5.model import Budget
+from .connection import connect
 from experiments.m4.smtp_transport import SMTPSubmission, BoundedSMTP
 
 
@@ -8,9 +11,7 @@ class GmailConnection(BoundedSMTP):
     def _get_socket(self, host, port, timeout):
         if (host, port) != ('smtp.gmail.com', 587):
             raise ValueError('provider endpoint rejected')
-        # DNS/connect remains a bounded-socket library phase, not a claim of
-        # sub-second DNS cancellation. UI publication is independently cancelled.
-        self.sock = socket.create_connection((host, port), timeout=min(8, self.arm()))
+        self.sock = connect(host,port,Budget(self.cancel,min(self.deadline,time.monotonic()+8)))
         self.arm()
         return self.sock
 

@@ -1,11 +1,12 @@
 """Settings-only development window: no legacy Session, inbox, TQR, portal or SMTP."""
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer,Qt
 from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QComboBox,
     QLineEdit,QFileDialog,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem)
 from experiments.m3.types import BoundaryError,Code
 from experiments.m3.vault import LIMIT
+from .mail_accessibility import configure,error_message
 
 
 class IdentitySettings(QWidget):
@@ -14,6 +15,7 @@ class IdentitySettings(QWidget):
         self.service=service
         self.pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='qumail-dev-identity')
         self.pending=[]
+        self.disposed=False
         self.setWindowTitle('QuMail — development identity Settings (sending disabled)')
         self.resize(920,680)
         layout=QVBoxLayout(self)
@@ -22,6 +24,8 @@ class IdentitySettings(QWidget):
         banner.setWordWrap(True); layout.addWidget(banner)
         self.status=QLabel('Locked'); layout.addWidget(self.status)
         self.details=QLabel(); layout.addWidget(self.details)
+        self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True)
+        self.details.setTextFormat(Qt.TextFormat.PlainText)
         self.accounts=QComboBox(); self.accounts.currentIndexChanged.connect(self.select); layout.addWidget(self.accounts)
         self.address=QLineEdit(); self.address.setPlaceholderText('Expected Google test-account email'); layout.addWidget(self.address)
         self.buttons={}
@@ -40,13 +44,16 @@ class IdentitySettings(QWidget):
             button.clicked.connect(lambda checked=False,cb=callback:self.guard(cb)); line.addWidget(button)
         self.contacts=QTableWidget(0,3); self.contacts.setHorizontalHeaderLabels(['Address','Root fingerprint','Trust / lifecycle'])
         self.contacts.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); layout.addWidget(self.contacts)
+        configure(self,[(self.accounts,'Settings account'),(self.address,'Expected Google test-account email'),
+            (self.contacts,'Contact fingerprints and trust lifecycle'),(self.status,'Identity operation status'),
+            (self.details,'Selected account root and lifecycle')],[self.accounts,self.address,*self.buttons.values(),self.contacts])
         self.timer=QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(100)
         service.session.changed.connect(self.render)
         self.render(service.session.snapshot)
 
     def guard(self,callback):
         try: callback()
-        except BoundaryError as error: self.status.setText(error.code.value)
+        except BoundaryError as error: self.status.setText(error_message(error))
         except Exception: self.status.setText('Operation failed; no credentials or provider diagnostics displayed.')
 
     def render(self,snapshot):
@@ -67,6 +74,17 @@ class IdentitySettings(QWidget):
             if name in ('Refresh Google','Reauthorize selected'): enabled=enabled and self.service.google is not None
             button.setEnabled(enabled)
         self.refresh_contacts()
+        self.update_busy()
+
+    def update_busy(self):
+        busy=any(not future.done() for _,future,_,_ in self.pending)
+        ready=not self.service.session.snapshot.locked
+        configured=self.service.google is not None
+        for name in ('Connect Google','Reauthorize selected','Refresh Google'):
+            self.buttons[name].setEnabled(ready and configured and not busy and
+                (name=='Connect Google' or self.service.session.snapshot.active is not None))
+        self.address.setEnabled(ready and not busy)
+        self.buttons['Cancel authorization'].setEnabled(busy)
 
     def refresh_contacts(self):
         self.contacts.setRowCount(0)
@@ -92,6 +110,7 @@ class IdentitySettings(QWidget):
         ticket,work=self.service.authorization(address,refresh=mode=='refresh',reauthorize=mode=='reauthorize')
         self.pending.append((ticket,self.pool.submit(work),mode,recovery))
         self.status.setText('Complete authorization in your external browser, or cancel.')
+        self.update_busy()
 
     def poll(self):
         for item in list(self.pending):
@@ -104,6 +123,7 @@ class IdentitySettings(QWidget):
             except Exception:
                 self.service.session.invalidate()
                 self.status.setText('Authorization did not complete in this session. Unlock to inspect committed accounts.')
+        self.update_busy()
 
     @staticmethod
     def read_bounded(path):
@@ -166,6 +186,13 @@ class IdentitySettings(QWidget):
             self.service.revoke()
 
     def closeEvent(self,event):
-        self.cancel(); self.service.lock(); self.timer.stop()
-        self.pool.shutdown(wait=False,cancel_futures=True)
+        self.cancel(); self.service.lock()
+        # Closing Settings hides it. Its timer must drain cancelled results and
+        # its executor must remain usable when the mailbox reopens Settings.
         event.accept()
+
+    def dispose(self):
+        if self.disposed: return
+        self.disposed=True
+        self.cancel(); self.timer.stop()
+        self.pool.shutdown(wait=False,cancel_futures=True)

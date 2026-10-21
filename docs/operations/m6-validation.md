@@ -1,3 +1,24 @@
+# Current Windows M6 assessment — 2026-10-21
+
+**M6 PARTIAL, with one remaining Windows engineering blocker.** Continued from
+actual clean tracked `6f4d5fcb62ae0fbae7be68739e0242a4468d750d`. Bounded DNS/OAuth,
+TCP/TLS cancellation, shutdown cleanup and keyboard/busy/error corrections pass
+65 M6 tests (54.93 s), including 13 focused tests (16.78 s); affected M3 regression
+54 passes (11.19 s). Zero skips/warnings. Tests are local Windows fixtures, not Google.
+
+Settings native/vault work, including enrollment/restore commits after OAuth, is
+still synchronous. Its finite 30 s helper and 5 s SQLite waits do not establish
+responsive UI/<1 s cancellation. This is a locally actionable engineering gap,
+separate from live Google and deferred independent/human review. Next: stage slow
+Settings work safely off UI with generation/transaction/recovery-secret tests.
+
+See the [current acceptance table, exact commands and limits](m6-windows-validation.md),
+[hash-identified evidence](evidence/m6-windows/input-hashes.json) and the
+[single live Google checklist](m6-google-acceptance.md). Previous assessments below
+remain historical; this entry supersedes their connection/usability status.
+
+## Preserved assessment at 6f4d5fc
+
 # M6 integrated mail workflow continuation — 2026-10-21
 
 **Bounded workflow engineering implemented and locally validated; full M6 PARTIAL.**

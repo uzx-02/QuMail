@@ -1,3 +1,35 @@
+# Current Windows M6 decision — 2026-10-21
+
+**M6 PARTIAL: connection/usability corrections validated; one local engineering
+blocker remains.** Started from actual clean tracked checkpoint
+`6f4d5fcb62ae0fbae7be68739e0242a4468d750d`, branch `codex/m6-gmail-inbox`.
+
+- Bounded private DNS/OAuth workers, cancellable TCP/TLS/IMAP setup, cleanup on
+  shutdown, Settings reopening/disposal, accessible names/focus, actionable errors
+  and busy/outbox state controls implemented. Verification, account, frozen outbox,
+  transport uncertainty and UID/PEEK guarantees retained.
+- Final M6 **65 passed in 54.93 s**; focused **13 passed in 16.78 s** (subset of 65);
+  affected M3 **54 passed in 11.19 s**. Zero skips/warnings. Real disposable Windows
+  vault/crypto and local TLS, with synthetic OAuth clearly distinguished.
+- **Engineering blocker:** synchronous Settings native/vault work, including
+  enrollment/restore acceptance. Finite 30 s helper/5 s SQLite waits are not a
+  responsive/subsecond UI contract. Stage work off UI with account-generation,
+  transactional commit and recovery-secret guarantees; test delayed/cancelled/late
+  results. This work needs neither live credentials nor independent review.
+- Live Google browser/refresh/IMAP/SMTP and human usable-security/accessibility
+  walkthrough remain separate gates. ADR 004/006 review deferrals, interoperability,
+  historical compatibility, native assurance and licensing/release gates unchanged.
+
+[Acceptance and evidence](docs/operations/m6-windows-validation.md),
+[manifest](docs/operations/evidence/m6-windows/input-hashes.json),
+[live checklist and exact user inputs](docs/operations/m6-google-acceptance.md).
+M1 hosted baseline `023c941…`, M2 proof `1fc4e55…`, previous evidence, native inputs,
+legacy data/readers and untracked user files preserved. No M7/M8, ports, external
+mail, migration, push, merge, deployment or release. Results describe recorded
+working-tree hashes; the local Git receipt identifies their checkpoint.
+
+## Preserved prior assessment at 6f4d5fc
+
 # Current M6 mail workflow decision — 2026-10-21
 
 **Requested bounded workflows implemented and locally validated; full M6 PARTIAL.**

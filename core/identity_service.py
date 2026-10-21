@@ -6,7 +6,8 @@ from experiments.m3.types import BoundaryError,Code,EmailAddress,RootIdentity,Us
 from experiments.m3.vault import Vault,safe_path,LIMIT
 from experiments.m3.provider import Provider
 from experiments.m3.secure_store import WindowsCredentialStore
-from transport.development_google import GoogleAuthorization,client_configuration
+from transport.development_google import client_configuration
+from transport.bounded_google import BoundedGoogleAuthorization as GoogleAuthorization
 
 
 def persist_new(path,data):

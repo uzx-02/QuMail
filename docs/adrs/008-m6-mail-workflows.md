@@ -78,3 +78,25 @@ specification's larger release target. DNS/connect, OAuth HTTP and SQLite timing
 limits still prevent a universal sub-second cancellation claim. Native assurance,
 historical compatibility, licensing, restricted-scope distribution approval and
 security release gates are unchanged. No M7/M8, migration, external send or release.
+
+
+## Windows connection/usability amendment — 2026-10-21
+
+From `6f4d5fcb62ae0fbae7be68739e0242a4468d750d`, isolate OS DNS and Google OAuth
+waits in hidden bounded private subprocesses. Run the unchanged Google verifier;
+no identity/token semantic change. Resolve only fixed Gmail endpoints, then use
+cancellable nonblocking TCP/verified TLS. IMAP setup has a shared 8 s budget;
+authorization 210 s and refresh 30 s, clamped to its caller. Kill/reap and close
+pipes on cancellation; remote consent/refresh side effects cannot be undone.
+No secrets in argv/logs/files, alternative provider, password or TLS bypass.
+
+Add names/focus order, busy/state controls and actionable errors without redesign.
+Escape clears/cancels compose. Settings hide retains timer/executor; final disposal
+cancels/shuts them down. Retain Unknown after possible side effects, no recall claim.
+
+Final 65 M6/13 focused and 54 M3 checks pass; see current validation. This is not
+hard real-time or human accessibility evidence. **Engineering remains partial:**
+synchronous Settings native/vault commits delay UI. Stage preparation/commit with
+account-generation and recovery-secret delivery guarantees; moving the mutable
+service wholesale to a thread is unsafe. Live Google/deferred review are separate
+from this locally actionable work. No production/release approval.
