@@ -1,3 +1,29 @@
+# Current Windows M6 Settings result — 2026-10-21
+
+**Local Windows engineering complete at bounded development scope; full M6 PARTIAL
+pending live Google and human acceptance.** Starting actual checkpoint:
+`f39bc5429658ec3009b9ce10c3f1cd39c21db3ef`. The remaining synchronous Settings
+blocker is resolved by immutable requests, one worker/admission, guarded commits,
+owner receipts and GUI-only publication. Backup secrets are acknowledged offline
+before file persistence; no secret-retention fallback is introduced.
+
+| Final retained output | Exact result |
+|---|---|
+| [M6 normal](evidence/m6-settings/normal.txt) | 82 passed in 64.27 s; 82 distinct; zero skips/warnings |
+| [Settings reverse](evidence/m6-settings/focused-reverse.txt) | 17 passed in 7.97 s; same 17 as the full run, exact reverse order; zero skips/warnings |
+| [M3 regression](evidence/m6-settings/m3.txt) | 54 passed in 12.49 s; zero skips/warnings |
+
+See [acceptance, exact commands, failures and limits](m6-settings-validation.md),
+[manifest](evidence/m6-settings/input-hashes.json) and [recovery](m3-recovery.md).
+Final tests describe the recorded working-tree runtime bytes, not unchanged parent
+HEAD; the local commit receipt identifies them. Previous evidence below remains
+historical. Live OAuth/provider behavior, human walkthrough and deferred independent
+review are not claimed. No further local engineering blocker is identified within
+this requested Windows scope. Next: the [controlled Google checklist](m6-google-acceptance.md)
+when explicitly provisioned; permission to retrieve does not authorize sends.
+
+## Preserved assessment at f39bc54
+
 # Current Windows M6 assessment — 2026-10-21
 
 **M6 PARTIAL, with one remaining Windows engineering blocker.** Continued from

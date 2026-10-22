@@ -1,4 +1,5 @@
 from concurrent.futures import Future
+import time
 from dataclasses import replace
 from datetime import datetime,timedelta,timezone
 import json
@@ -68,7 +69,14 @@ def test_atomic_enrollment_vault_failure(service,monkeypatch):
     import sqlite3
     with sqlite3.connect(service.path) as db: assert db.execute('SELECT COUNT(*) FROM accounts').fetchone()[0]==0
 
-def test_settings_controls_and_stale_worker_display(service,qapp):
+def drain_settings(window,qapp):
+    end=time.monotonic()+10
+    while (window.operations.busy or window.needs_read) and time.monotonic()<end:
+        qapp.processEvents(); window.poll(); time.sleep(.005)
+    assert not window.operations.busy and not window.needs_read
+
+
+def test_settings_controls_and_stale_worker_display(service,qapp,monkeypatch):
     a=add(service,'alice'); b=add(service,'bob')
     window=IdentitySettings(service)
     window.show(); qapp.processEvents()
@@ -77,34 +85,39 @@ def test_settings_controls_and_stale_worker_display(service,qapp):
     index=next(i for i in range(window.accounts.count()) if window.accounts.itemData(i)==a.context.account)
     window.accounts.setCurrentIndex(index); qapp.processEvents()
     assert service.session.snapshot.active==a and 'alice@example.invalid' in window.details.text()
-    ticket=service.session.begin(); future=Future()
-    window.pending.append((ticket,future,'enroll',None))
+    drain_settings(window,qapp)
+    entered=threading.Event(); release=threading.Event()
+    def delayed(*args):
+        entered.set(); assert release.wait(3); return result('late')
+    monkeypatch.setattr(service.google,'authorize',delayed)
+    window.address.setText('late@example.invalid'); window.start_auth()
+    assert entered.wait(2)
     window.buttons['Lock'].click(); qapp.processEvents()
-    future.set_result(result('late')); window.poll()
+    release.set(); drain_settings(window,qapp)
     assert window.details.text()=='No account selected' and window.contacts.rowCount()==0
     assert service.vault is None
-    window.close(); qapp.processEvents()
+    window.close(); window.dispose(); window.pool.shutdown(wait=True); qapp.processEvents()
 
 def test_settings_trust_changed_revoked_expired(service,qapp,monkeypatch):
     a=add(service,'alice'); b=add(service,'bob'); service.select(a.context.account)
     address='bob@example.invalid'
     public=service.vault.export_public(b.context,b.key)
     root=service.import_certificate(address,public)
-    window=IdentitySettings(service); window.show(); window.refresh_contacts()
+    window=IdentitySettings(service); window.show(); window.refresh_contacts(); drain_settings(window,qapp)
     assert window.contacts.item(0,2).text()==Trust.UNVERIFIED.value
-    service.verify_fingerprint(address,root.fingerprint,'in-person'); window.refresh_contacts()
+    service.verify_fingerprint(address,root.fingerprint,'in-person'); window.refresh_contacts(); drain_settings(window,qapp)
     assert window.contacts.item(0,2).text()==Trust.VERIFIED.value
     real=service.provider.call
     def expired(op,**kwargs): return {'state':'expired'} if op=='status' else real(op,**kwargs)
-    monkeypatch.setattr(service.provider,'call',expired); window.refresh_contacts()
+    monkeypatch.setattr(service.provider,'call',expired); window.refresh_contacts(); drain_settings(window,qapp)
     assert window.contacts.item(0,2).text()=='expired'  # Labeled display fixture, not time travel.
     monkeypatch.setattr(service.provider,'call',real)
     new=service.vault.replace_root(b.context)
-    service.import_certificate(address,service.vault.export_public(b.context,new)); window.refresh_contacts()
+    service.import_certificate(address,service.vault.export_public(b.context,new)); window.refresh_contacts(); drain_settings(window,qapp)
     assert window.contacts.item(0,2).text()==Trust.CHANGED.value
-    revoked=service.vault.revoke(b.context,new); service.import_certificate(address,revoked); window.refresh_contacts()
+    revoked=service.vault.revoke(b.context,new); service.import_certificate(address,revoked); window.refresh_contacts(); drain_settings(window,qapp)
     assert window.contacts.item(0,2).text()==Trust.REVOKED.value
-    window.close()
+    window.close(); window.dispose(); window.pool.shutdown(wait=True)
 
 def test_backup_transfer_failed_persistence_and_restore(service,tmp_path,provider):
     view=add(service,'alice')
@@ -240,11 +253,18 @@ def test_settings_backup_and_transfer_controls(service,qapp,tmp_path,monkeypatch
     monkeypatch.setattr(ui.QFileDialog,'getSaveFileName',lambda *args: (next(outputs),''))
     monkeypatch.setattr(ui.QMessageBox,'information',lambda *args:None)
     monkeypatch.setattr(ui.QMessageBox,'question',lambda *args:ui.QMessageBox.StandardButton.Yes)
+    drain_settings(window,qapp)
     window.buttons['Encrypted backup'].click()
+    drain_settings(window,qapp)
+    assert not (tmp_path/'ordinary.bin').exists()
+    window.acknowledge_backup(window.recovery.secret.hex()); drain_settings(window,qapp)
     assert service.session.snapshot.active.lifecycle=='active'
     window.buttons['Transfer device'].click()
+    drain_settings(window,qapp)
+    assert not (tmp_path/'transfer.bin').exists()
+    window.acknowledge_backup(window.recovery.secret.hex()); drain_settings(window,qapp)
     assert service.session.snapshot.active.lifecycle=='suspended_for_transfer'
-    window.close()
+    window.close(); window.dispose(); window.pool.shutdown(wait=True)
 
 
 def test_enrollment_commit_failure_leaves_no_partial_account(service,monkeypatch):

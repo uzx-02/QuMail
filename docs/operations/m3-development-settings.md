@@ -22,14 +22,29 @@ data directory. Create vault and Unlock/Lock are explicit controls; lock removes
 the selected context and cancels outstanding authorization work. OS storage must
 be available; no password/file-key fallback exists.
 
-The Settings selector switches complete immutable account views. Root, account,
-device and key handle belong to that one view; no OAuth/private material is stored
-in the view or legacy global session. Starting authorization, switching accounts,
-locking, cancellation and closing invalidate generation tickets. Workers perform
-authorization/refresh only; a current ticket is required before the GUI thread
-can commit credentials/account enrollment. Stale results/errors are discarded.
-At most two unfinished authorization workers are allowed. Network calls have
-15-second timeouts; loopback wait has a three-minute deadline and cancellation.
+The Settings selector switches cached immutable account views immediately. The
+background reader refreshes lifecycle/contact data. All blocking Settings work now
+uses one admitted immutable request and one worker: unlock/create, authorization
+and enrollment/restore persistence, native operations, vault reads, certificate
+operations and recovery. Workers never access widgets or share SQLite connections.
+
+**Cancel authorization / operation**, Lock, account switch and close invalidate
+publication/authorization. A short synchronized reservation precedes irreversible
+work and COMMIT; cancellation after reservation may leave a committed original-
+account effect. Unlock/select that owner and **Inspect outcomes**; never assume
+rollback. Read-only refresh does not invalidate unrelated compose/outbox workers.
+While work is draining, destructive controls remain disabled; repeated clicks are
+rejected, not queued. Close hides/locks Settings; reopening remains supported.
+
+Backup/transfer now requires **Complete backup**: save the displayed secret offline
+separately and re-enter it to acknowledge custody BEFORE any package file is written.
+Cancel/lock/close before acknowledgment clears the stage without producing a file.
+No secret is persisted by QuMail. See the [recovery instructions](m3-recovery.md)
+and [Settings validation/commit contract](m6-settings-validation.md).
+
+Original native calls can take up to 30 s and SQLite lock waits 5 s on the worker;
+UI remains responsive in tested phases. No universal OS cancellation/process-exit
+bound is claimed. The existing Google child budgets remain unchanged.
 
 ## Provision a Google test client explicitly
 
@@ -118,8 +133,9 @@ only on the selected account; public export never includes private key material.
 Encrypted backup leaves the source lifecycle unchanged. Transfer device asks for
 confirmation and suspends locally only after successful package persistence and
 vault commit. Outputs use new files, never overwrite an existing backup. The
-random recovery secret is intentionally shown locally once and is not logged,
-saved or automatically copied to the clipboard. Store it offline separately.
+random recovery secret is shown during Complete backup, then re-entered to
+acknowledge separate offline custody BEFORE writing. It is not logged, saved or
+automatically copied to the clipboard. Cancel/Lock clears an unwritten stage.
 
 Restore requires a clean vault, recovery secret and fresh matching Google
 authorization. Historical keys are restored transactionally into archive-only
@@ -128,7 +144,8 @@ are retired; its fingerprint stays unchanged. Replace root creates a different
 fingerprint and requires renewed verification by contacts. Neither can prove an
 offline copy was erased. See [recovery policy](m3-recovery.md).
 
-This is Windows development support. Local crypto/storage actions are synchronous
-in this small Settings panel; OAuth waits run off-thread. Production UI performance,
+This is Windows development support. Settings crypto/storage/OAuth waits now run
+on the bounded worker; only synchronized authorization and publication run on GUI.
+Universal OS/process-exit timing,
 memory/crash containment, filesystem-race hardening, broader platform support,
 licensing/distribution and security-release qualification remain later gates.

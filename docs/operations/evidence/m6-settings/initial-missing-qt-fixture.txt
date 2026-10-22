@@ -1,0 +1,139 @@
+EEEEEEEEEEE                                                              [100%]
+=================================== ERRORS ====================================
+__ ERROR at setup of test_slow_native_read_lock_switch_and_close_responsive ___
+file <WORKSPACE>\experiments\m6\test_settings.py, line 31
+  def test_slow_native_read_lock_switch_and_close_responsive(settings,qapp,monkeypatch):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_enrollment_cancel_during_real_generate_cannot_commit _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 51
+  def test_enrollment_cancel_during_real_generate_cannot_commit(service,qapp,monkeypatch):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:51
+___ ERROR at setup of test_cancel_commit_boundary_and_owner_receipt[False] ____
+file <WORKSPACE>\experiments\m6\test_settings.py, line 66
+  @pytest.mark.parametrize('after_reservation',[False,True])
+  def test_cancel_commit_boundary_and_owner_receipt(settings,qapp,monkeypatch,after_reservation):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+____ ERROR at setup of test_cancel_commit_boundary_and_owner_receipt[True] ____
+file <WORKSPACE>\experiments\m6\test_settings.py, line 66
+  @pytest.mark.parametrize('after_reservation',[False,True])
+  def test_cancel_commit_boundary_and_owner_receipt(settings,qapp,monkeypatch,after_reservation):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+__ ERROR at setup of test_backup_ack_before_write_survives_lock_and_restores __
+file <WORKSPACE>\experiments\m6\test_settings.py, line 87
+  def test_backup_ack_before_write_survives_lock_and_restores(settings,qapp,tmp_path,monkeypatch,provider):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_transfer_ack_and_failures_never_silently_suspend[before_write] _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 112
+  @pytest.mark.parametrize('failure',['before_write','during_write','before_commit','success'])
+  def test_transfer_ack_and_failures_never_silently_suspend(settings,qapp,tmp_path,monkeypatch,failure):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_transfer_ack_and_failures_never_silently_suspend[during_write] _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 112
+  @pytest.mark.parametrize('failure',['before_write','during_write','before_commit','success'])
+  def test_transfer_ack_and_failures_never_silently_suspend(settings,qapp,tmp_path,monkeypatch,failure):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_transfer_ack_and_failures_never_silently_suspend[before_commit] _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 112
+  @pytest.mark.parametrize('failure',['before_write','during_write','before_commit','success'])
+  def test_transfer_ack_and_failures_never_silently_suspend(settings,qapp,tmp_path,monkeypatch,failure):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_transfer_ack_and_failures_never_silently_suspend[success] _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 112
+  @pytest.mark.parametrize('failure',['before_write','during_write','before_commit','success'])
+  def test_transfer_ack_and_failures_never_silently_suspend(settings,qapp,tmp_path,monkeypatch,failure):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_ ERROR at setup of test_close_ceremony_destroys_private_staging_without_package _
+file <WORKSPACE>\experiments\m6\test_settings.py, line 133
+  def test_close_ceremony_destroys_private_staging_without_package(settings,qapp,tmp_path):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+_____ ERROR at setup of test_single_admission_and_private_result_disposal _____
+file <WORKSPACE>\experiments\m6\test_settings.py, line 143
+  def test_single_admission_and_private_result_disposal(settings,qapp,monkeypatch):
+file <WORKSPACE>\experiments\m6\test_settings.py, line 23
+  @pytest.fixture
+  def settings(service,qapp):
+E       fixture 'qapp' not found
+>       available fixtures: cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, doctest_namespace, monkeypatch, provider, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, service, settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, vault
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+<WORKSPACE>\experiments\m6\test_settings.py:23
+=========================== short test summary info ===========================
+ERROR experiments/m6/test_settings.py::test_slow_native_read_lock_switch_and_close_responsive
+ERROR experiments/m6/test_settings.py::test_enrollment_cancel_during_real_generate_cannot_commit
+ERROR experiments/m6/test_settings.py::test_cancel_commit_boundary_and_owner_receipt[False]
+ERROR experiments/m6/test_settings.py::test_cancel_commit_boundary_and_owner_receipt[True]
+ERROR experiments/m6/test_settings.py::test_backup_ack_before_write_survives_lock_and_restores
+ERROR experiments/m6/test_settings.py::test_transfer_ack_and_failures_never_silently_suspend[before_write]
+ERROR experiments/m6/test_settings.py::test_transfer_ack_and_failures_never_silently_suspend[during_write]
+ERROR experiments/m6/test_settings.py::test_transfer_ack_and_failures_never_silently_suspend[before_commit]
+ERROR experiments/m6/test_settings.py::test_transfer_ack_and_failures_never_silently_suspend[success]
+ERROR experiments/m6/test_settings.py::test_close_ceremony_destroys_private_staging_without_package
+ERROR experiments/m6/test_settings.py::test_single_admission_and_private_result_disposal
+11 errors in 1.97s

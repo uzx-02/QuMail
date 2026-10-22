@@ -1,3 +1,27 @@
+# Asynchronous Settings boundary — 2026-10-21
+
+`core.settings_operations` separates immutable account/vault/generation requests,
+background preparation/persistence and GUI publication. One admission/worker bounds
+work and private results. Workers open their own SQLite connections; neither Qt
+widgets nor the mutable IdentityService run there. Account selection uses coherent
+cached views; contact/lifecycle reads refresh asynchronously without invalidating
+unrelated mail workers. Stale results cannot repopulate another account.
+
+A narrow Vault.commit seam permits the Settings subclass to atomically encrypt
+owner receipts and reserve authorization under the session mutex before COMMIT.
+The mutex is released before disk I/O. Cancellation after reservation may leave a
+durable original-account effect; Inspect outcomes after unlocking/selecting it.
+No rollback claim is made for work already committed or authorized to commit.
+
+Backup/transfer preparation is memory-only. The GUI requires saved-offline-secret
+acknowledgment BEFORE a package can be written, then clears private staging. No
+new durable secret retention is introduced. Export intent/file/final receipt are
+separate bounded steps; transfer suspends only at the final successful commit.
+See [ADR 008](docs/adrs/008-m6-mail-workflows.md),
+[Settings validation](docs/operations/m6-settings-validation.md) and
+[recovery custody](docs/operations/m3-recovery.md). Prior architecture follows as
+historical context; its synchronous-Settings blocker is now superseded.
+
 # Windows connection/UI continuation — 2026-10-21
 
 Application DNS and Google OAuth run in bounded private child processes; fixed

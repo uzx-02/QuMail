@@ -67,7 +67,10 @@ class IdentityService:
 
     def select(self,account):
         self.session.invalidate()
-        rows=tuple(AccountView(*row) for row in self.require().summaries())
+        self.require()
+        # Selection publishes the coherent cached view; workers re-read lifecycle
+        # and ownership before use. Never wait for SQLite/native work on selection.
+        rows=self.session.snapshot.accounts
         selected=next((row for row in rows if row.context.account==account),None)
         if selected is None: raise BoundaryError(Code.OWNERSHIP)
         self.session.install(rows,selected)

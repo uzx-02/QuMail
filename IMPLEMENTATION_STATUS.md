@@ -1,3 +1,35 @@
+# Windows M6 Settings engineering completion — 2026-10-21
+
+**Local Windows M6 engineering complete at the documented development scope;
+full M6 remains PARTIAL pending live Google and human acceptance.** Continued from
+actual clean tracked `f39bc5429658ec3009b9ce10c3f1cd39c21db3ef` on
+`codex/m6-gmail-inbox`. The synchronous Settings blocker is resolved.
+
+| Requirement | Final evidence / disposition |
+|---|---|
+| Settings responsiveness, QM-PERF-002 / M6 T12/T15 | Immutable owner/vault/generation requests; one worker/admission; per-worker SQLite; all widgets/publication on GUI; tested delayed native/read/SQLite phases with responsive Cancel/Lock/selection/close |
+| Commit/isolation, T04/T12 | Short synchronized commit reservation, encrypted owner receipt, stale publication rejection; after-reservation cancellation reports inspectable durable effects, not rollback |
+| Recovery custody, T08/T12 | In-memory preparation; explicit offline-secret acknowledgment BEFORE writing; real restore after cancellation/lock/SQLite COMMIT denial; failed transfer leaves source active; format/history/root rules preserved |
+| Integration regressions | **82 M6 passed in 64.27 s; 54 M3 passed in 12.49 s; 17 focused Settings tests passed in reverse order in 7.97 s** (same 17 included in normal M6). Zero skips/warnings |
+| Remaining acceptance | Live Google browser/refresh/IMAP/SMTP, human usable-security/accessibility walkthrough; independent review deferred under ADR 004/006. No production approval |
+
+[Acceptance, exact commands and bounds](docs/operations/m6-settings-validation.md),
+[final snapshot hashes and logs](docs/operations/evidence/m6-settings/input-hashes.json),
+[recovery custody instructions](docs/operations/m3-recovery.md).
+No known remaining local Windows engineering blocker for this bounded M6 scope.
+Native calls/OS I/O may drain after immediate GUI cancellation; no universal
+subsecond OS/process-exit promise. Qualified size/storage limits remain unchanged
+apart from explicit bounded encrypted Settings receipts/export intents.
+
+Next user action: supply provisioned Desktop-client JSON path, new test-vault path,
+two controlled addresses and browser availability using the existing
+[Google checklist](docs/operations/m6-google-acceptance.md). Sending requires separate
+explicit permission; retrieval consent alone is insufficient. Earlier M1/M2/M6
+checkpoints/evidence, user files, providers/dependencies and legacy data preserved.
+No migration, external mail, push, merge, release, M7/M8 or production enablement.
+
+## Preserved assessment at f39bc54
+
 # Current Windows M6 decision — 2026-10-21
 
 **M6 PARTIAL: connection/usability corrections validated; one local engineering

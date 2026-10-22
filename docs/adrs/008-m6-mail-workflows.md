@@ -100,3 +100,46 @@ synchronous Settings native/vault commits delay UI. Stage preparation/commit wit
 account-generation and recovery-secret delivery guarantees; moving the mutable
 service wholesale to a thread is unsafe. Live Google/deferred review are separate
 from this locally actionable work. No production/release approval.
+
+
+## Settings responsiveness and recovery custody amendment — 2026-10-21
+
+Continue from `f39bc5429658ec3009b9ce10c3f1cd39c21db3ef`. Replace synchronous
+Settings dispatch with immutable owner/vault/generation requests to one worker,
+one admission slot, no queued destructive work. Keep service/session publication
+and every widget operation on GUI. Use worker-owned vault objects/connections and
+the unchanged native/provider implementation. Read-only refresh does not advance
+the generation or discard concurrent mail results; account selection uses cached
+views, refreshed asynchronously. Stale results cannot reinstall another owner.
+
+`Vault.commit` is a narrow default-preserving seam. The Settings subclass adds
+an encrypted owner receipt and obtains a short synchronized authorization reservation
+before COMMIT. Disk I/O occurs outside the session mutex. Cancellation before that
+reservation rejects; after it, the authorized original-account effect may finish.
+Do not promise rollback. Inspect outcomes after unlocking/selecting the owner.
+Creation/enrollment may require Unlock to discover durable account state. Recent
+receipts are bounded to 16; export intents are separately bounded to 16 and never
+silently pruned. Receipt metadata is not a release audit ledger.
+
+Change the recovery ceremony explicitly: prepare in memory, disclose secret to the
+current owner, require re-entry/affirmation of offline custody, then admit package
+persistence. No package exists before acknowledgment. Cancellation/lock/close can
+therefore clear the unacknowledged stage safely. After acknowledgment only ciphertext
+is needed by the worker; the user already holds the secret even if display, COMMIT
+or completion delivery fails. This is an operator assertion, not proof of physical
+custody. No durable secret retention, clipboard copy, temporary plaintext or escrow.
+Python/Qt memory zeroization remains unproven. Recovery format, archive-only restore,
+historical keys and independent replacement-root verification remain unchanged.
+
+Backup/public export intent precedes file persistence; completion and transfer
+suspension follow it. Filesystem/SQLite are not atomic. Failed persistence or
+cancelled/failed final commit leaves source active, potentially with a package and
+intent receipt. An authorized final commit may complete despite late cancellation.
+Inspect owner state/digest before retrying; never discard user data automatically.
+
+Native calls keep their 30 s timeout; SQLite busy waits 5 s. GUI cancellation is
+responsive in controlled delayed phases, but worker draining/process exit can wait
+for an in-flight native/file/commit operation. No universal subsecond OS promise.
+The [Settings validation](../operations/m6-settings-validation.md) records real
+Windows vault/crypto, controlled delays and synthetic OAuth separately. Existing
+ADR 004/006 review deferrals remain; no independent approval or production release.

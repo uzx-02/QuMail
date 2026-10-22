@@ -1,0 +1,26 @@
+..FF.......                                                              [100%]
+================================== FAILURES ===================================
+____________ test_cancel_commit_boundary_and_owner_receipt[False] _____________
+experiments\m6\test_settings.py:84: in test_cancel_commit_boundary_and_owner_receipt
+    assert service.active()==other and owner.address not in w.details.text()
+E   AssertionError: assert (<core.account...00248F1B55DF0> == <core.account...00248F1B55DF0>
+E     
+E     Omitting 5 identical items, use -vv to show and 'bob@example.invalid' not in 'bob@example...315DD4C4417C'
+E     
+E     'bob@example.invalid' is contained here:
+E       bob@example.invalid · active
+E       Root: 31D4E5D73E2911F219F790BF83BC8FA220FEE24BB066AB38DDEB315DD4C4417C)
+_____________ test_cancel_commit_boundary_and_owner_receipt[True] _____________
+experiments\m6\test_settings.py:84: in test_cancel_commit_boundary_and_owner_receipt
+    assert service.active()==other and owner.address not in w.details.text()
+E   AssertionError: assert (<core.account...00248F3229130> == <core.account...00248F3229130>
+E     
+E     Omitting 5 identical items, use -vv to show and 'bob@example.invalid' not in 'bob@example...619F6669EAC1'
+E     
+E     'bob@example.invalid' is contained here:
+E       bob@example.invalid · active
+E       Root: 3E7C931884258E3A41EB1C5A509E0BF1DFA7F4FD638523DEE5F0619F6669EAC1)
+=========================== short test summary info ===========================
+FAILED experiments/m6/test_settings.py::test_cancel_commit_boundary_and_owner_receipt[False]
+FAILED experiments/m6/test_settings.py::test_cancel_commit_boundary_and_owner_receipt[True]
+2 failed, 9 passed in 4.50s

@@ -106,8 +106,12 @@ Mail workers use a 30-second operation budget. IMAP DNS/TCP/TLS/greeting has an
 in cancellable private children, with 50 ms polling. Enrollment allows 210 s;
 refresh 30 s clamped to remaining caller budget. Cancellation cannot undo remote
 consent, flags or message acceptance; close leftover browser tabs explicitly.
-Settings native/vault work remains synchronous (30 s per native call; 5 s SQLite
-wait), an explicit engineering gap. No hard real-time or memory-zeroization claim.
+Settings native/vault work now runs on one bounded worker. Cancel/Lock/selection
+remain responsive in tested phases; a native call (30 s timeout), SQLite wait
+(5 s) or authorized filesystem/commit operation may still drain after cancellation.
+Use Inspect outcomes for the original owner. Backup requires secret acknowledgment
+before writing. See [Settings validation](m6-settings-validation.md). No hard
+real-time or memory-zeroization claim.
 
 ## Live acceptance, separately pending
 

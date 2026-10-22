@@ -33,6 +33,7 @@ class MailboxWindow(QWidget):
         self.threads = {}
         self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='qumail-mailbox')
         self.settings = IdentitySettings(identity)
+        self.settings.contacts_ready.connect(self.settings_contacts)
         self.service_factory = service_factory or self.production_service
         self.setWindowTitle('QuMail — Gmail mail (development)')
         self.resize(1000, 720)
@@ -119,13 +120,19 @@ class MailboxWindow(QWidget):
         self.signers.blockSignals(True); self.signers.clear()
         self.signers.addItem('Resolve local certificate (untrusted outer hint)', None)
         if self.lease:
-            data = self.identity.require()._read(self.lease.context)
-            self.signers.addItem(data['address']+' · own root', data['address'])
-            for address, contact in data['contacts'].items():
-                self.signers.addItem(address+' · '+contact['state'], address)
+            self.signers.addItem(snapshot.active.address+' · own root',snapshot.active.address)
         self.signers.blockSignals(False)
         self.status.setText('Selected account. Refresh headers explicitly.' if self.lease else 'Locked / no account. Open Settings.')
         self.update_controls()
+
+    def settings_contacts(self,generation,owner,contacts):
+        snapshot=self.identity.session.snapshot
+        if snapshot.generation!=generation or snapshot.active!=owner or not owner or not self.lease: return
+        self.signers.blockSignals(True); self.signers.clear()
+        self.signers.addItem('Resolve local certificate (untrusted outer hint)',None)
+        self.signers.addItem(owner.address+' · own root',owner.address)
+        for address,root,state in contacts: self.signers.addItem(address+' · '+state,address)
+        self.signers.blockSignals(False)
 
     def select_account(self, index):
         if index >= 0:

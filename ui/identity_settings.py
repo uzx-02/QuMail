@@ -1,20 +1,25 @@
 """Settings-only development window: no legacy Session, inbox, TQR, portal or SMTP."""
-from concurrent.futures import ThreadPoolExecutor
+import secrets
+from core.settings_operations import Operations,current
 from pathlib import Path
-from PyQt6.QtCore import QTimer,Qt
+from PyQt6.QtCore import QTimer,Qt,pyqtSignal
 from PyQt6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QComboBox,
-    QLineEdit,QFileDialog,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem)
+    QLineEdit,QFileDialog,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QDialog)
 from experiments.m3.types import BoundaryError,Code
 from experiments.m3.vault import LIMIT
 from .mail_accessibility import configure,error_message
 
 
 class IdentitySettings(QWidget):
+    contacts_ready=pyqtSignal(object,object,object)
     def __init__(self,service):
         super().__init__()
         self.service=service
-        self.pool=ThreadPoolExecutor(max_workers=2,thread_name_prefix='qumail-dev-identity')
-        self.pending=[]
+        self.operations=Operations(service)
+        self.pool=self.operations.pool
+        self.needs_read=False
+        self.recovery=None; self.recovery_request=None; self.ceremony=None
+        self.publishing=False
         self.disposed=False
         self.setWindowTitle('QuMail — development identity Settings (sending disabled)')
         self.resize(920,680)
@@ -29,15 +34,16 @@ class IdentitySettings(QWidget):
         self.accounts=QComboBox(); self.accounts.currentIndexChanged.connect(self.select); layout.addWidget(self.accounts)
         self.address=QLineEdit(); self.address.setPlaceholderText('Expected Google test-account email'); layout.addWidget(self.address)
         self.buttons={}
-        rows=[('Create vault',lambda:self.service.unlock(True)),('Unlock',lambda:self.service.unlock()),
+        rows=[('Create vault',lambda:self.start('create')),('Unlock',lambda:self.start('unlock')),
               ('Lock',self.service.lock),('Connect Google',lambda:self.start_auth()),
               ('Reauthorize selected',lambda:self.start_auth('reauthorize')),
-              ('Refresh Google',lambda:self.start_auth('refresh')),('Cancel authorization',self.cancel),
+              ('Refresh Google',lambda:self.start_auth('refresh')),('Cancel authorization / operation',self.cancel),
               ('Import public certificate',self.import_public),('Verify fingerprint',self.verify),
               ('Export my public certificate',self.export_public),('Encrypted backup',self.backup),
               ('Transfer device',lambda:self.backup(True)),('Restore backup',self.restore),
               ('Activate unchanged root',self.activate),('Replace root',lambda:self.activate(True)),
-              ('Rotate device keys',self.service.rotate),('Revoke root',self.revoke)]
+              ('Rotate device keys',lambda:self.start('rotate')),('Revoke root',self.revoke),
+              ('Complete backup',self.complete_backup),('Inspect outcomes',lambda:self.start('outcomes'))]
         for index,(name,callback) in enumerate(rows):
             if index%4==0: line=QHBoxLayout(); layout.addLayout(line)
             button=QPushButton(name); self.buttons[name]=button
@@ -73,57 +79,118 @@ class IdentitySettings(QWidget):
             else: enabled=view is not None and not snapshot.locked
             if name in ('Refresh Google','Reauthorize selected'): enabled=enabled and self.service.google is not None
             button.setEnabled(enabled)
-        self.refresh_contacts()
+        if not self.publishing:
+            self.drop_recovery()
+            self.contacts.setRowCount(0)
+            self.needs_read=not snapshot.locked
         self.update_busy()
 
     def update_busy(self):
-        busy=any(not future.done() for _,future,_,_ in self.pending)
-        ready=not self.service.session.snapshot.locked
-        configured=self.service.google is not None
-        for name in ('Connect Google','Reauthorize selected','Refresh Google'):
-            self.buttons[name].setEnabled(ready and configured and not busy and
-                (name=='Connect Google' or self.service.session.snapshot.active is not None))
-        self.address.setEnabled(ready and not busy)
-        self.buttons['Cancel authorization'].setEnabled(busy)
+        busy=self.operations.busy
+        snap=self.service.session.snapshot
+        ready=not snap.locked
+        for name,button in self.buttons.items():
+            if name=='Lock': allowed=ready
+            elif name=='Cancel authorization / operation': allowed=busy or self.recovery is not None
+            elif name=='Complete backup': allowed=ready and self.recovery is not None and not busy
+            elif name in ('Create vault','Unlock'): allowed=snap.locked and not busy
+            elif name in ('Connect Google','Restore backup'):
+                allowed=ready and self.service.google is not None and not busy and self.recovery is None
+            else: allowed=ready and snap.active is not None and not busy and self.recovery is None
+            if name in ('Refresh Google','Reauthorize selected'): allowed=allowed and self.service.google is not None
+            button.setEnabled(allowed)
+        self.address.setEnabled(ready and not busy and self.recovery is None)
 
     def refresh_contacts(self):
+        self.needs_read=not self.service.session.snapshot.locked
         self.contacts.setRowCount(0)
-        if not self.service.session.snapshot.active: return
-        try: rows=self.service.contacts()
-        except BoundaryError:
-            self.status.setText('Recipient state unavailable; no trust assertion shown.'); return
-        self.contacts.setRowCount(len(rows))
-        for i,row in enumerate(rows):
-            for j,value in enumerate(row): self.contacts.setItem(i,j,QTableWidgetItem(value))
 
     def select(self,index):
         if index>=0: self.guard(lambda:self.service.select(self.accounts.itemData(index)))
 
+    def drop_recovery(self):
+        self.recovery=None; self.recovery_request=None
+        if self.ceremony:
+            dialog,label,entry=self.ceremony
+            self.ceremony=None; label.clear(); entry.clear(); dialog.close(); dialog.deleteLater()
+
     def cancel(self):
-        self.service.session.invalidate()
-        self.status.setText('Authorization cancelled; late results will be discarded.')
+        self.operations.cancel(); self.drop_recovery(); self.needs_read=False
+        self.status.setText('Cancellation requested. Authorized commits may finish; unlock/select the original account and Inspect outcomes. No recall or rollback claim.')
+        self.update_busy()
+
+    def start(self,operation,*args):
+        self.operations.start(operation,*args)
+        self.needs_read=False
+        self.status.setText('Working in background. Cancel/Lock remain available; committed effects are not undone.')
+        self.update_busy()
 
     def start_auth(self,mode='enroll',recovery=None):
-        if sum(not future.done() for _,future,_,_ in self.pending)>=2:
-            raise BoundaryError(Code.LIMIT)
-        address=(self.service.active().address if mode in ('refresh','reauthorize') else self.address.text().strip())
-        ticket,work=self.service.authorization(address,refresh=mode=='refresh',reauthorize=mode=='reauthorize')
-        self.pending.append((ticket,self.pool.submit(work),mode,recovery))
-        self.status.setText('Complete authorization in your external browser, or cancel.')
-        self.update_busy()
+        address=self.service.active().address if mode in ('refresh','reauthorize') else self.address.text().strip()
+        self.start(mode,address,*(recovery or ()))
+        self.status.setText('Complete authorization in your external browser, or cancel. Persistence follows in the background.')
 
     def poll(self):
-        for item in list(self.pending):
-            ticket,future,mode,recovery=item
-            if not future.done(): continue
-            self.pending.remove(item)
-            if not self.service.session.current(ticket): continue
-            try:
-                self.service.accept_authorization(ticket,future.result(),mode,recovery)
-            except Exception:
-                self.service.session.invalidate()
-                self.status.setText('Authorization did not complete in this session. Unlock to inspect committed accounts.')
+        result=self.operations.take()
+        if result is not None:
+            authorized=current(self.service.session,result.request)
+            if authorized:
+                if result.state in ('ready','committed'):
+                    op=result.request.operation
+                    if (op not in ('read','prepare_backup','outcomes') or
+                        op in ('read','outcomes') and result.accounts!=self.service.session.snapshot.accounts):
+                        self.publishing=True
+                        try:
+                            self.service.vault=result.vault
+                            self.service.session.install(result.accounts,result.selected)
+                        finally: self.publishing=False
+                    self.contacts.setRowCount(len(result.contacts))
+                    for i,row in enumerate(result.contacts):
+                        for j,value in enumerate(row): self.contacts.setItem(i,j,QTableWidgetItem(value))
+                    snap=self.service.session.snapshot
+                    self.contacts_ready.emit(snap.generation,snap.active,result.contacts)
+                    if result.recovery is not None:
+                        self.recovery=result.recovery; self.recovery_request=result.request
+                        self.status.setText('Backup prepared in memory only. Complete backup: save and acknowledge the recovery secret BEFORE any file is written.')
+                    elif op=='outcomes':
+                        self.status.setText('Owner-scoped outcomes (last 16 commits): '+str(result.outcomes or 'none'))
+                    else: self.status.setText('Committed.' if result.state=='committed' else 'Current account data loaded.')
+                elif result.state=='inspect_outcome':
+                    self.status.setText('An irreversible step was authorized. Inspect outcomes for this account; do not assume rollback. Unlock again if enrollment/creation changed the vault.')
+                elif result.state=='cancelled': self.status.setText('Cancelled before irreversible work.')
+                else: self.status.setText(error_message(BoundaryError(result.error)))
+            # Stale completion never changes selection, widgets, vault or secret custody.
+            result.recovery=None; result.vault=None
+        if self.needs_read and not self.operations.busy and not self.recovery and not self.disposed:
+            self.needs_read=False
+            if not self.service.session.snapshot.locked: self.guard(lambda:self.start('read'))
         self.update_busy()
+
+    def complete_backup(self):
+        if self.ceremony: return
+        if self.recovery is None: return
+        if not self.service.session.current(self.recovery_request.ticket):
+            self.drop_recovery(); return
+        dialog=QDialog(self); dialog.setWindowTitle('Recovery secret custody — no file written yet')
+        layout=QVBoxLayout(dialog)
+        label=QLabel('Save this secret offline, separately from the package. QuMail will not retain it.\n'+self.recovery.secret.hex())
+        label.setTextFormat(Qt.TextFormat.PlainText); label.setWordWrap(True); layout.addWidget(label)
+        entry=QLineEdit(); entry.setEchoMode(QLineEdit.EchoMode.Password)
+        entry.setAccessibleName('Re-enter the saved recovery secret to acknowledge custody'); layout.addWidget(entry)
+        button=QPushButton('I saved the secret separately; write package'); button.setAutoDefault(False)
+        button.clicked.connect(lambda:self.guard(lambda:self.acknowledge_backup(entry.text())))
+        layout.addWidget(button)
+        self.ceremony=(dialog,label,entry)
+        dialog.finished.connect(lambda _:self.cancel() if self.ceremony and self.ceremony[0] is dialog else None)
+        dialog.show()
+
+    def acknowledge_backup(self,text):
+        stage=self.recovery; req=self.recovery_request
+        if stage is None or not self.service.session.current(req.ticket): raise BoundaryError(Code.OWNERSHIP)
+        if not secrets.compare_digest(text.strip().lower(),stage.secret.hex()): raise BoundaryError(Code.INVALID)
+        args=(stage.package,stage.destination,stage.transfer,stage.revision)
+        self.drop_recovery()
+        self.start('write_backup',*args)
 
     @staticmethod
     def read_bounded(path):
@@ -136,7 +203,7 @@ class IdentitySettings(QWidget):
         if not ok: return
         path,_=QFileDialog.getOpenFileName(self,'Select public OpenPGP certificate')
         if not path: return
-        self.service.import_certificate(address,self.read_bounded(path)); self.refresh_contacts()
+        self.start('import',address,path)
 
     def verify(self):
         row=self.contacts.currentRow()
@@ -148,22 +215,18 @@ class IdentitySettings(QWidget):
         method,ok=QInputDialog.getItem(self,'Verification method','Independent channel',
                                      ['in-person','independent-voice','independent-qr'],editable=False)
         if ok:
-            self.service.verify_fingerprint(address,fingerprint.strip().upper(),method); self.refresh_contacts()
+            self.start('verify',address,fingerprint.strip().upper(),method)
 
     def export_public(self):
         path,_=QFileDialog.getSaveFileName(self,'Export public certificate to a NEW file')
-        if path: self.service.export_public(path)
+        if path: self.start('export',path)
 
     def backup(self,transfer=False):
         if transfer and QMessageBox.question(self,'Confirm device transfer',
             'Persist encrypted recovery, then suspend this local account? Offline copies cannot be erased.')!=QMessageBox.StandardButton.Yes: return
         path,_=QFileDialog.getSaveFileName(self,'Save encrypted recovery to a NEW file')
         if not path: return
-        secret=self.service.backup(path,transfer=transfer,confirmed=transfer)
-        # Intentional local recovery-secret disclosure after explicit export. No log/cache/clipboard copy.
-        QMessageBox.information(self,'Save recovery secret separately',
-            ('Transfer saved; source account suspended.\n' if transfer else 'Backup saved; source remains unchanged.\n')+
-            'Store this 256-bit recovery secret offline, separately from the package. It is not saved by QuMail.\n\n'+secret.hex())
+        self.start('prepare_backup',path,transfer)
 
     def restore(self):
         if self.service.session.snapshot.accounts: raise BoundaryError(Code.CONFLICT)
@@ -173,17 +236,17 @@ class IdentitySettings(QWidget):
         if not ok: return
         try: key=bytes.fromhex(secret)
         except ValueError: raise BoundaryError(Code.INVALID) from None
-        self.start_auth('restore',(self.read_bounded(path),key))
+        self.start_auth('restore',(path,key))
 
     def activate(self,replace=False):
         text=('Create a replacement root? Contacts must independently reverify its NEW fingerprint.' if replace else
               'Activate the unchanged restored root? Confirm all prior devices are retired. Offline copies cannot be detected or erased.')
         if QMessageBox.question(self,'Explicit activation',text)==QMessageBox.StandardButton.Yes:
-            self.service.activate(replace_root=replace,prior_device_retired=not replace)
+            self.start('replace' if replace else 'activate')
 
     def revoke(self):
         if QMessageBox.question(self,'Revoke root','Block new use of this root? Historical decryption records remain.')==QMessageBox.StandardButton.Yes:
-            self.service.revoke()
+            self.start('revoke')
 
     def closeEvent(self,event):
         self.cancel(); self.service.lock()
@@ -195,4 +258,4 @@ class IdentitySettings(QWidget):
         if self.disposed: return
         self.disposed=True
         self.cancel(); self.timer.stop()
-        self.pool.shutdown(wait=False,cancel_futures=True)
+        self.operations.close()

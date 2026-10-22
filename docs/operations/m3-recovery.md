@@ -54,26 +54,50 @@ of all copies or media. No ciphertext is deleted and no legacy record is migrate
 
 ## Ordinary encrypted backup
 
-Choose Encrypted backup explicitly. A random 32-byte recovery secret protects a
-versioned authenticated package containing the selected account's keys/metadata.
-The source remains in its existing lifecycle state; backup does not revoke or
-suspend it. The UI writes ciphertext to a new file and displays the secret locally
-once. Keep it offline separately; no password/provider-reset shortcut, plaintext
-key export, automatic clipboard copy, hosted escrow or secret-file fallback exists.
-OAuth tokens are excluded from backup and require fresh authorization at restore.
-A failed write can leave an incomplete encrypted file; use a new destination on
-retry. No account deactivation results from ordinary export or persistence failure.
+Choose **Encrypted backup** explicitly and select a NEW destination. The worker
+prepares an authenticated package and random 32-byte recovery secret in memory.
+The source remains unchanged; no file exists yet. Click **Complete backup**, save
+the secret offline separately, re-enter all 64 hexadecimal characters, then choose
+**I saved the secret separately; write package**. This explicitly acknowledges your
+custody before the worker may write. It cannot prove that you really saved a copy.
+
+Before acknowledgment, cancellation, locking, account switch or closing clears the
+private stage and secret widgets without writing a package. A failed secret-display
+attempt can be retried while that owner/stage remains current. After acknowledgment,
+QuMail clears its stage/widgets and writes only encrypted bytes; the worker needs no
+recovery secret. Thus a later cancellation, lock, stale result or display failure
+cannot discard the only acknowledged copy. Losing your saved copy still loses
+recovery: there is no reset shortcut or escrow.
+
+**Policy clarification/change:** secret disclosure and explicit custody acknowledgment
+now precede file persistence; the former UI disclosed it after persistence. The
+secret is retained transiently in memory until acknowledgment/cancel/lock/close,
+never saved by QuMail in the vault, logs, argv, clipboard or temporary files.
+Python/Qt do not guarantee memory zeroization. OAuth tokens and local operation/
+export receipts are excluded from new packages. Packet format and legacy recovery
+readers are unchanged. Stale account revision requires preparing/acknowledging a
+fresh package. Failed writes may leave incomplete encrypted files; use a new path.
 
 ## Explicit device transfer
 
-Transfer device is a separate confirmed action. It holds a lifecycle transaction,
-persists the encrypted package to a new file with flush/fsync, and only then commits
-local suspension. A failed file write or vault commit leaves the source active.
-If the file succeeds but database commit fails, an encrypted package can remain;
-it still restores archive-only. OS filesystem and SQLite do not share an atomic
-transaction, so this ordering prefers an extra inert backup over silent deactivation.
-After a successful transfer commit, even a display refresh failure returns the
-recovery secret and reports transfer completion; the UI may lock for safe refresh.
+**Transfer device** is a separate confirmed action with the same pre-write custody
+ceremony. An encrypted owner-scoped intent is committed first, the new package is
+written/flushed, then a guarded transaction records completion and source suspension.
+A failed write or denied/cancelled final commit does not suspend the source. If
+cancellation follows final commit authorization, that original-account commit can
+finish; cancellation does not claim rollback or recall. Ordinary backup never
+changes lifecycle.
+
+Unlock/select the original owner and **Inspect outcomes** to discover the actual
+result after cancellation/restart. It shows recent encrypted commit receipts,
+export intent/completion, current source lifecycle and whether the file matches its
+recorded digest. A matching file with only an intent can be a usable backup while
+the source remains active; use your already saved secret. Missing/inaccessible/
+changed files are not silently retried or overwritten. Filesystem and SQLite cannot
+commit atomically together. Up to 16 export records are retained per account; the
+next export fails explicitly rather than deleting those records. The most recent
+16 ordinary operation receipts are retained. Paths/digests are encrypted metadata,
+not secret escrow or proof of remote-device retirement.
 
 Local suspension cannot disable an offline/cloned vault or erase a remote device.
 Keep source data and backup until restore/historical decryption are validated.

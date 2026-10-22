@@ -1,0 +1,12 @@
+.................F....................................                   [100%]
+================================== FAILURES ===================================
+_________________ test_settings_backup_and_transfer_controls __________________
+experiments\m3\tests\test_integration.py:259: in test_settings_backup_and_transfer_controls
+    assert service.session.snapshot.active.lifecycle=='suspended_for_transfer'
+E   AssertionError: assert 'active' == 'suspended_for_transfer'
+E     
+E     - suspended_for_transfer
+E     + active
+=========================== short test summary info ===========================
+FAILED experiments/m3/tests/test_integration.py::test_settings_backup_and_transfer_controls
+1 failed, 53 passed in 11.85s

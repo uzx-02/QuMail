@@ -97,6 +97,10 @@ class Vault:
     def aad(self,ident,revision):
         return f'QuMail-M3-record-v1/{self.ident}/{ident}/{revision}'.encode()
 
+    def commit(self,db):
+        """Commit seam for account-scoped development operation authorization."""
+        db.execute('COMMIT')
+
     def load(self,db,account,master):
         if type(account) is not AccountId: raise BoundaryError(Code.OWNERSHIP)
         row=db.execute('SELECT revision,blob FROM accounts WHERE id=?',(account.value,)).fetchone()
@@ -125,7 +129,7 @@ class Vault:
                 yield data
                 blob=protect(master,encode(data),self.aad(ctx.account.value,revision+1))
                 db.execute('UPDATE accounts SET revision=?,blob=? WHERE id=?',(revision+1,blob,ctx.account.value))
-                db.execute('COMMIT')
+                self.commit(db)
             except BaseException:
                 db.execute('ROLLBACK'); raise
 
@@ -169,7 +173,7 @@ class Vault:
                     if (old['issuer'],old['subject'])==(identity.issuer,identity.subject):
                         raise BoundaryError(Code.CONFLICT)
                 db.execute('INSERT INTO accounts VALUES(?,?,?)',(account.value,1,protect(master,encode(data),self.aad(account.value,1))))
-                db.execute('COMMIT')
+                self.commit(db)
             except BaseException: db.execute('ROLLBACK'); raise
         return AccountContext(account,device,identity.issuer,identity.subject),handle
 
@@ -405,7 +409,7 @@ class Vault:
                 try:
                     if db.execute('SELECT COUNT(*) FROM accounts').fetchone()[0]: raise BoundaryError(Code.CONFLICT)
                     db.execute('INSERT INTO accounts VALUES(?,?,?)',(account.value,1,protect(master,encode(data),self.aad(account.value,1))))
-                    db.execute('COMMIT')
+                    self.commit(db)
                 except BaseException: db.execute('ROLLBACK'); raise
             return AccountContext(account,device,identity.issuer,identity.subject)
         except (KeyError,ValueError,TypeError): raise BoundaryError(Code.CORRUPT) from None
