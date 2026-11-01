@@ -1,3 +1,43 @@
+# Combined Google / optional relay continuation — 2026-11-01
+
+**M7 locally qualified; live Google acceptance remains incomplete and is now
+handed to the owner for manual execution.** Cloud relay deployment is explicitly
+outside this workstream per the owner's 2026-10-23 direction, not an engineering
+blocker. No cloud-operation/production claim or independent approval is made.
+
+Started from actual checkpoint `8eebb5eb7834caa230795c7ca9b446c631df6247` on
+`codex/m7-relay-google-acceptance`. This section describes the separately
+hash-identified tested working tree; it does not attribute new results to that
+unchanged parent. The local checkpoint commit containing these files identifies
+the final continuation; its parent is the SHA above.
+
+| Requirement / finding | Actual result |
+|---|---|
+| M7 ciphertext-only, own-audience authentication, I01 | Isolated loopback mTLS API, dedicated certificate allowlist bound to real disposable M3 account/device contexts; frozen M5 encrypted MIME only; no endpoint private keys, Gmail tokens or plaintext body/attachment in backend snapshots |
+| M7 I10 / T10 lease, retry, expiry, concurrency | One initial device/request-bound lease under 128 requests in eight Windows processes; <=300-second same-lease retry; expiry after lock and before publication; ACK/restart/concurrency tested |
+| M7 I12 quotas/outage/retention | Durable single-host SQLite; bounded body/headers/handlers; global/principal object/byte/tombstone caps; explicit creation, no memory fallback; consumed/expired payload removal and transparent WAL/backup limits |
+| Existing endpoint boundaries | Actual provider decrypt/signature/trust/attachment/archive; tamper rejected locally without ACK; stale response suppressed; current vault trust and exact persisted bytes rechecked before upload |
+| Google live findings | Real A browser/callback/token exchange reached verification; token-time rejection confirmed with fixed secret-free codes. Added bounded wait only for not-yet-valid tokens, then full verification again. No signature/expiry/nonce/audience weakening |
+| Final local regressions | **163 passed in 122.39 s** (13 M7 + 96 M6 + 54 M3); exact reversed 27 relay/OAuth cases **27 passed in 29.42 s**. Same distinct IDs, zero skips/warnings; source hashes verified unchanged |
+| Live acceptance | Owner reported possible A enrollment after the correction, not subsequently verified by the agent. B/refresh/IMAP/flags/three SMTP sends/decrypt/archive/attachment/reply/forward and human checks require the supplied manual sequence. No agent-executed external sends |
+
+[Manual Google instructions](docs/operations/google-manual-acceptance.md),
+[actual live attempts](docs/operations/m6-google-acceptance.md),
+[M7 validation](docs/operations/m7-validation.md),
+[ADR 009](docs/adrs/009-m7-local-ciphertext-relay.md),
+[final hashes](docs/operations/evidence/m7/checkpoint-input-hashes.json).
+The machine-specific launcher is in ignored `tmp/m7/Start-GoogleAcceptance.ps1`;
+client JSON, vault, credentials and user keys remain outside the checkpoint.
+
+M1 hosted baseline and M2 committed proof remain preserved. M6 local engineering
+and existing review deferrals remain; full live/human acceptance is not complete.
+M7 independent backend/identity review remains a pre-production/security-release
+gate. QKD is excluded; no custom combiner or hardware results. Historical
+compatibility, provider assurance, licensing and distribution gates are unchanged.
+No M8, migration, paid provisioning, public deployment, push, merge or release.
+
+## Preserved M6 checkpoint assessment
+
 # Windows M6 Settings engineering completion — 2026-10-21
 
 **Local Windows M6 engineering complete at the documented development scope;

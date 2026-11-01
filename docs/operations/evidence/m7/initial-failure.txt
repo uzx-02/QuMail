@@ -1,0 +1,44 @@
+F......                                                                  [100%]
+================================== FAILURES ===================================
+______ test_real_mtls_upload_recipient_decrypt_ack_archive_and_snapshot _______
+
+relay = (((<experiments.m3.vault.Vault object at 0x000001515150A480>, <experiments.m3.types.AccountContext object at 0x0000015...b445ca31123d72fe28865'), Peer(principal='ef49237b341e4276a98e7fc5c6219b5e', device='6bc4e7ffda5346e89f1b7d05357248a2'))
+tmp_path = WindowsPath('<LOCAL_USER>/AppData/Local/Temp/<LOCAL_USER>/pytest-80/test_real_mtls_upload_recipien0')
+
+    def test_real_mtls_upload_recipient_decrypt_ack_archive_and_snapshot(relay,tmp_path):
+        (state,work,draft,envelope),store,pa,pb = relay
+        v,a,ak,b,bk,access,lease,native = state
+        ctx,clients,registry,_ = contexts(tmp_path/'tls',[pa,pb])
+        with Server(store,ctx,registry) as server:
+            sender = Client(access,lease,clients[0],server.server_port)
+            recipient = Recipient(pb.principal,'bob@example.invalid',envelope.binding.roots[0])
+            key = uid()
+            uploaded = sender.upload(lease,budget(),envelope,recipient,key)
+            assert sender.upload(lease,budget(),envelope,recipient,key)==uploaded
+            with pytest.raises(Failure): sender.acquire(lease,budget(),uploaded['id'],uid())
+            local = access.select(b)
+            receiver = Client(access,local,clients[1],server.server_port)
+            acquired = receiver.acquire(local,budget(),uploaded['id'],uid())
+            wire = receiver.download(local,budget(),uploaded['id'],acquired['lease'])
+            assert wire==envelope.serialized
+            opened = work.opener.open(local,bk,wire,v.export_public(a,ak),budget())
+            assert opened.signature_valid and opened.verified_confidential
+            assert opened.body==draft.body and opened.attachments==draft.attachments
+>           assert opened.trust=='independently_verified'
+                   ^^^^^^^^^^^^
+E           AttributeError: 'OpenedMessage' object has no attribute 'trust'
+
+experiments\m7\test_relay.py:60: AttributeError
+=================================== PASSES ====================================
+_______ test_128_requests_across_eight_processes_have_one_initial_lease _______
+---------------------------- Captured stdout call -----------------------------
+128 competing requests; 8 Windows processes/independent Store instances: exactly one initial lease, 127 denied
+=========================== short test summary info ===========================
+PASSED experiments/m7/test_relay.py::test_128_requests_across_eight_processes_have_one_initial_lease
+PASSED experiments/m7/test_relay.py::test_expiry_device_retry_idempotency_and_retention
+PASSED experiments/m7/test_relay.py::test_expiry_checked_after_waiting_for_database_lock
+PASSED experiments/m7/test_relay.py::test_quotas_malformed_profile_and_backend_outage_fail_closed
+PASSED experiments/m7/test_relay.py::test_tls_auth_registry_and_authorization_header_rejection
+PASSED experiments/m7/test_relay.py::test_switch_cancel_and_late_result_no_cross_account_publication
+FAILED experiments/m7/test_relay.py::test_real_mtls_upload_recipient_decrypt_ack_archive_and_snapshot
+1 failed, 6 passed in 13.09s

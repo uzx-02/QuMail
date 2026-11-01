@@ -171,7 +171,7 @@ def test_google_flow_pkce_and_verified_result(monkeypatch):
         return {'id_token':'synthetic-id','access_token':'synthetic-access','refresh_token':'synthetic-refresh',
                 'expires_at':2000000000,'scope':list(google.SCOPES)}
     monkeypatch.setattr(actual,'fetch_token',fetch)
-    monkeypatch.setattr(google,'google_identity',lambda token,cid,nonce,state,received,subject,request=None:
+    monkeypatch.setattr(google,'google_identity',lambda token,cid,nonce,state,received,subject,request=None,**kwargs:
         result().identity if nonce==observed['nonce'] and state==received==observed['state'] else None)
     threads=[]
     def opener(url):

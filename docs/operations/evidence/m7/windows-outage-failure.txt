@@ -1,0 +1,73 @@
+.........F.......                                                        [100%]
+================================== FAILURES ===================================
+_____________ test_http_limits_duplicates_outage_and_slow_client ______________
+
+relay = (((<experiments.m3.vault.Vault object at 0x00000176B1F62DE0>, <experiments.m3.types.AccountContext object at 0x0000017...a47088374ead4dadcb95c'), Peer(principal='7695671880df4843ab137d7221c09958', device='344a72d26e22410aaeb8b6a1511f95ee'))
+tmp_path = WindowsPath('<LOCAL_USER>/AppData/Local/Temp/<LOCAL_USER>/pytest-82/test_http_limits_duplicates_ou0')
+
+    def test_http_limits_duplicates_outage_and_slow_client(relay,tmp_path):
+        (_,_,_,envelope),store,pa,pb=relay
+        ctx,clients,registry,_=contexts(tmp_path/'tls',[pa,pb])
+        with Server(store,ctx,registry) as server:
+            def raw(request):
+                with socket.create_connection(('127.0.0.1',server.server_port),timeout=7) as sock:
+                    with clients[0].wrap_socket(sock,server_hostname='127.0.0.1') as tls:
+                        tls.sendall(request)
+                        return tls.recv(4096)
+            prefix=b'POST /v1/objects HTTP/1.0\r\nContent-Type: application/json\r\n'
+            assert b' 429 ' in raw(prefix+b'Content-Length: 9999999\r\n\r\n')
+            assert b' 400 ' in raw(prefix+b'Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}')
+            body=b'{"key":"one","key":"two"}'
+            assert b' 400 ' in raw(prefix+b'Content-Length: '+str(len(body)).encode()+b'\r\n\r\n'+body)
+            assert raw(prefix+b'X-Large: '+b'a'*9000+b'\r\n\r\n')==b''
+            started=time.monotonic()
+            assert raw(b'POST /v1/objects HTTP/1.0\r\nX-Incomplete: ')==b''
+            assert 4 <= time.monotonic()-started < 7  # Only this controlled phase, not all OS calls.
+>           store.path.rename(tmp_path/'offline.sqlite')
+
+experiments\m7\test_relay.py:229: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('<LOCAL_USER>/AppData/Local/Temp/<LOCAL_USER>/pytest-82/test_http_limits_duplicates_ou0/relay.sqlite')
+target = WindowsPath('<LOCAL_USER>/AppData/Local/Temp/<LOCAL_USER>/pytest-82/test_http_limits_duplicates_ou0/offline.sqlite')
+
+    def rename(self, target):
+        """
+        Rename this path to the target path.
+    
+        The target path may be absolute or relative. Relative paths are
+        interpreted relative to the current working directory, *not* the
+        directory of the Path object.
+    
+        Returns the new Path instance pointing to the target path.
+        """
+>       os.rename(self, target)
+E       PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: '<LOCAL_USER>\\AppData\\Local\\Temp\\<LOCAL_USER>\\pytest-82\\test_http_limits_duplicates_ou0\\relay.sqlite' -> '<LOCAL_USER>\\AppData\\Local\\Temp\\<LOCAL_USER>\\pytest-82\\test_http_limits_duplicates_ou0\\offline.sqlite'
+
+..\..\..\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\Lib\pathlib.py:1363: PermissionError
+=================================== PASSES ====================================
+______ test_real_mtls_upload_recipient_decrypt_ack_archive_and_snapshot _______
+---------------------------- Captured stdout call -----------------------------
+Real endpoint crypto, mTLS upload/download, verified recipient/attachment, archive, redacted backend snapshot, ACK deletion: pass
+_______ test_128_requests_across_eight_processes_have_one_initial_lease _______
+---------------------------- Captured stdout call -----------------------------
+128 competing requests; 8 Windows processes/independent Store instances: exactly one initial lease, 127 denied
+=========================== short test summary info ===========================
+PASSED experiments/m7/test_relay.py::test_real_mtls_upload_recipient_decrypt_ack_archive_and_snapshot
+PASSED experiments/m7/test_relay.py::test_128_requests_across_eight_processes_have_one_initial_lease
+PASSED experiments/m7/test_relay.py::test_expiry_device_retry_idempotency_and_retention
+PASSED experiments/m7/test_relay.py::test_expiry_checked_after_waiting_for_database_lock
+PASSED experiments/m7/test_relay.py::test_expiry_inside_lease_transaction_rolls_back_claim
+PASSED experiments/m7/test_relay.py::test_global_bytes_and_tombstone_quotas
+PASSED experiments/m7/test_relay.py::test_simultaneous_ack_download_and_restart
+PASSED experiments/m7/test_relay.py::test_quotas_malformed_profile_and_backend_outage_fail_closed
+PASSED experiments/m7/test_relay.py::test_tls_auth_registry_and_authorization_header_rejection
+PASSED experiments/m7/test_relay.py::test_switch_cancel_and_late_result_no_cross_account_publication
+PASSED experiments/m6/test_google_diagnostics.py::test_authorization_stage_redacts_provider_errors[callback-google_callback_failed_or_expired]
+PASSED experiments/m6/test_google_diagnostics.py::test_authorization_stage_redacts_provider_errors[token-google_token_exchange_failed]
+PASSED experiments/m6/test_google_diagnostics.py::test_authorization_stage_redacts_provider_errors[claims-google_verified_identity_failed]
+PASSED experiments/m6/test_google_diagnostics.py::test_authorization_stage_redacts_provider_errors[address-google_expected_address_mismatch]
+PASSED experiments/m6/test_google_diagnostics.py::test_authorization_stage_redacts_provider_errors[scope-google_required_consent_missing]
+PASSED experiments/m6/test_google_diagnostics.py::test_bounded_google_preserves_only_fixed_stage_code
+FAILED experiments/m7/test_relay.py::test_http_limits_duplicates_outage_and_slow_client
+1 failed, 16 passed in 23.00s

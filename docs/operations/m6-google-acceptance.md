@@ -1,7 +1,48 @@
-# Controlled live Google acceptance — pending
+# Live Google continuation and manual handoff — 2026-11-01
 
-Use two dedicated, controlled Google test accounts, A and B. This checklist is
-unexecuted. Local fixtures are not Google evidence. Independent review remains
+**Live acceptance remains incomplete. The owner now performs the manual checks.**
+Use the concise [manual sequence and result template](google-manual-acceptance.md).
+Do not restart project/client setup or create a new vault/root unnecessarily.
+
+Actual work on 2026-10-22/23: the owner configured an External/Testing Google
+Desktop client and listed both designated controlled accounts as test users.
+The explicitly supplied JSON schema/endpoints were validated without displaying
+contents. QuMail launched with Gmail submission explicitly enabled, using a NEW
+owner-approved disposable vault outside Git and Windows secure storage. No
+personal token caches were discovered or reused. Three bounded non-sensitive
+sends between A/B are authorized; mail scope alone is not send authorization.
+
+Real A browser callbacks and token exchange executed. Enrollment failed closed
+at identity verification, initially hidden by a generic status. Fixed enum-only
+stage reporting then confirmed Google's maintained verifier rejected token time.
+The owner synchronized Windows time; a separate public-certificate endpoint
+check showed server Date within one second, but a fresh token still triggered
+the time check. A bounded, cancellable not-yet-valid-token wait now retries full
+signature/audience/time verification for up to 20 seconds; zero clock-skew
+allowance remains. Expired tokens and signature failures are never retried as
+not-yet-valid tokens. Nonce, issuer, subject, address and consent checks remain.
+Browser callback wait remains three minutes; interrupted/late callbacks cannot
+install an account. Fixed diagnostics never include token payloads or URLs.
+
+After the correction the owner reported that enrollment appeared to work. This
+was **not subsequently verified by the agent** and is not recorded as a passed
+live step. B enrollment, both refreshes, retrieval/flags, certificate exchange,
+three SMTP submissions, recipient verification, attachment export and sender
+archive all remain unexecuted or unverified in this record. No external send was
+executed or observed by the agent. On resuming, inspect any existing A account
+and refresh/reauthorize it rather than creating a replacement root.
+
+No live tokens, private keys, callback URLs, client JSON or vault data are in the
+checkpoint/evidence. The owner was asked to report sanitized UI results only.
+Independent usable-security/accessibility and cryptographic review remain
+separate gates under existing development exceptions. The local M7 relay is
+independent; cloud deployment is explicitly outside this workstream.
+
+## Preserved reusable checklist (originally prepared before live testing)
+
+
+Use two dedicated, controlled Google test accounts, A and B. The original checklist below was prepared before execution. Current outcomes
+are recorded above; local fixtures are not Google evidence. Independent review remains
 deferred under ADR 004/006; completing this checklist is not production approval.
 
 1. **Supply configuration.** Provision a Google OAuth **Desktop app** client through

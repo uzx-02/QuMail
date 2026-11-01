@@ -13,7 +13,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request
-from experiments.m3.identity import google_identity
+from experiments.m3.identity import google_identity,verify_google_token
 from experiments.m3.types import BoundaryError, Code, EmailAddress, VerifiedProviderIdentity
 
 AUTH='https://accounts.google.com/o/oauth2/v2/auth'
@@ -125,6 +125,7 @@ class GoogleAuthorization:
         state=secrets.token_urlsafe(32); nonce=secrets.token_urlsafe(32)
         listener=Loopback(state)
         flow=None
+        stage=Code.GOOGLE_BROWSER
         try:
             if cancel.is_set(): raise BoundaryError(Code.IDENTITY)
             flow=InstalledAppFlow.from_client_config(self.config,self.scopes,state=state,autogenerate_code_verifier=True)
@@ -132,23 +133,33 @@ class GoogleAuthorization:
             url,returned_state=flow.authorization_url(nonce=nonce,prompt='select_account consent',access_type='offline')
             if returned_state!=state or not flow.code_verifier: raise BoundaryError(Code.IDENTITY)
             if not opener(url): raise BoundaryError(Code.IDENTITY)
+            stage=Code.GOOGLE_CALLBACK
             code=listener.wait(cancel)
             if cancel.is_set(): raise BoundaryError(Code.IDENTITY)
             # State/path/host verified on loopback; HTTPS token exchange and PKCE
             # are handled by maintained requests-oauthlib/google-auth-oauthlib.
+            stage=Code.GOOGLE_TOKEN
             token=flow.fetch_token(code=code,timeout=15,allow_redirects=False)
+            stage=Code.GOOGLE_CLAIMS
             verified=google_identity(token['id_token'],self.client_id,nonce,state,state,
-                                     expected_subject,request=BoundedRequest())
+                                     expected_subject,request=BoundedRequest(),cancel=cancel,wait_seconds=20)
+            stage=Code.GOOGLE_ADDRESS
             if EmailAddress(expected_address) not in verified.addresses or cancel.is_set():
                 raise BoundaryError(Code.IDENTITY)
+            stage=Code.GOOGLE_SCOPES
             scopes=token.get('scope',SCOPES if self.scopes==SCOPES else ())
             if isinstance(scopes,str): scopes=scopes.split()
             if not set(self.scopes)<=set(scopes): raise BoundaryError(Code.IDENTITY)
             tokens=dict(access_token=token['access_token'],refresh_token=token.get('refresh_token'),
                         expiry=int(token['expires_at']),scopes=list(scopes))
             return Authorization(verified,tokens)
+        except BoundaryError as error:
+            if error.code in (Code.GOOGLE_CLOCK,Code.GOOGLE_KEYS,Code.GOOGLE_SIGNATURE,
+                              Code.GOOGLE_AUDIENCE,Code.GOOGLE_NONCE,Code.GOOGLE_AUTHORITY):
+                raise
+            raise BoundaryError(stage) from None
         except Exception:
-            raise BoundaryError(Code.IDENTITY) from None
+            raise BoundaryError(stage) from None
         finally:
             listener.close()
             if flow: flow.oauth2session.close()
@@ -172,7 +183,7 @@ class GoogleAuthorization:
             if (claims.get('sub')!=context.subject or claims.get('email_verified') is not True or
                 EmailAddress(claims['email'])!=EmailAddress(address) or cancel.is_set()): raise ValueError()
             if credentials.id_token:
-                info=id_token.verify_oauth2_token(credentials.id_token,BoundedRequest(),audience=self.client_id)
+                info=verify_google_token(credentials.id_token,self.client_id,BoundedRequest(),cancel=cancel,wait_seconds=20)
                 if info.get('sub')!=context.subject: raise ValueError()
             expiration=credentials.expiry
             if expiration.tzinfo is None: expiration=expiration.replace(tzinfo=timezone.utc)

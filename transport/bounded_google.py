@@ -15,6 +15,7 @@ class BoundedGoogleAuthorization(GoogleAuthorization):
             i=result['identity']
             identity=VerifiedProviderIdentity(i['issuer'],i['subject'],tuple(EmailAddress(a['value']) for a in i['addresses']),i['expires'],i['evidence'])
             return Authorization(identity,result['tokens'])
+        except BoundaryError: raise
         except Exception: raise BoundaryError(Code.IDENTITY) from None
 
     def authorize(self,cancel,expected_address,expected_subject=None):

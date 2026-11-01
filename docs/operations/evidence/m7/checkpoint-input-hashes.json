@@ -1,0 +1,39 @@
+{
+  "head": "8eebb5eb7834caa230795c7ca9b446c631df6247",
+  "scope": "2026-11-01 tested uncommitted source snapshot, not unchanged HEAD",
+  "inputs": {
+    "experiments/m3/identity.py": "339e8f9bc0391b63f62c608049fd338a31ea9a97131eee757372caa99a8ddd6b",
+    "experiments/m3/tests/test_integration.py": "e59aae9fcc9c32e9cac2e5dc889b18e81a93e55b6930b338ff7c178307911330",
+    "experiments/m3/types.py": "97d1ba72c5e557c366f1af37ce4540ea7852104e98ffcd6dc418441a37600aba",
+    "experiments/m6/test_google_diagnostics.py": "71c6ae86c38408204d38931902465986503f5647527f33b1f7c2eab25498a9c3",
+    "experiments/m7/__init__.py": "f7067d5028732a9cf2d7d50a74a83b1680b95fc700833fff8c4543d6cef152c0",
+    "experiments/m7/test_relay.py": "30c6912617e749613928bc219929e651e3330096e9fd2c081fee577e9acda63e",
+    "experiments/m7/tls_fixture.py": "2719d17f9007439176b6714a5f36b5b0605234074998da1969187d85cba1df9c",
+    "services/relay/__init__.py": "07243f0085c9d802cf40bf35bb36bbba6ad17c5d285c8cb12deb76ea593e0f67",
+    "services/relay/__main__.py": "371d20e9c01d33d0caf89e0e634f63ba1b438e6a4e9f82aa43af6871cec0bef0",
+    "services/relay/client.py": "7be40f2ad5ad1f82bdf8d2b2671f488b857a5eda81d1a9f331b0978342a2d462",
+    "services/relay/http.py": "f801f34a5064701d698eeed02a28e7d6d06ea4518b6f974e12cb794bee75610b",
+    "services/relay/store.py": "4db434d5de66bf23532e445d08f1a9b1f4c8a9c6bbcb7add3a12efa9a8b404ff",
+    "transport/bounded_google.py": "6ba5d1375a930c89bb0f5389d92649b165c3d6f55ca56dee7d643bada579d8d8",
+    "transport/bounded_worker.py": "26a81de4a45e0915e40700119809450ee6351f9baed82622402e4556e05c045f",
+    "transport/development_google.py": "353bbeca4ce793bcd575d3e3b85dc0fda0f279f8836894092f2b9692394427f1",
+    "transport/network_worker.py": "0cba1d4bfd429042ffb07e17b451542e3c723905708d16edbcb2abdf10cd1a17",
+    "ui/mail_accessibility.py": "aad31551a8f340c249d25494777a20f3267d699e809f899404b8691e2c391ad8"
+  },
+  "runtime": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "tls": "OpenSSL 3.5.8 25 Aug 2026",
+    "sqlite": "3.53.1",
+    "packages": {
+      "pytest": "8.4.2",
+      "PyQt6": "6.10.2",
+      "cryptography": "50.0.2",
+      "google-auth": "2.49.1",
+      "google-auth-oauthlib": "1.3.0"
+    }
+  },
+  "native": {
+    "tmp/m2/target/debug/qumail-m5-provider.exe": "a07bec89fa06a172688f7565911554256b82c5db4d048900dd6d91643fc699f8"
+  }
+}

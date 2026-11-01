@@ -30,5 +30,8 @@ if __name__=='__main__':
         raw=sys.stdin.buffer.read(1024*1024+1)
         if len(raw)>1024*1024: raise ValueError('input limit')
         print(json.dumps(dict(ok=True,value=run(json.loads(raw))),separators=(',',':')))
-    except Exception:
-        print('{"ok":false}')  # Never forward provider diagnostics or callback URLs.
+    except Exception as error:
+        from experiments.m3.types import BoundaryError
+        # Fixed application enums only; never provider diagnostics/callback URLs.
+        code=error.code.value if isinstance(error,BoundaryError) else None
+        print(json.dumps(dict(ok=False,code=code),separators=(',',':')))

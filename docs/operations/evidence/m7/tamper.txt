@@ -1,0 +1,8 @@
+.                                                                        [100%]
+=================================== PASSES ====================================
+________ test_relay_ciphertext_tampering_rejected_locally_without_ack _________
+---------------------------- Captured stdout call -----------------------------
+Valid MIME carrying modified real ciphertext: recipient provider rejects; no plaintext result or ACK
+=========================== short test summary info ===========================
+PASSED experiments/m7/test_relay.py::test_relay_ciphertext_tampering_rejected_locally_without_ack
+1 passed in 2.81s

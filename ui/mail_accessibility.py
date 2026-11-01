@@ -15,6 +15,21 @@ def configure(root,names,order):
 
 def error_message(error):
     code=getattr(getattr(error,'code',None),'value','')
+    google_steps={
+        'google_browser_start_failed':'Could not start Google authorization. Check the Desktop client and default browser.',
+        'google_callback_failed_or_expired':'Google browser authorization was cancelled or expired. Start Connect Google again and complete consent promptly.',
+        'google_token_exchange_failed':'Google token exchange failed. Check connectivity, Desktop-client configuration and granted scopes; no account was installed.',
+        'google_verified_identity_failed':'Google identity verification failed. Check the system clock and client configuration; no account was installed.',
+        'google_token_time_invalid':'Google token time is invalid. Synchronize Windows date/time, then retry authorization; no token was accepted.',
+        'google_verification_keys_unavailable':'Google verification keys could not be fetched. Check connectivity and retry; signature verification remains required.',
+        'google_token_signature_or_format_invalid':'Google token signature or format verification failed. No account was installed; inspect the maintained verifier configuration.',
+        'google_token_audience_mismatch':'Google token audience does not match the configured Desktop client. Check that client configuration before retrying.',
+        'google_token_nonce_mismatch':'Google token nonce does not match this authorization. Start a fresh flow; no account was installed.',
+        'google_token_authority_or_claims_invalid':'Google token issuer, subject, email authority or required claims were rejected. No account was installed.',
+        'google_expected_address_mismatch':'Google returned a different account. Select the exact expected address and authorize again.',
+        'google_required_consent_missing':'Required Google mail/identity consent is missing. Authorize again and grant the requested test permissions.',
+    }
+    if code in google_steps: return google_steps[code]
     if code in ('authorize_selected_google_account_with_mail_scope','credential_unavailable_or_expired','identity_binding_failed'):
         return 'Google authorization failed or expired. Check the configured Desktop client; reauthorize the selected account with mail consent in Settings.'
     if code in ('cancelled_or_account_changed','cancelled_or_stale','cancelled_before_submission','account_locked_or_changed'):
