@@ -1,3 +1,12 @@
+> Handover annotation, 2026-11-01: the proof described below is preserved at
+> `1fc4e55f09e173cec7634d0b2dc776097b552063` (parent `5880dd4…`). Its engineering
+> result is complete; external review remains pending. Historical “next M2 step,”
+> “future helper” and no-commit wording below refer to the original decision date.
+> M3/M5 later implemented bounded JSON-pipe helpers under the development exceptions
+> in ADRs 004–006; this does not retroactively approve M2 or its proposed production
+> profile. Current implementation mapping: [CODEBASE_MAP](../handover/CODEBASE_MAP.md).
+> Existing reviewer draft and original evidence remain preserved.
+
 # ADR 003: bounded OpenPGP provider proof and candidate profile
 
 Updated: 2026-10-05. Status: **proposed; M2 PARTIAL, not production approval**.

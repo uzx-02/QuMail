@@ -1,3 +1,24 @@
+# Current architecture index — handover 2026-11-01
+
+For source checkpoint `4e429a43a6d9ae7fe6bb45c4ae5a8dcb6200e6b0`, the maintained
+actual-path/interface map is [CODEBASE_MAP](docs/handover/CODEBASE_MAP.md), with
+[security contracts](docs/handover/SECURITY_CONTRACTS.md). Read these before the
+historical snapshots below. Modern application: `main.py --dev-mailbox` → mailbox/
+Settings UI → coherent sessions and bounded workers → shared M3 vault/identity,
+M5 MIME/crypto and M4 durable outbox → explicitly configured Gmail TLS. Optional
+`services/relay` is separate local SQLite/mTLS ciphertext storage, not an ordinary
+email dependency. Default startup remains legacy. Modern shared code still under
+`experiments/` is not disposable fixture code; consolidation is proposed, not done.
+
+Settings async engineering is complete at bounded Windows scope. Live Google,
+normal-desktop launch handoff, independent review and release gates remain; historical
+exclusions below describe earlier checkpoints only. Android is a new delivery goal
+with no implementation, recorded in the [roadmap amendment](docs/handover/STATUS_AND_ROADMAP.md).
+ADRs 004–009 retain development exceptions; no production approval is implied.
+Canonical specification unchanged. No architecture/runtime rewrite in this handover.
+
+## Preserved architecture snapshots (newest first)
+
 # Asynchronous Settings boundary — 2026-10-21
 
 `core.settings_operations` separates immutable account/vault/generation requests,

@@ -2,40 +2,29 @@
 
 The owner now performs live testing. This is a checklist, not a success record.
 Use only the two already designated controlled Google accounts (A and B), the
-existing disposable acceptance vault and the supplied Desktop-client JSON. Keep
+deliberately selected disposable acceptance vault and supplied Desktop-client JSON. Keep
 Google Auth Platform in **Testing** with both accounts listed as test users.
 Do not create another vault or root if A already appears after enrollment.
 
-## Launch
+## Launch — paused pending actual desktop dry run
 
-Close earlier QuMail instances normally. From the repository root, first run the
-machine-specific launcher in check-only mode:
+The old private `tmp/m7/Start-GoogleAcceptance.ps1` wrapper **does not currently
+work in the owner's desktop**: its prior vault folder is absent in File Explorer,
+although tool shells can see it. Do not repeat its check-only success as a remedy.
+Do not delete credentials, copy a raw master or replace an inaccessible old vault.
 
-```powershell
-powershell -NoProfile -File .\tmp\m7\Start-GoogleAcceptance.ps1 -CheckOnly
-```
+The generic `tools/start_google_acceptance.ps1` is available, but the actual
+normal-desktop path and GUI launch still need qualification. Follow
+[BUILD_RUN_TEST](../handover/BUILD_RUN_TEST.md#launch-and-the-unresolved-desktop-mismatch).
+A private new-path GUI shortcut was prepared but NOT launched/validated. This
+handover stops before vault creation, enrollment and sending; the owner will test.
 
-Expect `Desktop client configuration: valid`, `Existing vault found`, and
-`Preflight passed`. Then launch with the same command without `-CheckOnly`:
-
-```powershell
-powershell -NoProfile -File .\tmp\m7\Start-GoogleAcceptance.ps1
-```
-
-The ignored private wrapper contains the already supplied client/vault path
-references, not credentials. It calls the versioned
-`tools/start_google_acceptance.ps1`. This validates the Desktop client before
-launching, uses the installed environment/helpers, and keeps errors visible.
-The earlier `C:\chosen` example was a placeholder and must not be run literally.
-No placeholder path is required by this sequence.
-
-If preflight says the existing vault is missing or inaccessible, **stop and report
-that output**; do not create a replacement or delete Credential Manager entries.
-The generic launcher accepts explicit `-GoogleClient` and `-Vault` paths for an
-intentional configuration change. `-AllowNewVault` must be supplied explicitly
-for a deliberately NEW disposable vault; it only permits the app to start with
-a new path. Creation still requires Settings → Create vault. It never restores
-missing keys/accounts and is not the remedy for an inaccessible old vault.
+For a confirmed accessible existing vault choose Unlock. For a deliberately NEW,
+distinct disposable vault, use explicit `-AllowNewVault`, then Create vault once.
+This creates new local identities on enrollment; it cannot recover the old root or
+historical messages. Existing old data stays preserved. Once the successor supplies
+an actually desktop-verified launch command, continue the controls below. Do not run
+literal `C:\chosen` placeholders. The provisioned Desktop client need not be recreated.
 
 ## Click sequence and expected results
 

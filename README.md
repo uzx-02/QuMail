@@ -1,3 +1,10 @@
+> Successor agents: start at [AI_HANDOVER.md](AI_HANDOVER.md). The current
+> [roadmap](docs/handover/STATUS_AND_ROADMAP.md) distinguishes Windows development,
+> Android delivery goals, live acceptance and release gates. The private Google
+> launcher currently has an unresolved desktop-vault visibility mismatch; read
+> [launch troubleshooting](docs/handover/BUILD_RUN_TEST.md#launch-and-the-unresolved-desktop-mismatch)
+> before following historical setup examples.
+
 # QuMail 1.0 — development prototype
 
 QuMail is being evolved into its first proper 1.0 release. **This checkout is not

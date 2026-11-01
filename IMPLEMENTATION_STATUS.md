@@ -1,3 +1,34 @@
+# Engineering handover freeze — 2026-11-01
+
+**Feature/live work stopped at the owner's request.** Source branch
+`codex/m7-relay-google-acceptance`, source HEAD
+`4e429a43a6d9ae7fe6bb45c4ae5a8dcb6200e6b0`; the later handover commit changes
+only documentation. Start at [AI_HANDOVER.md](AI_HANDOVER.md). The reconciled
+[current state and roadmap](docs/handover/STATUS_AND_ROADMAP.md) supersede historical
+next-step summaries below without deleting their evidence. Windows and Android are
+product goals; only Windows development code exists. Android and ESP32 are proposed,
+not implemented. M1 baseline remains COMPLETE; M2 review pending; M3–M6 bounded
+engineering implemented with full acceptance partial; M7 local-only qualified;
+M8 not started. No new approval, migration, send, deployment or release.
+
+**Correction to the launcher report immediately below:** the old vault's absence
+was reproduced in the owner's normal desktop File Explorer. Tool shells (including
+an escalated shell) saw that path; their successful preflight did NOT qualify desktop
+visibility. Do not repeat the private launcher as a verified remedy or overwrite the
+old vault. A separate ignored GUI shortcut was prepared but never launched; no new
+vault/account was created. The next task is the actual desktop launch-through-Settings
+dry run, stopping before creation/authentication/sending for owner manual testing.
+
+Handover checks: all four supplied historical anchors are ancestors; retained M1
+hosted JSON names 023c941/success; all 17 M7 source manifest inputs and one native
+helper match. Retained tests remain 163 normal / 27 reverse subset, not newly run.
+No tracked engineering changes at pause. Process inventory found no Python/native
+helper/build process; no known in-flight commit/backup/send. Existing vaults,
+configuration, untracked PDF/presentation launcher/reviewer draft and private tmp
+artifacts remain untouched. See the roadmap for precise unknowns and preservation.
+
+## Historical launcher report (desktop conclusion superseded above)
+
 # Manual acceptance launcher correction
 
 The reported missing-vault failure is not currently reproducible: read-only

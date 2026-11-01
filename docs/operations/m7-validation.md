@@ -1,3 +1,20 @@
+# Handover provenance clarification — 2026-11-01
+
+The final hash-identified source below was committed as
+`18174e1b8c0ce276aa294275e195b2e54c498075`, parent `8eebb5e…`.
+Current source HEAD `4e429a43a6d9ae7fe6bb45c4ae5a8dcb6200e6b0` adds only launcher/docs;
+all 17 source inputs and the M5 native hash were rechecked at handover with zero
+mismatches. No runtime suite was rerun for this documentation-only task. Earlier
+“uncommitted” wording describes when the logs were generated, not present Git state.
+
+M7 remains locally qualified, cloud explicitly outside scope, independent review
+pending before production/security release. Google live acceptance remains incomplete;
+see [actual desktop/Google record](m6-google-acceptance.md). The
+[handover](../../AI_HANDOVER.md) and [roadmap](../handover/STATUS_AND_ROADMAP.md)
+identify the interrupted launcher task; no relay implementation changes were made.
+
+## Preserved validation record
+
 # M7 local relay validation — 2026-10-23
 
 Starting checkpoint: `8eebb5eb7834caa230795c7ca9b446c631df6247`.
@@ -80,8 +97,8 @@ Earlier collection and order runs:
 
 ```powershell
 ./.venv-m1-clean/Scripts/python.exe -m pytest experiments/m7 experiments/m6/test_google_diagnostics.py --collect-only -q
-./.venv-m1-clean/Scripts/python.exe -m pytest -q -rA <node IDs from final-nodeids.txt in listed order>
-./.venv-m1-clean/Scripts/python.exe -m pytest -q -rA <the same node IDs in reverse order>
+# Historical argv description: python -m pytest -q -rA followed by final-nodeids.txt in listed order
+# Historical argv description: the same node IDs in reverse order (not literal angle-bracket arguments)
 ```
 
 Earlier normal: **18 passed in 25.85 seconds**. Exact reverse: **18 passed in

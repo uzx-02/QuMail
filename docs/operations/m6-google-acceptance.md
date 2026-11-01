@@ -1,3 +1,20 @@
+# Desktop handover correction — 2026-11-01
+
+The later launcher failure was reproduced in normal desktop File Explorer: the old
+acceptance folder is absent there although tool subprocesses can see it. Earlier
+preflight success is tool-context evidence only. No vault was copied/replaced and
+no new account was created. A distinct desktop-path shortcut was prepared but not
+launched before the owner stopped work for handover. Durable A enrollment remains
+unknown, not a verified live pass. No new browser authorization or send occurred.
+
+Next: [the exact desktop dry-run task](../handover/STATUS_AND_ROADMAP.md#ordered-work-items-and-stopping-boundaries),
+then the owner performs the existing manual checklist. Check actual normal-desktop
+paths and selected vault before deciding Unlock versus intentional new creation;
+never recreate an inaccessible old root silently. The record below preserves prior
+attempts, not proof the same vault is available in the user's desktop session.
+
+## Preserved live attempt record
+
 # Live Google continuation and manual handoff — 2026-11-01
 
 **Live acceptance remains incomplete. The owner now performs the manual checks.**
