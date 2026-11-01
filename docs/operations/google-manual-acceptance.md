@@ -8,21 +8,34 @@ Do not create another vault or root if A already appears after enrollment.
 
 ## Launch
 
-Close earlier QuMail instances normally. Use the installed environment from the
-repository root, replacing paths with the already provisioned files:
+Close earlier QuMail instances normally. From the repository root, first run the
+machine-specific launcher in check-only mode:
 
 ```powershell
-./.venv-m1-clean/Scripts/python.exe main.py --dev-mailbox --dev-gmail-submit --dev-vault "C:\chosen\acceptance.sqlite" --google-client "C:\chosen\desktop-client.json"
+powershell -NoProfile -File .\tmp\m7\Start-GoogleAcceptance.ps1 -CheckOnly
 ```
 
-For this owner's machine an ignored, private launcher is retained at
-`tmp/m7/Start-GoogleAcceptance.ps1`; it selects the actual existing paths and
-keeps errors visible. It contains path references, not JSON contents or tokens.
-It is deliberately excluded from the checkpoint. Run from the repository:
+Expect `Desktop client configuration: valid`, `Existing vault found`, and
+`Preflight passed`. Then launch with the same command without `-CheckOnly`:
 
 ```powershell
 powershell -NoProfile -File .\tmp\m7\Start-GoogleAcceptance.ps1
 ```
+
+The ignored private wrapper contains the already supplied client/vault path
+references, not credentials. It calls the versioned
+`tools/start_google_acceptance.ps1`. This validates the Desktop client before
+launching, uses the installed environment/helpers, and keeps errors visible.
+The earlier `C:\chosen` example was a placeholder and must not be run literally.
+No placeholder path is required by this sequence.
+
+If preflight says the existing vault is missing or inaccessible, **stop and report
+that output**; do not create a replacement or delete Credential Manager entries.
+The generic launcher accepts explicit `-GoogleClient` and `-Vault` paths for an
+intentional configuration change. `-AllowNewVault` must be supplied explicitly
+for a deliberately NEW disposable vault; it only permits the app to start with
+a new path. Creation still requires Settings → Create vault. It never restores
+missing keys/accounts and is not the remedy for an inaccessible old vault.
 
 ## Click sequence and expected results
 

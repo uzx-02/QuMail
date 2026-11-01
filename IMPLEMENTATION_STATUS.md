@@ -1,3 +1,20 @@
+# Manual acceptance launcher correction
+
+The reported missing-vault failure is not currently reproducible: read-only
+Windows PowerShell preflight finds the existing acceptance database and validates
+the explicitly supplied Desktop client. No vault contents or Windows credentials
+were read; no new database or account was created. Earlier live acceptance
+remains pending; the owner is performing manual tests.
+
+Added a versioned parameterized launcher with `-CheckOnly`, explicit path errors,
+Desktop-client validation and opt-in `-AllowNewVault` for intentional fresh tests.
+The ignored machine-specific wrapper now delegates to it. Removed the runnable
+placeholder command from the manual guide. Existing vaults require Unlock.
+Validation: actual existing-path preflight passed; missing vault and missing
+client rejected; explicit new-vault preflight passed without creating a file.
+These are launcher-only checks; previous 163/27 regression evidence is unchanged.
+No application/provider/dependency changes, authorization, sending or migration.
+
 # Combined Google / optional relay continuation — 2026-11-01
 
 **M7 locally qualified; live Google acceptance remains incomplete and is now
