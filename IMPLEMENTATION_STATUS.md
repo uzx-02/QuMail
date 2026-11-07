@@ -1,3 +1,13 @@
+# Module 1.1 Completion — Desktop Launch Handoff & Path Resolution (2026-11-07)
+
+**Issue QM-BUG-001 resolved on branch `codex/m7-desktop-handoff`.**
+- Root cause identified: The acceptance path `%LOCALAPPDATA%\QuMailAcceptance\2026-10-22-google-m7\acceptance.sqlite` was never created on disk in the desktop user session; the prior launcher threw an exception because `-AllowNewVault` was omitted, and `Vault.__init__` caught a missing parent directory error which was misattributed to Windows Credential Manager or virtualization.
+- Corrected and parameterized `tools/start_google_acceptance.ps1` with dedicated preflight regression test suite (`tools/test_launcher.ps1`, 11/11 tests passing).
+- Added explicit `-DryRun` mode (SMTP submission strictly disabled), `-SettingsOnly` mode, safe parent directory creation on `-AllowNewVault`, and mutually exclusive submission flags.
+- Updated private wrapper `tmp/m7/Start-GoogleAcceptance.ps1` and desktop shortcut `tmp/m7/QuMail-Desktop-DryRun.lnk` targeting verified desktop path `%LOCALAPPDATA%\QuMailAcceptance\2026-11-01-desktop\acceptance.sqlite`.
+- Verification: Dry-run launch initializes Qt GUI cleanly in a visible console without writing database files, writing credentials, or opening network sockets.
+- Stopped before vault creation or account enrollment; owner manual acceptance (Module 1.2) is ready to proceed.
+
 # Engineering handover freeze — 2026-11-01
 
 **Feature/live work stopped at the owner's request.** Source branch

@@ -112,15 +112,24 @@ The reusable versioned launcher is safe only with deliberately selected paths:
 ```powershell
 $clientPath = Read-Host 'Full path to your provisioned Google Desktop JSON (path only)'
 $vaultPath = Read-Host 'Full path to the intentionally selected disposable vault'
-powershell -NoProfile -File .\tools\start_google_acceptance.ps1 -GoogleClient $clientPath -Vault $vaultPath -CheckOnly
+
+# Preflight check only (no application launch, no database creation):
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 -GoogleClient $clientPath -Vault $vaultPath -AllowNewVault -CheckOnly
+
+# Dry-run launch (submission strictly disabled; safe for desktop verification and Settings exploration):
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 -GoogleClient $clientPath -Vault $vaultPath -AllowNewVault -DryRun
+
+# Settings-only launch (isolated identity Settings; no mailbox window, sending disabled):
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 -Vault $vaultPath -AllowNewVault -SettingsOnly
 ```
 
-For an existing accessible vault, remove `-CheckOnly` to launch and choose **Unlock**.
-For a genuinely NEW, distinct test vault, explicitly append `-AllowNewVault` to
-both check-only and launch commands. This permits startup; **Settings → Create
-vault** is still the explicit creation action. Never use this switch to recover or
-overwrite old keys. The launcher enables the Gmail submission adapter; it does not
-submit automatically. Normal GUI confirmations and bounded send authorization remain.
+For an existing accessible vault, omit `-AllowNewVault` and choose **Unlock** in Settings.
+For a genuinely NEW, distinct test vault, explicitly append `-AllowNewVault`. This ensures the parent directory exists and permits startup; **Settings → Create vault** remains the explicit user creation action. Never use this switch to recover or overwrite old keys.
+
+Live Gmail submission requires the explicit `-EnableGmailSubmit` switch instead of `-DryRun` (mutually exclusive with `-DryRun` and `-SettingsOnly`):
+```powershell
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 -GoogleClient $clientPath -Vault $vaultPath -EnableGmailSubmit
+```
 Paths from Read-Host should be entered without surrounding quote characters.
 
 The immediate successor task stops before Create vault/auth/send; owner will test.

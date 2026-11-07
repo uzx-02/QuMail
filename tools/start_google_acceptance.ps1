@@ -1,25 +1,63 @@
 param(
-    [Parameter(Mandatory = $true)][string]$GoogleClient,
+    [Parameter(Mandatory = $false)][string]$GoogleClient,
     [Parameter(Mandatory = $true)][string]$Vault,
     [switch]$CheckOnly,
-    [switch]$AllowNewVault
+    [switch]$DryRun,
+    [switch]$AllowNewVault,
+    [switch]$EnableGmailSubmit,
+    [switch]$SettingsOnly
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($DryRun -and $EnableGmailSubmit) {
+    throw "-DryRun and -EnableGmailSubmit are mutually exclusive. Dry-run mode strictly disables Gmail SMTP submission."
+}
+if ($SettingsOnly -and $EnableGmailSubmit) {
+    throw "-SettingsOnly and -EnableGmailSubmit are mutually exclusive. Settings-only mode has no mail submission capability."
+}
+
 $repoPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $pythonPath = Join-Path $repoPath '.venv-m1-clean\Scripts\python.exe'
-$clientPath = [System.IO.Path]::GetFullPath($GoogleClient)
+$m3Helper = Join-Path $repoPath 'tmp\m2\target\debug\qumail-m3-provider.exe'
+$m5Helper = Join-Path $repoPath 'tmp\m2\target\debug\qumail-m5-provider.exe'
 $vaultPath = [System.IO.Path]::GetFullPath($Vault)
-foreach ($requiredPath in @($pythonPath, $clientPath,
-        (Join-Path $repoPath 'tmp\m2\target\debug\qumail-m3-provider.exe'),
-        (Join-Path $repoPath 'tmp\m2\target\debug\qumail-m5-provider.exe'))) {
+
+foreach ($requiredPath in @($pythonPath, $m3Helper, $m5Helper)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
-        throw "Required file is missing or inaccessible: $requiredPath. Use the actual provisioned path, not C:\chosen placeholders."
+        throw "Required runtime component is missing or inaccessible: $requiredPath."
     }
 }
-if (Test-Path -LiteralPath $vaultPath -PathType Container) {
-    throw "Vault path names a directory, not a database file: $vaultPath"
+
+$hasClient = -not [string]::IsNullOrWhiteSpace($GoogleClient)
+$clientPath = $null
+if ($hasClient) {
+    $clientPath = [System.IO.Path]::GetFullPath($GoogleClient)
+    if (-not (Test-Path -LiteralPath $clientPath -PathType Leaf)) {
+        throw "Google client JSON file is missing or inaccessible: $clientPath. Use the actual downloaded desktop client JSON path."
+    }
+} elseif ($EnableGmailSubmit) {
+    throw "-EnableGmailSubmit requires an explicitly configured Google client JSON file via -GoogleClient."
 }
+
+if (Test-Path -LiteralPath $vaultPath -PathType Container) {
+    throw "Vault path names an existing directory, not a database file: $vaultPath"
+}
+
+$vaultDir = Split-Path -Parent $vaultPath
+if (-not [string]::IsNullOrWhiteSpace($vaultDir) -and -not (Test-Path -LiteralPath $vaultDir -PathType Container)) {
+    if ($AllowNewVault) {
+        try {
+            New-Item -ItemType Directory -Force -Path $vaultDir | Out-Null
+            Write-Host "Created parent directory for new vault: $vaultDir"
+        } catch {
+            throw "Failed to create parent directory for new vault '$vaultDir': $($_.Exception.Message)"
+        }
+    } else {
+        throw "Vault parent directory does not exist: $vaultDir. Confirm path or specify -AllowNewVault for a new vault location."
+    }
+}
+
 $vaultExists = Test-Path -LiteralPath $vaultPath -PathType Leaf
 if (-not $vaultExists -and -not $AllowNewVault) {
     throw "Existing vault is missing or inaccessible: $vaultPath. Nothing was created. Confirm its location before proceeding. Use -AllowNewVault only for an intentionally NEW disposable vault; it cannot recover old accounts or keys."
@@ -27,25 +65,50 @@ if (-not $vaultExists -and -not $AllowNewVault) {
 
 Push-Location -LiteralPath $repoPath
 $oldQtPlatform = $env:QT_QPA_PLATFORM
+$oldQtPluginPath = $env:QT_PLUGIN_PATH
 try {
-    & $pythonPath -c 'import sys; from transport.development_google import client_configuration; client_configuration(sys.argv[1])' $clientPath
-    if ($LASTEXITCODE -ne 0) { throw 'Desktop-client validation failed. Select the downloaded Desktop-app JSON, not a placeholder or another client type.' }
-    Write-Host 'Desktop client configuration: valid (contents hidden)'
-    Write-Host "Vault: $vaultPath"
+    if ($hasClient) {
+        & $pythonPath -c 'import sys; from transport.development_google import client_configuration; client_configuration(sys.argv[1])' $clientPath
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop-client validation failed. Select the downloaded Desktop-app JSON, not a placeholder or another client type.' }
+        Write-Host 'Desktop client configuration: valid (contents hidden)'
+    } else {
+        Write-Host 'Desktop client configuration: omitted (offline / identity-only mode)'
+    }
+
+    Write-Host "Vault path: $vaultPath"
     if ($vaultExists) {
         Write-Host 'Existing vault found. In Settings choose Unlock, not Create vault.'
     } else {
         Write-Host 'Explicit NEW-vault mode. In Settings choose Create vault. No database has been created by this launcher.'
     }
+
     if ($CheckOnly) {
-        Write-Host 'Preflight passed. Application not launched; vault contents not read; no authorization started.'
+        Write-Host 'Preflight passed. Application not launched; vault contents not read; no database created; no credentials read.'
         return
     }
-    Write-Host 'Close any prior QuMail instance. Only the three designated A/B test sends are authorized.'
+
+    $appArgs = @('main.py')
+    if ($SettingsOnly) {
+        $appArgs += @('--dev-identity', '--dev-vault', $vaultPath)
+        if ($hasClient) { $appArgs += @('--google-client', $clientPath) }
+        Write-Host '[MODE: SETTINGS-ONLY] Launching isolated Identity Settings. Mailbox and sending are completely disabled.'
+    } else {
+        $appArgs += @('--dev-mailbox', '--dev-vault', $vaultPath)
+        if ($hasClient) { $appArgs += @('--google-client', $clientPath) }
+        if ($EnableGmailSubmit) {
+            Write-Host '[MODE: LIVE SUBMISSION] Close any prior QuMail instance. Live Gmail submission is explicitly enabled.'
+            $appArgs += @('--dev-gmail-submit')
+        } else {
+            Write-Host '[MODE: DRY-RUN / INSPECTION] Gmail SMTP submission is DISABLED. You can safely explore the mailbox UI and Settings without any risk of sending mail.'
+        }
+    }
+
     $env:QT_QPA_PLATFORM = 'windows'
-    & $pythonPath main.py --dev-mailbox --dev-gmail-submit --dev-vault $vaultPath --google-client $clientPath
+    $env:QT_PLUGIN_PATH = Join-Path $repoPath '.venv-m1-clean\Lib\site-packages\PyQt6\Qt6\plugins'
+    & $pythonPath @appArgs
     if ($LASTEXITCODE -ne 0) { throw "QuMail exited with code $LASTEXITCODE" }
 } finally {
     $env:QT_QPA_PLATFORM = $oldQtPlatform
+    $env:QT_PLUGIN_PATH = $oldQtPluginPath
     Pop-Location
 }

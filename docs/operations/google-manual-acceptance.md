@@ -6,25 +6,39 @@ deliberately selected disposable acceptance vault and supplied Desktop-client JS
 Google Auth Platform in **Testing** with both accounts listed as test users.
 Do not create another vault or root if A already appears after enrollment.
 
-## Launch — paused pending actual desktop dry run
+## Launch — qualified desktop dry run procedure
 
-The old private `tmp/m7/Start-GoogleAcceptance.ps1` wrapper **does not currently
-work in the owner's desktop**: its prior vault folder is absent in File Explorer,
-although tool shells can see it. Do not repeat its check-only success as a remedy.
-Do not delete credentials, copy a raw master or replace an inaccessible old vault.
+The launcher `tools/start_google_acceptance.ps1` has been updated and verified with dedicated preflight regression tests. It provides deterministic parent directory resolution, explicit dry-run protection (`-DryRun`), and clear diagnostics.
 
-The generic `tools/start_google_acceptance.ps1` is available, but the actual
-normal-desktop path and GUI launch still need qualification. Follow
-[BUILD_RUN_TEST](../handover/BUILD_RUN_TEST.md#launch-and-the-unresolved-desktop-mismatch).
-A private new-path GUI shortcut was prepared but NOT launched/validated. This
-handover stops before vault creation, enrollment and sending; the owner will test.
+For a confirmed accessible existing vault, choose Unlock. For a deliberately NEW, distinct disposable vault, use explicit `-AllowNewVault`, then Create vault once in Settings. This creates new local identities on enrollment; it cannot recover the old root or historical messages. Existing old data stays preserved.
 
-For a confirmed accessible existing vault choose Unlock. For a deliberately NEW,
-distinct disposable vault, use explicit `-AllowNewVault`, then Create vault once.
-This creates new local identities on enrollment; it cannot recover the old root or
-historical messages. Existing old data stays preserved. Once the successor supplies
-an actually desktop-verified launch command, continue the controls below. Do not run
-literal `C:\chosen` placeholders. The provisioned Desktop client need not be recreated.
+### 0. Desktop Dry-Run (Verification Only — No Sending)
+Before enrolling or sending, verify that the application launches and Settings is reachable from your desktop:
+
+```powershell
+# Parameterized launch from PowerShell:
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 `
+    -Vault "$env:LOCALAPPDATA\QuMailAcceptance\2026-11-01-desktop\acceptance.sqlite" `
+    -GoogleClient "$env:USERPROFILE\Downloads\client_secret_953431543574-6oapvj8m0nbu3e71mdd3kb2r45atgjfh.apps.googleusercontent.com.json" `
+    -AllowNewVault `
+    -DryRun
+```
+
+Or double-click the updated shortcut `tmp/m7/QuMail-Desktop-DryRun.lnk`. Confirm:
+1. The PowerShell console displays `[MODE: DRY-RUN / INSPECTION] Gmail SMTP submission is DISABLED`.
+2. The QuMail Mailbox window opens.
+3. Clicking **Settings** opens the Settings window showing `Locked`.
+4. Close the application. Verify that `acceptance.sqlite` was **NOT** created yet (dry run creates no database).
+
+### 0b. Live Submission Mode (When Authorized for Test Sends)
+When ready to execute the manual acceptance checklist below with live email transmission:
+```powershell
+powershell -NoProfile -File .\tools\start_google_acceptance.ps1 `
+    -Vault "$env:LOCALAPPDATA\QuMailAcceptance\2026-11-01-desktop\acceptance.sqlite" `
+    -GoogleClient "$env:USERPROFILE\Downloads\client_secret_953431543574-6oapvj8m0nbu3e71mdd3kb2r45atgjfh.apps.googleusercontent.com.json" `
+    -AllowNewVault `
+    -EnableGmailSubmit
+```
 
 ## Click sequence and expected results
 
