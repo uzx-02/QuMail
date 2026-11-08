@@ -46,7 +46,9 @@ if (Test-Path -LiteralPath $vaultPath -PathType Container) {
 
 $vaultDir = Split-Path -Parent $vaultPath
 if (-not [string]::IsNullOrWhiteSpace($vaultDir) -and -not (Test-Path -LiteralPath $vaultDir -PathType Container)) {
-    if ($AllowNewVault) {
+    if ($CheckOnly) {
+        Write-Host "Vault parent directory does not exist yet: $vaultDir"
+    } elseif ($AllowNewVault) {
         try {
             New-Item -ItemType Directory -Force -Path $vaultDir | Out-Null
             Write-Host "Created parent directory for new vault: $vaultDir"
@@ -59,7 +61,7 @@ if (-not [string]::IsNullOrWhiteSpace($vaultDir) -and -not (Test-Path -LiteralPa
 }
 
 $vaultExists = Test-Path -LiteralPath $vaultPath -PathType Leaf
-if (-not $vaultExists -and -not $AllowNewVault) {
+if (-not $vaultExists -and -not $CheckOnly -and -not $AllowNewVault) {
     throw "Existing vault is missing or inaccessible: $vaultPath. Nothing was created. Confirm its location before proceeding. Use -AllowNewVault only for an intentionally NEW disposable vault; it cannot recover old accounts or keys."
 }
 
@@ -78,8 +80,10 @@ try {
     Write-Host "Vault path: $vaultPath"
     if ($vaultExists) {
         Write-Host 'Existing vault found. In Settings choose Unlock, not Create vault.'
-    } else {
+    } elseif ($AllowNewVault) {
         Write-Host 'Explicit NEW-vault mode. In Settings choose Create vault. No database has been created by this launcher.'
+    } else {
+        Write-Host 'Target vault does not exist yet (pre-vault check mode). In Settings choose Create vault when initialized with -AllowNewVault.'
     }
 
     if ($CheckOnly) {

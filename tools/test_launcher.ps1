@@ -43,28 +43,50 @@ try {
     Remove-Item -Force -Recurse -Path $tempDir -ErrorAction SilentlyContinue
 }
 
-# Test 4: Non-existent vault without -AllowNewVault
+# Test 4: Live launch on non-existent vault without -AllowNewVault is rejected
 $nonExistentVault = Join-Path $repoPath 'tmp\test_nonexistent_vault.sqlite'
 $caught = $false
 try {
-    & $launcher -Vault $nonExistentVault -CheckOnly 2>$null
+    & $launcher -Vault $nonExistentVault 2>$null
 } catch {
     if ($_.Exception.Message -match "Existing vault is missing or inaccessible") { $caught = $true }
 }
 if (-not $caught) { throw "FAIL: Test 4 - Missing vault without -AllowNewVault was not rejected." }
 if (Test-Path -LiteralPath $nonExistentVault) { throw "FAIL: Test 4 - Database file was unexpectedly created." }
-Write-Host "PASS: Test 4 - Missing vault without -AllowNewVault rejected; no file created."
+Write-Host "PASS: Test 4 - Live launch on missing vault without -AllowNewVault rejected; no file created."
 
-# Test 5: Missing parent directory without -AllowNewVault
+# Test 4b: CheckOnly on non-existent vault without -AllowNewVault succeeds without creating files
+try {
+    $out4b = & $launcher -Vault $nonExistentVault -CheckOnly
+    if ($out4b -notmatch "Target vault does not exist yet \(pre-vault check mode\)") { throw "FAIL: Test 4b - Did not report pre-vault check mode." }
+    if ($out4b -notmatch "Preflight passed") { throw "FAIL: Test 4b - Did not report preflight passed." }
+    if (Test-Path -LiteralPath $nonExistentVault) { throw "FAIL: Test 4b - File created." }
+    Write-Host "PASS: Test 4b - CheckOnly on missing vault without -AllowNewVault succeeded; zero files created."
+} catch {
+    throw "FAIL: Test 4b - CheckOnly unexpectedly threw on missing vault: $($_.Exception.Message)"
+}
+
+# Test 5: Live launch with missing parent directory without -AllowNewVault is rejected
 $nestedMissingVault = Join-Path $repoPath 'tmp\missing_parent_dir\vault.sqlite'
 $caught = $false
 try {
-    & $launcher -Vault $nestedMissingVault -CheckOnly 2>$null
+    & $launcher -Vault $nestedMissingVault 2>$null
 } catch {
     if ($_.Exception.Message -match "Vault parent directory does not exist") { $caught = $true }
 }
 if (-not $caught) { throw "FAIL: Test 5 - Missing parent directory without -AllowNewVault was not rejected." }
-Write-Host "PASS: Test 5 - Missing parent directory without -AllowNewVault rejected."
+Write-Host "PASS: Test 5 - Live launch with missing parent directory without -AllowNewVault rejected."
+
+# Test 5b: CheckOnly with missing parent directory succeeds without creating parent directory
+try {
+    $out5b = & $launcher -Vault $nestedMissingVault -CheckOnly
+    if ($out5b -notmatch "Vault parent directory does not exist yet") { throw "FAIL: Test 5b - Did not report missing parent directory." }
+    if ($out5b -notmatch "Preflight passed") { throw "FAIL: Test 5b - Did not report preflight passed." }
+    if (Test-Path -LiteralPath (Split-Path -Parent $nestedMissingVault)) { throw "FAIL: Test 5b - Directory created." }
+    Write-Host "PASS: Test 5b - CheckOnly on missing parent directory succeeded; zero directories created."
+} catch {
+    throw "FAIL: Test 5b - CheckOnly unexpectedly threw on missing parent directory: $($_.Exception.Message)"
+}
 
 # Test 6: Mutually exclusive -DryRun and -EnableGmailSubmit
 $caught = $false
@@ -113,8 +135,8 @@ $testNewVaultDir = Join-Path $repoPath 'tmp\test_new_vault_dir'
 $testNewVaultFile = Join-Path $testNewVaultDir 'acceptance.sqlite'
 try {
     $out = & $launcher -Vault $testNewVaultFile -GoogleClient $tempClient -AllowNewVault -CheckOnly
-    if (-not (Test-Path -LiteralPath $testNewVaultDir -PathType Container)) {
-        throw "FAIL: Test 9 - Parent directory was not created."
+    if (Test-Path -LiteralPath $testNewVaultDir -PathType Container) {
+        throw "FAIL: Test 9 - Parent directory was unexpectedly created in -CheckOnly mode."
     }
     if (Test-Path -LiteralPath $testNewVaultFile) {
         throw "FAIL: Test 9 - Database file was unexpectedly created in -CheckOnly mode."
@@ -125,7 +147,7 @@ try {
     if ($out -notmatch "Desktop client configuration: valid") {
         throw "FAIL: Test 9 - Did not validate Desktop client JSON."
     }
-    Write-Host "PASS: Test 9 - Positive -CheckOnly with -AllowNewVault created parent dir but NO database file."
+    Write-Host "PASS: Test 9 - Positive -CheckOnly with -AllowNewVault validated client without creating directory or database."
 } finally {
     Remove-Item -Force -Recurse -Path $testNewVaultDir -ErrorAction SilentlyContinue
     Remove-Item -Force -Path $tempClient -ErrorAction SilentlyContinue
@@ -139,10 +161,13 @@ try {
     if ($out -notmatch "Desktop client configuration: omitted \(offline / identity-only mode\)") {
         throw "FAIL: Test 10 - Did not report client omitted in offline mode."
     }
+    if (Test-Path -LiteralPath $testOfflineVaultDir) {
+        throw "FAIL: Test 10 - Directory was unexpectedly created."
+    }
     if (Test-Path -LiteralPath $testOfflineVaultFile) {
         throw "FAIL: Test 10 - Database file was unexpectedly created."
     }
-    Write-Host "PASS: Test 10 - Positive -CheckOnly in Settings-only offline mode succeeded."
+    Write-Host "PASS: Test 10 - Positive -CheckOnly in Settings-only offline mode succeeded without side effects."
 } finally {
     Remove-Item -Force -Recurse -Path $testOfflineVaultDir -ErrorAction SilentlyContinue
 }
