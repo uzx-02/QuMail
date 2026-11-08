@@ -159,16 +159,20 @@ The 10 architectural trace questions from the Technical Lead Review Directive ar
   `SubmitOutbox.submit()` receives the transport `Outcome`:
   ```python
   state, reason = {
-      Outcome.ACCEPTED: (State.ACCEPTED, 'accepted_by_transport'),
-      Outcome.REJECTED: (State.FAILED, 'rejected_by_transport'),
-      Outcome.UNKNOWN: (State.UNKNOWN, 'unknown_submission_outcome'),
+      Outcome.ACCEPTED: (State.ACCEPTED, 'server_accepted_not_delivered'),
+      Outcome.REJECTED: (State.FAILED, 'definitive_rejection_or_stopped_before_data'),
+      Outcome.UNKNOWN: (State.UNKNOWN, 'acceptance_unknown_duplicate_risk'),
   }[outcome]
-  with self.repository.transaction(lease, until) as account:
+  with self.repository.completion(lease.context) as account:
       row = account.row(operation)
+      if row['state'] != State.SUBMITTING.value or row['attempts'][-1]['identity'] != identity:
+          raise Failure(Error.TRANSITION)
       row.update(state=state.value, reason=reason)
       row['attempts'][-1].update(state=state.value, reason=reason)
+      delivered = result(operation, row)
   ```
-- The transaction commits to the SQLite vault before the worker returns `DeliveryResult`.
+- The completion transaction commits to the SQLite vault before the worker returns `DeliveryResult`.
+- *(Note: In contrast to the live submission `acceptance_unknown_duplicate_risk` reason above, startup recovery of an interrupted submission via `SubmitOutbox.recover()` persists the distinct reason `interrupted_acceptance_unknown` in [lines 126–128](file:///c:/Users/uzx/Desktop/Aavishkar-26/QuMail/experiments/m4/services.py#L126-L128)).*
 
 ---
 
@@ -290,13 +294,16 @@ The exact user-facing disclosure text distinguishing local processing, external 
   - `ACCEPTED` in the outbox represents **Google SMTP server acceptance** (`250 2.0.0 OK`).
   - It does **not** prove recipient inbox arrival, decryption, or signature validity.
   - Recipient arrival, decryption, signature validation, and attachment verification are evaluated as separate, observable acceptance steps.
-  - **Explicit Stop Condition for Ambiguous Submission:** If an outbox operation transitions to `UNKNOWN` (`interrupted_acceptance_unknown`), the operator must **HALT IMMEDIATELY**. Do not click retry. Reconcile with the recipient out-of-band and inspect the Gmail Sent Mail folder before taking any further action.
-- **Interrupted-Submission UI Enforcement (`M12-ISOL-04`):**
-  - *Detection & Transition:* `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) scans for outbox records in `SUBMITTING` state on startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
-  - *UI Submission Prevention:* `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
-  - *Explicit Retry Gating:* In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which triggers a blocking confirmation dialog (`QMessageBox.question`): *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  - **Explicit Stop Condition for Ambiguous Submission:** If an outbox operation transitions to `UNKNOWN` (`interrupted_acceptance_unknown` on startup recovery or `acceptance_unknown_duplicate_risk` on transport ambiguity), the operator must **HALT IMMEDIATELY**. Do not click retry. Follow the mandatory operator reconciliation procedure before taking any further action.
+- **Interrupted-Submission Enforcement & Retry Controls (`M12-ISOL-04`):**
+  - *Application-Enforced Protections (Technical Code Guarantees):*
+    * Detection & Transition: `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) scans for outbox records in `SUBMITTING` state on startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
+    * Submission Prevention: `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
+    * Explicit Retry Gating: In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which triggers a blocking confirmation dialog (`QMessageBox.question`): *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  - *Mandatory Operator Procedure (Administrative / Out-of-Band):*
+    * Out-of-band reconciliation is an operator-executed verification procedure, not a technical code enforcement (the software cannot query recipient inboxes out-of-band or verify external human delivery).
+    * An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (transit delays, greylisting, or spam filters may delay arrival). Before considering an explicit retry, the operator is required to inspect the Gmail web interface **Sent Mail** folder and obtain direct out-of-band confirmation from the recipient to establish whether delivery occurred.
   - *Synthetic Offline Fixture Gating:* Because creating a real interrupted submission in a live environment requires intentionally killing the process during SMTP transmission (which risks corrupting live vault state and sending duplicate emails to real accounts), `M12-ISOL-04` is executed as an offline synthetic test against a dedicated SQLite fixture and is explicitly gated by the project owner.
-  - *Out-of-Band Reconciliation Requirement:* An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (due to transit delays, greylisting, or spam filters). The operator must inspect the Gmail web interface **Sent Mail** folder and verify delivery status with the recipient out-of-band before considering an explicit retry.
 
 ### B. Six-Level State & Authorization Classification
 Every acceptance test is classified into one of six operational tiers:
@@ -330,7 +337,7 @@ Every acceptance test is classified into one of six operational tiers:
 | **M12-SEND-02** | **Tier 6** | Controlled Reply & Forward (B → A) | Original message opened in Account B; sending enabled. | Click **"Reply"**; add text; save, prepare, submit once. Reopen; click **"Forward"**; select A; save, prepare, submit once. | Both submissions transition to `ACCEPTED`. Account A refreshes headers and decrypts both messages successfully. | Persistent Vault & Remote Google SMTP | **Yes** | Ambiguous SMTP outcome or signature mismatch. |
 | **M12-FLAG-01** | **Tier 5** | IMAP Flag Mutation | Test message present in mailbox. | Select message; click **"Mark read"** → refresh (verify read). Click **"Mark unread"** → refresh (verify unread). Click **"Open selected"** → refresh (verify remains unread). | Server flags updated only upon explicit button click; opening message preserves prior unread state. | Remote Gmail IMAP Mailbox Flags | **Yes** | Opening message alters unread flag on Gmail server. |
 | **M12-ISOL-03** | **Tier 3** | Restart Durability (Accepted Records) | Outbox contains accepted/sent records from Stage E. | Close QuMail application; restart via live launcher; unlock vault. | All historical outbox operations, attempts, digests, and delivery receipts reload bit-for-bit from SQLite; zero network calls. | None (Read-only verification of SQLite) | **Yes** | Missing outbox records or automatic network transmission on restart. |
-| **M12-ISOL-04** | **Tier 3** | Startup Outbox Recovery (Interrupted Submission) | Controlled offline test fixture with synthetic `SUBMITTING` outbox row (owner gated). | Launch against offline test fixture; outbox recovery runs (`Workflows.outbox()` calling `offline.recover()`). Inspect UI outbox controls and retry behavior. | Record transitions to state `UNKNOWN` with reason `interrupted_acceptance_unknown`; UI blocks `submit`; `retry` requires explicit confirmation of duplicate risk; zero automatic resubmissions occur. Out-of-band reconciliation required before retry. | Local Test Database Only (0 Network) | **Yes** | Automatic resubmission, transition failure, or unconfirmed retry. |
+| **M12-ISOL-04** | **Tier 3** | Startup Outbox Recovery (Interrupted Submission) | Controlled offline test fixture with synthetic `SUBMITTING` outbox row (owner gated). | Launch against offline test fixture; outbox recovery runs (`Workflows.outbox()` calling `offline.recover()`). Inspect UI outbox controls and retry behavior. | Record transitions to state `UNKNOWN` with reason `interrupted_acceptance_unknown`; UI blocks `submit`; `retry` requires explicit confirmation of duplicate risk; zero automatic resubmissions occur. Operator follows mandatory out-of-band reconciliation procedure before retrying. | Local Test Database Only (0 Network) | **Yes** | Automatic resubmission, transition failure, or unconfirmed retry. |
 
 ---
 
@@ -379,11 +386,14 @@ The 18 acceptance tests are strictly partitioned into six sequential stages, eac
   - `M12-ISOL-04` (Startup outbox recovery for interrupted submission) [Tier 3]  
 - **Scope:** Evaluates in-memory view purging on account switch, vault locking while idle, token auto-renewal, simulated token failure, non-destructive reauthorization, two-way reply/forward threading, explicit read flag mutation, restart persistence, and startup outbox recovery.
 - **Interrupted Submission Recovery Architecture & UI Enforcement (`M12-ISOL-04`):**
-  * *Transition & Recovery:* `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) detects outbox records in `SUBMITTING` state upon startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
-  * *UI Submission Prevention:* `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
-  * *Explicit Retry Gating:* In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which displays a blocking warning: *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  * *Application-Enforced Protections (Technical Code Guarantees):*
+    - Transition & Recovery: `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) detects outbox records in `SUBMITTING` state upon startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
+    - UI Submission Prevention: `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
+    - Explicit Retry Gating: In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which displays a blocking warning: *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  * *Mandatory Operator Procedure (Administrative / Out-of-Band):*
+    - Out-of-band reconciliation is an operator-executed procedure, not a technical code enforcement (the software cannot query recipient inboxes out-of-band or verify human delivery).
+    - An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (transit delays, greylisting, or spam filters may delay arrival). Before considering an explicit retry, the operator is required to inspect the Gmail web interface **Sent Mail** folder and obtain direct out-of-band confirmation from the recipient to establish whether delivery occurred.
   * *Synthetic Offline Fixture Gating:* Because creating a real interrupted submission in a live environment requires intentionally killing the process during SMTP transmission (which risks corrupting live vault state and sending duplicate emails to real accounts), `M12-ISOL-04` is executed as an offline synthetic test against a dedicated SQLite fixture and is explicitly gated by the project owner.
-  * *Out-of-Band Reconciliation Requirement:* An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (due to transit delays, greylisting, or spam filters). The operator must inspect the Gmail web interface **Sent Mail** folder and verify delivery status with the recipient out-of-band before considering an explicit retry.
 - **Gate 6:** Each extended test is executed only upon separate owner/authority authorization; persistence confirmed; zero duplicate sends.
 
 ---
@@ -429,10 +439,12 @@ The 18 acceptance tests are strictly partitioned into six sequential stages, eac
 ## ABSOLUTE STOP CONDITION COMPLIANCE
 
 **STOP.**  
-In accordance with Section 8 of the Technical Lead Review Directive:
-- **No live Google account has been enrolled or authorized.**
+- **Google OAuth client configuration was read and validated; it may contain a client secret.**
+- **No Google user access or refresh tokens were accessed.**
+- **No vault-stored credentials were accessed.**
+- **Windows Credential Manager was neither read nor modified.**
+- **No OAuth exchange or live Google connection occurred.**
 - **No acceptance vault or SQLite database has been created.**
-- **No credentials or tokens have been read, written, or migrated.**
 - **No IMAP or SMTP connections have been initiated.**
 - **No email has been submitted or transmitted.**
-- **No further actions will be taken until the Technical Authority reviews this report and issues the formal Module 1.2 Execution Directive.**
+- **Stage A complete and accepted. Awaiting separate project-owner authorization for Stage B.**
