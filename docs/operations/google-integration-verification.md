@@ -443,8 +443,8 @@ The 18 acceptance tests are strictly partitioned into six sequential stages, eac
 - **No Google user access or refresh tokens were accessed.**
 - **No vault-stored credentials were accessed.**
 - **Windows Credential Manager was neither read nor modified.**
-- **No OAuth exchange or live Google connection occurred.**
+- **No live Google connection or OAuth exchange occurred.**
 - **No acceptance vault or SQLite database has been created.**
-- **No IMAP or SMTP connections have been initiated.**
-- **No email has been submitted or transmitted.**
+- **Preflight execution (M12-PRE-01): strictly zero IMAP or SMTP connections were initiated, and zero emails were submitted or transmitted.**
+- **Module 1.2 testing boundary:** While local subsystem qualification previously executed an offline loopback TLS SMTP test on `127.0.0.1` (`test_real_compose_outbox_archive_and_recipient_open`), zero connections have been made to Gmail (`smtp.gmail.com` / `imap.gmail.com`), zero live Google OAuth exchanges were performed, and zero emails have been submitted or transmitted through Google or any external mail provider.
 - **Stage A complete and accepted. Awaiting separate project-owner authorization for Stage B.**
