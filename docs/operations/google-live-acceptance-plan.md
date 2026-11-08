@@ -106,7 +106,34 @@ In accordance with engineering discipline, branch `codex/m7-google-live-acceptan
   `%LOCALAPPDATA%\QuMailAcceptance\2026-11-01-desktop\acceptance.sqlite`
 - **Working Tree:** Pinned to branch `codex/m7-google-live-acceptance`.
 
-### 5.3 Secrets & Privacy Rules
+### 5.3 User Privacy Disclosure & Regulatory Compliance
+
+#### A. Technically Accurate User-Facing Privacy & Service Disclosure
+> **QuMail Privacy and Google Service Access Disclosure**
+>
+> **1. Scope and Permissions Granted to QuMail:**  
+> To connect using standard internet email protocols (IMAP and SMTP with SASL XOAUTH2), Google requires QuMail to request the full `https://mail.google.com/` permission. This permission grants broad access to your Google account, including the ability to read, compose, send, and permanently delete all email in your Gmail mailbox.  
+> *QuMail Feature Constraint:* QuMail’s code does not implement or expose any message deletion feature (`EXPUNGE` or trash emptying commands are excluded by design), nor does it access spam or mail settings. However, Google’s platform grants QuMail full technical authority under this scope.
+>
+> **2. Message Payload and Network Transmission:**  
+> - **Plaintext Processing:** Composition, plaintext editing, and message decryption occur strictly in memory on your local computer. Plaintext message bodies and unencrypted attachments are never sent to Google or any other server.  
+> - **Encrypted Payload Transmission:** QuMail uses OpenPGP (Sequoia PGP) to encrypt and sign your messages locally before transmission. The resulting encrypted MIME ciphertext payload is transmitted directly through Google’s SMTP servers (`smtp.gmail.com`) to reach your recipients.  
+> - **Visible Transport Metadata:** While message contents and attachments are encrypted, standard email routing metadata—including sender address, recipient addresses, message timestamps, transport Message-IDs, and transmission size—remains visible to Google and network intermediaries as required by standard SMTP protocols. Outer message subjects are standardized to `"Encrypted message"` to protect subject line confidentiality.
+>
+> **3. OAuth Tokens and Local Cryptographic Custody:**  
+> - **OAuth Tokens:** Google OAuth authorization codes and refresh tokens are exchanged directly between your local computer and Google’s authorization servers (`accounts.google.com` / `oauth2.googleapis.com`) over TLS. Tokens are stored encrypted on your local drive inside QuMail’s SQLite vault.  
+> - **Master Key Custody:** The vault’s AES-256-GCM encryption key is protected by your Windows user account in the Windows Credential Manager (`QuMail M3 local vault`).  
+> - **Private Keys:** Your OpenPGP private signing and decryption keys are generated locally, stored exclusively inside your local encrypted vault, and are never transmitted to Google, QuMail developers, or any third party.
+>
+> **4. Server Infrastructure & Telemetry Disclosure:**  
+> QuMail operates with no developer-hosted backend servers for ordinary email operations. QuMail does not operate telemetry, tracking, analytics, or remote crash-reporting servers. Network traffic from QuMail flows strictly between your local computer and Google’s documented endpoints (`*.google.com`, `*.googleapis.com`), plus the local loopback interface (`127.0.0.1`) used during browser OAuth callback handling.
+
+#### B. Google OAuth Verification & Assessment Implications
+- `https://mail.google.com/` is classified as a restricted Gmail scope by Google.
+- For an application to exit Testing status and serve general users, Google OAuth verification and applicable restricted-scope security assessment requirements must be satisfied.
+- Google's security assessment process utilizes risk-based assurance levels. The specific assessment level (e.g., Cloud Application Security Assessment / CASA evaluation) must be determined and confirmed directly through Google's verification process. Development testing does not imply production approval, and no legal or compliance guarantee is made.
+
+### 5.4 Operational Safeguards
 - **Zero Secrets in Chat/Logs:** Never paste client secrets, access tokens, refresh tokens, passwords, private keys, or raw callback URLs.
 - **Redacted Reporting:** Test reports must contain only sanitized UI state strings, account aliases (A/B), and cryptographic fingerprints.
 
@@ -129,8 +156,8 @@ Every acceptance test is classified into one of six operational tiers:
 
 | Test ID | Tier | Operation Category | Preconditions | Procedure | Expected Observable Result | Pass/Fail Criteria | Requires Owner Approval? |
 |---|---|---|---|---|---|---|---|
-| **M12-PRE-01** | **Tier 1** | Local Preflight | Client JSON downloaded; Python venv valid. | Run `start_google_acceptance.ps1` with `-AllowNewVault -EnableGmailSubmit -CheckOnly`. | Console reports client valid, new-vault mode, live submission mode enabled; zero DB created; no network calls. | Exit code 0; exactly matches preflight signature. | No |
-| **M12-VAULT-01** | **Tier 3** | Vault Creation | Vault file absent; launched with `-EnableGmailSubmit`. | Launch QuMail; open Settings; click **"Create vault"**. | SQLite created in `%LOCALAPPDATA%\...\acceptance.sqlite`; Settings status shows `Unlocked · sending disabled`; Mailbox banner shows `Gmail submission explicitly enabled`. | SQLite DB initialized with `vault` and `accounts` tables; master key stored in Credential Manager. | **Yes** (Creates persistent state) |
+| **M12-PRE-01** | **Tier 1** | Local Preflight | Client JSON downloaded; Python venv valid. | Run `start_google_acceptance.ps1` with `-Vault <path>` `-GoogleClient <path>` `-CheckOnly` (no `-AllowNewVault`). | Console reports client valid, preflight passed; zero filesystem modification; zero network calls. | Exit code 0; strictly side-effect-free. | No |
+| **M12-VAULT-01** | **Tier 3** | Vault Creation | Vault file absent; launched with `-AllowNewVault -EnableGmailSubmit`. | Launch QuMail; open Settings; click **"Create vault"**. | SQLite created in `%LOCALAPPDATA%\...\acceptance.sqlite`; Settings status shows `Unlocked · sending disabled`; Mailbox banner shows `Gmail submission explicitly enabled`. | SQLite DB initialized with `vault` and `accounts` tables; master key stored in Credential Manager. | **Yes** (Creates persistent state) |
 | **M12-AUTH-01** | **Tier 4** | OAuth Enrollment (A) | Vault unlocked; Account A in Google Test Users. | Enter Account A address in Settings; click **"Connect Google"**; complete browser consent within 180s. | Browser shows "Return to QuMail"; Settings displays Account A address, `active` lifecycle, and root fingerprint. | Account A row created in `accounts` table with encrypted OAuth tokens. | **Yes** (Live OAuth handshake) |
 | **M12-AUTH-02** | **Tier 4** | OAuth Enrollment (B) | Account A enrolled; Account B in Google Test Users. | Enter Account B address in Settings; click **"Connect Google"**; complete browser consent within 180s. | Browser shows "Return to QuMail"; Settings account selector lists both A and B independently. | Separate Account B row created in `accounts` table; A and B root fingerprints differ. | **Yes** (Live OAuth handshake) |
 | **M12-TOKEN-01** | **Tier 4** | Proactive Token Refresh | Accounts A and B enrolled; tokens in vault. | Select Account A; click **"Refresh Google"**. Repeat for Account B. | Bounded worker queries Google userinfo endpoint; token refreshed; status displays `Committed.` | Token expiry timestamp updated in DB without re-opening browser. | **Yes** (Live Google call) |
@@ -143,39 +170,45 @@ Every acceptance test is classified into one of six operational tiers:
 | **M12-SEND-02** | **Tier 6** | Protected Reply & Forward | Original message opened in Account B. | Click **"Reply"**; add reply text; save, prepare, and submit once. Reopen original; click **"Forward"**; select A; save, prepare, and submit once. | Both submissions transition to `ACCEPTED`. Account A refreshes headers and decrypts both messages successfully. | Two distinct messages received by A; verified references established. | **Yes** (Live email transmission) |
 | **M12-FLAG-01** | **Tier 5** | IMAP Flag Mutation | Test message present in mailbox. | Select message; click **"Mark read"** → refresh (verify read). Click **"Mark unread"** → refresh (verify unread). Click **"Open selected"** → refresh (verify remains unread). | Server flags updated only upon explicit command; opening message preserves prior unread state. | `\Seen` flag matches explicit user commands exactly. | **Yes** (Live IMAP mutation) |
 | **M12-ISOL-01** | **Tier 2** | Account Switch Isolation | Mailbox open with Account A message displayed. | Switch account selector from A to B while message is open. | Plaintext body, attachments, and security label clear immediately; Account B headers load; no cross-account residue. | Zero leakage of A's plaintext or tokens into B's session. | No |
-| **M12-ISOL-02** | **Tier 2** | Vault Lock Isolation | Operations running or completed. | Click **"Lock"** in Mailbox window. | Vault locks immediately; lease invalidated; header/compose buttons disable; cached keys purged from memory. | Application cannot perform mail operations until re-unlocked. | No |
-| **M12-ISOL-03** | **Tier 3** | Restart Durability | Outbox contains accepted/sent records. | Close QuMail; restart via live launcher; unlock vault. | All historical outbox operations, attempts, and receipts remain intact; no duplicate submission triggered. | Re-read from SQLite matches pre-restart state bit-for-bit. | No |
-
+| **M12-ISOL-02** | **Tier 2** | Vault Lock Isolation | Mailbox idle; zero pending worker threads. | Click **"Lock"** in Mailbox window while idle. | Vault locks immediately; lease invalidated; header/compose buttons disable; cached keys purged from memory; late workers drop results. | Application enters locked state safely without interrupting state transitions. | No |
+| **M12-ISOL-03** | **Tier 3** | Restart Durability | Outbox contains accepted/sent records. | Close QuMail; restart via live launcher; unlock vault. | All historical outbox operations, attempts, and receipts remain intact; startup recovery transitions any interrupted submissions to `UNKNOWN`. | Re-read from SQLite matches pre-restart state bit-for-bit; no duplicate submission triggered. | **Yes** (Interacts with persistent vault & recovery) |
 
 ---
 
-## 7. Staged Implementation & Testing Roadmap
+## 7. Staged Execution Plan with Separate Gates
 
-```
-  Phase 1: Environment & Preflight Validation
-     │   • Verify Google Cloud Console Test Users (Accounts A & B)
-     │   • Run automated test suite & launcher preflight checks
-     ▼
-  Phase 2: Vault Initialization & Account Enrollment (Authorized by Owner)
-     │   • Create disposable acceptance vault
-     │   • Enroll Account A via Google OAuth loopback
-     │   • Enroll Account B via Google OAuth loopback
-     ▼
-  Phase 3: Cryptographic Trust Establishment
-     │   • Export A and B public certificates
-     │   • Mutually import and verify root fingerprints
-     ▼
-  Phase 4: Live Mailbox Verification & Controlled Sends
-     │   • IMAP PEEK header retrieval (A & B)
-     │   • One A → B protected email send (SMTP XOAUTH2)
-     │   • Recipient B verification, PEEK read, attachment export
-     │   • Two B → A sends (Reply and Forward)
-     ▼
-  Phase 5: State & Isolation Stress Verification
-     │   • Explicit flag toggling (Read/Unread)
-     │   • Account switching & lock clearing verification
-     │   • Restart durability inspection
-```
+The 16 acceptance tests are strictly partitioned into six sequential stages, each gated by explicit verification before subsequent stages can be authorized:
+
+### Stage A — Offline & Local Preparation (Tiers 1 & 2)
+- Tests: `M12-PRE-01` (side-effect-free preflight), `M12-ISOL-01` (account switch view purging).
+- Scope: Validates local environment, client JSON syntax, binary availability, and UI memory isolation.
+- Gate: Zero side effects; preflight passes exit code 0.
+
+### Stage B — Owner-Authorized Vault Preparation (Tier 3)
+- Tests: `M12-VAULT-01` (Acceptance vault creation and Credential Manager master key write).
+- Scope: Creates `%LOCALAPPDATA%\QuMailAcceptance\2026-11-01-desktop\acceptance.sqlite` and writes master key to Windows Credential Manager.
+- Gate: SQLite database initialized; Settings displays `Unlocked · sending disabled`; Mailbox banner displays `Gmail submission explicitly enabled`.
+
+### Stage C — Google OAuth Authorization (Tier 4)
+- Tests: `M12-AUTH-01` (Account A enrollment), `M12-AUTH-02` (Account B enrollment), `M12-TRUST-01` (Mutual PGP export & fingerprint pinning), `M12-TOKEN-01` (Proactive token refresh).
+- Scope: Completes browser OAuth consent for both test users, verifies ID token signatures, establishes PGP root keys, and mutually pins public fingerprints.
+- Gate: Both accounts enrolled with distinct root keys; mutual public certificates pinned; token refresh succeeds.
+
+### Stage D — Controlled Mailbox Read (Tier 4)
+- Tests: `M12-IMAP-01` (IMAP PEEK header retrieval).
+- Scope: Connects to `imap.gmail.com:993` in readonly mode using `BODY.PEEK`.
+- Gate: Headers fetched for A and B; zero server-side read flag mutations occur.
+
+### Stage E — First Protected Message Send & Receive (Tiers 4 & 6)
+- Tests: `M12-SEND-01` (Single A → B protected email send), `M12-RECV-01` (Recipient B PEEK read, decrypt, and attachment export).
+- Scope: Executes exactly one protected email send from Account A to Account B via `smtp.gmail.com:587`. Account B retrieves via IMAP PEEK, decrypts inner payload, verifies signature, and exports attachment.
+- Gate: Outbox status `Accepted`; B decrypts message; signature valid; exported attachment SHA-256 matches sent attachment bit-for-bit.
+
+### Stage F — Recovery & Extended Workflows (Tiers 2, 3, 4, 5, 6)
+- Tests: `M12-TOKEN-02` (On-demand auto renewal), `M12-TOKEN-03` (Expired refresh recovery), `M12-SEND-02` (B → A Reply & Forward), `M12-FLAG-01` (Explicit `\Seen` flag mutation), `M12-ISOL-02` (Idle vault lock isolation), `M12-ISOL-03` (Restart durability & recovery).
+- Scope: Evaluates token expiration recovery, two-way threaded replies/forwards, explicit read flag mutation, idle locking, and restart durability.
+- Gate: All extended operations complete; zero duplicate sends; persistence confirmed.
+
 
 ---
 
