@@ -21,11 +21,10 @@ class IdentitySettings(QWidget):
         self.recovery=None; self.recovery_request=None; self.ceremony=None
         self.publishing=False
         self.disposed=False
-        self.setWindowTitle('QuMail — development identity Settings (sending disabled)')
+        self.setWindowTitle('QuMail — Account Settings')
         self.resize(920,680)
         layout=QVBoxLayout(self)
-        banner=QLabel('Development only · provisional cryptography · no sending\n'
-            'Google test-client authorization only. Yahoo enrollment unavailable. Independent review deferred.')
+        banner=QLabel('Google accounts only · Pre-release · Independent security review pending.')
         banner.setWordWrap(True); layout.addWidget(banner)
         self.status=QLabel('Locked'); layout.addWidget(self.status)
         self.details=QLabel(); layout.addWidget(self.details)

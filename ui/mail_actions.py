@@ -22,10 +22,10 @@ class MailActions(QDialog):
         self.epoch = 0; self.pending = []; self.cancel_event = None
         self.operation = None; self.attachments = (); self.references = (); self.in_reply_to = ''
         self.rows = ()
-        self.setWindowTitle('QuMail — protected compose and outbox (development)')
+        self.setWindowTitle('QuMail — Secure Compose')
         self.resize(900, 800)
         layout = QVBoxLayout(self)
-        self.notice = QLabel('Protected mail only · Bcc unavailable · 3 recipients · body 8 KiB · 4 attachments / 16 KiB total')
+        self.notice = QLabel('🔒  Encrypted · No Bcc · Up to 3 recipients · Body limit 8 KiB · Up to 4 attachments (16 KiB total)')
         self.notice.setWordWrap(True); layout.addWidget(self.notice)
         self.to = QLineEdit(); self.cc = QLineEdit(); self.subject = QLineEdit()
         for name, widget in [('To (comma separated)',self.to),('Cc',self.cc),('Subject',self.subject)]:
@@ -36,34 +36,45 @@ class MailActions(QDialog):
         self.files = QListWidget(); self.files.setMaximumHeight(80); layout.addWidget(self.files)
         bar = QHBoxLayout(); layout.addLayout(bar)
         self.editor_buttons=[]
-        for name, fn in [('New',self.new),('Add attachment',self.add_attachment),('Remove attachment',self.remove_attachment),
+        for name, fn in [('New draft',self.new),('Add attachment',self.add_attachment),('Remove attachment',self.remove_attachment),
                          ('Verify recipients',lambda:self.start('verify')),('Save encrypted draft',lambda:self.start('save'))]:
             b=QPushButton(name); b.clicked.connect(lambda checked=False, action=fn:action()); bar.addWidget(b)
             self.editor_buttons.append(b)
-        layout.addWidget(QLabel('Saved outbox: preparation uses the saved draft; save edits first. Accepted means server acceptance, not delivery.'))
+        layout.addWidget(QLabel('ℹ️  Preparation freezes the encrypted draft. “Accepted by mail server” means the server accepted it, not that it was delivered to the recipient.'))
         self.table = QTableWidget(0,4)
-        self.table.setHorizontalHeaderLabels(['Operation','State','Attempts','Reason'])
+        self.table.setHorizontalHeaderLabels(['Type','Status','Attempts','Details'])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         layout.addWidget(self.table)
         bar = QHBoxLayout(); layout.addLayout(bar)
         self.buttons={}
-        for name, action in [('Refresh outbox','list'),('Edit draft','load'),('Prepare saved','prepare'),
-            ('Submit once','submit'),('Explicit retry','retry'),('Discard / cancel saved','discard'),('Open archive','archive')]:
-            b=QPushButton(name); self.buttons[name]=b
-            b.clicked.connect(lambda checked=False,a=action:self.start(a)); bar.addWidget(b)
+        _specs = [
+            ('Refresh', 'Refresh outbox', 'list'),
+            ('Edit draft', 'Edit draft', 'load'),
+            ('Prepare to send', 'Prepare saved', 'prepare'),
+            ('Send now', 'Submit once', 'submit'),
+            ('Retry send', 'Explicit retry', 'retry'),
+            ('Discard', 'Discard / cancel saved', 'discard'),
+            ('Open archive', 'Open archive', 'archive')
+        ]
+        for label, canonical, action in _specs:
+            b=QPushButton(label)
+            self.buttons[label]=b
+            self.buttons[canonical]=b
+            b.clicked.connect(lambda checked=False,a=action:self.start(a))
+            bar.addWidget(b)
         self.buttons['Submit once'].setEnabled(gmail_enabled or factory is not None)
         stop=QPushButton('Cancel active work / clear plaintext'); stop.clicked.connect(lambda:self.stop(True)); layout.addWidget(stop)
         self.stop_button=stop
-        self.status=QLabel('Gmail submission disabled unless launched with --dev-gmail-submit. No automatic submission.')
+        self.status=QLabel('Ready. Submission requires --dev-gmail-submit flag. No automatic sending.')
         self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True); layout.addWidget(self.status)
         self.timer=QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(50)
         configure(self,[(self.to,'To recipients, comma separated'),(self.cc,'Cc recipients, comma separated; Bcc unavailable'),
             (self.subject,'Protected subject'),(self.body,'Message plain-text body, 8 KiB maximum'),(self.files,'Compose attachments'),
             (self.table,'Durable outbox operations and delivery states'),(self.archive,'Include encrypted sender archive'),
             (self.status,'Compose and outbox operation status')],
-            [self.to,self.cc,self.subject,self.body,self.archive,self.files,*self.editor_buttons,self.table,*self.buttons.values(),stop])
+            [self.to,self.cc,self.subject,self.body,self.archive,self.files,*self.editor_buttons,self.table,*list(dict.fromkeys(self.buttons.values())),stop])
 
     def service(self):
         helper=Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
@@ -136,9 +147,9 @@ class MailActions(QDialog):
             self.status.setText('Select an outbox operation first.'); return
         acknowledge=False
         if action in ('submit','retry','discard'):
-            text={'submit':'Submit this frozen protected message once through the configured Gmail endpoint?',
-                  'retry':'Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail.',
-                  'discard':'Discard the selected draft, or cancel a prepared submission? This cannot recall sent mail.'}[action]
+            text={'submit':'Send this frozen protected message now through the configured Gmail endpoint?',
+                  'retry':'Send the same frozen message again? If the previous attempt was accepted, this will create a duplicate. Use only when you are certain the first attempt did not succeed.',
+                  'discard':'Discard this draft or cancel the prepared submission? This cannot recall mail that was already sent.'}[action]
             if QMessageBox.question(self,'Explicit action',text)!=QMessageBox.StandardButton.Yes: return
             acknowledge=True
         try:
@@ -180,7 +191,8 @@ class MailActions(QDialog):
                 if action=='list':
                     self.rows=value; self.table.setRowCount(len(value))
                     for i,row in enumerate(value):
-                        for j,text in enumerate((row.operation.value,row.state.value,str(row.attempt),row.reason)):
+                        from ui.outbox_state_labels import label_for_state
+                        for j,text in enumerate((row.operation.value,label_for_state(row.state.value),str(row.attempt),row.reason)):
                             self.table.setItem(i,j,QTableWidgetItem(text))
                     self.table.resizeColumnsToContents(); self.status.setText('Durable account outbox refreshed.')
                 elif isinstance(value,Draft):
@@ -209,7 +221,10 @@ class MailActions(QDialog):
         for name,button in self.buttons.items():
             allowed={'Refresh outbox':True,'Edit draft':state=='Draft','Prepare saved':state=='Draft',
                 'Submit once':self.submission_enabled and state=='Prepared','Explicit retry':state in ('Failed','Unknown'),
-                'Discard / cancel saved':state in ('Draft','Prepared'),'Open archive':state is not None and state!='Draft'}[name]
+                'Discard / cancel saved':state in ('Draft','Prepared'),'Open archive':state is not None and state!='Draft',
+                'Refresh':True,'Prepare to send':state=='Draft',
+                'Send now':self.submission_enabled and state=='Prepared','Retry send':state in ('Failed','Unknown'),
+                'Discard':state in ('Draft','Prepared')}.get(name,False)
             button.setEnabled(idle and allowed)
 
     def reject(self):

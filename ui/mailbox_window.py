@@ -35,7 +35,7 @@ class MailboxWindow(QWidget):
         self.settings = IdentitySettings(identity)
         self.settings.contacts_ready.connect(self.settings_contacts)
         self.service_factory = service_factory or self.production_service
-        self.setWindowTitle('QuMail — Gmail mail (development)')
+        self.setWindowTitle('QuMail')
         self.resize(1000, 720)
         # Retain the presentation shell's restrained dark palette, not its fixture workflow.
         self.setStyleSheet('QWidget { background:#0B1220; color:#E5EDF6; } '
@@ -43,8 +43,8 @@ class MailboxWindow(QWidget):
             'QTableWidget,QPlainTextEdit { background:#111D2E; selection-background-color:#254B70; } '
             'QPushButton:disabled { color:#8290A3; } QPushButton:focus,QComboBox:focus,QLineEdit:focus,QPlainTextEdit:focus { border:2px solid #78B9FF; }')
         layout = QVBoxLayout(self)
-        self.banner = QLabel('Development · production approval pending · '+
-                             ('Gmail submission explicitly enabled' if gmail_enabled else 'Gmail submission disabled'))
+        self.banner = QLabel('🔒️  ' + ('Gmail submission enabled' if gmail_enabled else 'Gmail submission disabled — launch with --dev-gmail-submit to send'))
+        self.banner.setStyleSheet(f'color: #818CF8; background: #1E2238; padding: 5px 12px; font-size: 11px;')
         layout.addWidget(self.banner)
         self.accounts = QComboBox(); layout.addWidget(self.accounts)
         self.accounts.currentIndexChanged.connect(self.select_account)
@@ -56,7 +56,7 @@ class MailboxWindow(QWidget):
             ('Cancel', self.cancel), ('Lock', self.identity.lock)]:
             button = QPushButton(text); button.clicked.connect(lambda checked=False, fn=action:fn())
             self.buttons[text] = button; bar.addWidget(button)
-        self.status = QLabel('Open Settings to unlock or enroll an explicitly configured Google account.')
+        self.status = QLabel('Open Settings to unlock or connect your Google account.')
         self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True); layout.addWidget(self.status)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(['Read state', 'From (transport claim)', 'Subject (transport claim)', 'Date', 'Verified reference thread'])
