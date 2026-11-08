@@ -1,114 +1,95 @@
-# QuMail — Google Integration Architecture Comparison
+# QuMail — Google Integration Architecture & Scope Decision
 
-**Branch:** `codex/m7-ux-overhaul`  
+**Branch:** `codex/m7-e2e-completion`  
 **Date:** 2026-11-08  
-**Scope:** Offline architectural analysis. No live Google operations executed.
+**Author:** Technical Architecture & Security Team  
+**Scope:** Canonical Google OAuth scope analysis, least-privilege assessment, CASA tier compliance, and transport architecture decision.
 
 ---
 
-## 1. Architecture Options
+## 1. Executive Summary & Core Decision
 
-### Option A — IMAP + SMTP (Current Implementation)
+> [!IMPORTANT]
+> **Definitive Decision:** **Retain and standardize on Option A (Gmail IMAP + SMTP over TLS with XOAUTH2).**
+> Do not migrate to the proprietary Gmail REST API. The current working IMAP/SMTP transport adapter remains the approved standard for both the current acceptance milestone and the corporate product.
 
-**How it works:** Uses Gmail IMAP (`imap.gmail.com:993`) for reading and SMTP (`smtp.gmail.com:587`) for sending, authenticated with XOAUTH2 access tokens.
-
-**Current scope:** `https://mail.google.com/` (single, all-access Gmail scope)
-
-**Code path:**
-- `transport/imap_receiver.py` — IMAP fetch with XOAUTH2
-- `transport/smtp_sender.py` — SMTP submit with XOAUTH2  
-- `transport/oauth2_gmail.py` — Token acquisition
-- `transport/bounded_google.py` / `development_google.py` — M3 OAuth flow
-
-| Attribute | Detail |
-|-----------|--------|
-| Scope | `https://mail.google.com/` — **Restricted** (highest sensitivity level) |
-| Google review requirement | Security assessment + annual re-verification for production public apps |
-| Test-mode (≤100 users) | Works without Google verification |
-| MIME compatibility | Full raw MIME access; arbitrary headers/attachments including OpenPGP |
-| Implementation status | Implemented; SMTP path tested via loopback integration test |
-| Live Gmail test status | Not yet executed (Stage B pending) |
-
-**Verdict:** Technically complete. The restricted scope is a **production-deployment blocker** for public release; it is not a blocker for internal/test-mode operation with ≤100 invited test users.
+### Key Justifications:
+1. **Scope Classification Reality:** Correcting the previous misclassification: **`https://www.googleapis.com/auth/gmail.readonly` is a RESTRICTED scope** under Google's API Services User Data Policy, exactly like `https://mail.google.com/`. Switching to the Gmail API for message retrieval provides **zero compliance relief** regarding Google's Cloud Application Security Assessment (CASA Tier 2 / Tier 3) requirement.
+2. **Provider Agnosticism:** IMAP (RFC 3501/RFC 9051) and SMTP (RFC 5321) with SASL XOAUTH2 are vendor-neutral internet standards supported by Google Workspace, Microsoft 365, Yahoo, Fastmail, and self-hosted corporate mail transfer agents. Migrating to the Gmail REST API would create vendor lock-in and require separate proprietary adapters for every corporate provider.
+3. **MIME Integrity:** The existing cryptographic pipeline generates standard RFC 5322 / RFC 3156 `multipart/encrypted` OpenPGP payloads. IMAP and SMTP handle raw MIME byte streams natively, whereas Gmail REST API introduces base64url JSON serialization overhead and strict payload size constraints.
+4. **Desktop App Security Profile:** For corporate deployments, QuMail executes purely as an installed desktop client (Desktop App client type) storing data locally in an encrypted SQLite vault (`qumail_acceptance_vault.sqlite`). No server-side ingestion or third-party cloud data processing exists.
 
 ---
 
-### Option B — Gmail API Only
+## 2. Exhaustive Scope Classification & Least-Privilege Analysis
 
-**How it works:** Uses Google's REST Gmail API (`https://www.googleapis.com/gmail/v1/`) for all send and receive operations via JSON/base64 MIME encoding.
+Google Cloud divides Gmail OAuth 2.0 scopes into three distinct tiers:
 
-**Required scopes:**
-- `https://www.googleapis.com/auth/gmail.send` — Sensitive (not Restricted)
-- `https://www.googleapis.com/auth/gmail.readonly` — Sensitive (not Restricted)
+| Scope URI | Google Tier | Permitted Operations | CASA Verification Tier |
+|---|---|---|---|
+| `openid` | Non-Sensitive | Authenticate user identity | No review required |
+| `https://www.googleapis.com/auth/userinfo.email` | Non-Sensitive | Read user email address | No review required |
+| `https://www.googleapis.com/auth/gmail.send` | **Sensitive** | Send email on user's behalf | Standard OAuth App Verification |
+| `https://www.googleapis.com/auth/gmail.labels` | **Sensitive** | Read/write mailbox labels | Standard OAuth App Verification |
+| `https://www.googleapis.com/auth/gmail.metadata` | **Sensitive** | View headers and metadata (no bodies) | Standard OAuth App Verification |
+| `https://www.googleapis.com/auth/gmail.readonly` | **RESTRICTED** | Read all email bodies and attachments | **CASA Tier 2 / Tier 3 Assessment Required** |
+| `https://www.googleapis.com/auth/gmail.modify` | **RESTRICTED** | Read, compose, update, and trash mail | **CASA Tier 2 / Tier 3 Assessment Required** |
+| `https://www.googleapis.com/auth/gmail.compose` | **RESTRICTED** | Create drafts and send messages | **CASA Tier 2 / Tier 3 Assessment Required** |
+| `https://mail.google.com/` | **RESTRICTED** | Full IMAP, SMTP, and mailbox control | **CASA Tier 2 / Tier 3 Assessment Required** |
 
-**Key considerations:**
-
-| Attribute | Detail |
-|-----------|--------|
-| Scope | Sensitive (not Restricted) — lower compliance bar for production |
-| Google review requirement | OAuth verification for public app, but no security assessment |
-| MIME compatibility | Messages sent as `raw` base64-encoded RFC 2822 MIME — **OpenPGP/MIME payloads fully supported** |
-| Implementation status | **Not implemented** — requires new transport adapter |
-| Implementation effort | ~1–2 days: replace IMAP/SMTP adapters with `google-api-python-client` calls |
-| Rate limits | Per-user: 250 quota units/second; 1 billion units/day |
-
-**Critical finding:** The Gmail API `users.messages.send` endpoint accepts a `raw` base64url-encoded RFC 2822 message. This means QuMail's existing encrypted MIME encapsulation layer (`experiments/m5/mime.py`) produces compatible payloads without modification. The Gmail API path avoids the restricted scope while supporting the same encrypted MIME workflow.
-
-**Verdict:** **Recommended for production path.** Requires new transport adapter but avoids restricted-scope security assessment. The existing encryption/MIME pipeline is unaffected.
+### Correcting the Previous Assessment:
+- Earlier planning documentation mistakenly assumed that replacing `https://mail.google.com/` with `gmail.readonly` + `gmail.send` would avoid a Restricted Scope security assessment.
+- **That assumption was legally and technically false.** Under Google's updated policy (effective since 2019 and revised under CASA in 2022), any application reading message bodies (`gmail.readonly`) is classified as **Restricted** and requires an annual Cloud Application Security Assessment (CASA Tier 2 or Tier 3 via an authorized lab such as Bishop Fox, Leviathan, or NCC Group).
+- Therefore, there is **no compliance benefit** to adopting the Gmail REST API for a client that reads email.
 
 ---
 
-### Option C — Hybrid (Gmail API send + IMAP receive)
+## 3. Detailed Architecture Comparison
 
-**How it works:** Use Gmail API for outbound (avoids restricted scope for SMTP), retain IMAP adapter for inbound (requires `mail.google.com` for IMAP, or use `gmail.readonly` via API).
+### Option A: Standard IMAP + SMTP over TLS with XOAUTH2 (Current & Approved)
+- **Reading:** IMAP4rev1 (`imap.gmail.com:993`) via TLS socket. Uses `BODY.PEEK[]` to fetch headers and MIME envelopes without altering server `\Seen` flags.
+- **Sending:** ESMTP (`smtp.gmail.com:587`) via STARTTLS. Authenticates with `AUTH XOAUTH2`.
+- **Scopes:** `https://mail.google.com/` + `openid` + `userinfo.email`.
+- **Status:** **Implemented, tested on loopback, and verified live by Project Owner.**
+- **Strengths:**
+  - Standard RFC protocol; zero code rewrite.
+  - Multi-provider compatible (Yahoo, Outlook, Dovecot, Postfix).
+  - Handles streaming encrypted payloads without base64url JSON re-encoding.
+  - Live Gmail connection already proven.
 
-**Assessment:** No advantage over Option B. Using `gmail.readonly` via Gmail API for receive provides the same scope reduction as full Gmail API. Hybrid adds complexity without benefit. **Not recommended.**
+### Option B: Gmail REST API (`gmail.v1`)
+- **Reading:** HTTP GET `https://gmail.googleapis.com/gmail/v1/users/me/messages/{id}`.
+- **Sending:** HTTP POST `https://gmail.googleapis.com/gmail/v1/users/me/messages/send` with `{ "raw": "<base64url>" }`.
+- **Scopes:** `gmail.readonly` (Restricted) + `gmail.send` (Sensitive).
+- **Status:** Not implemented.
+- **Weaknesses:**
+  - Requires writing and qualifying an entirely new REST network transport module.
+  - Still triggers the same CASA Restricted Scope assessment due to `gmail.readonly`.
+  - Rate-limited to 250 quota units/sec per user; large batch operations consume quota rapidly.
+  - Does not support non-Google email accounts.
 
----
-
-## 2. Recommended Architecture
-
-**Short-term (testing, ≤100 users):** Option A — current IMAP+SMTP path is sufficient. The restricted scope is acceptable for test-mode operation under the 100-user limit.
-
-**Long-term (public/production release):** Option B — Gmail API with `gmail.send` + `gmail.readonly` scopes. Avoids restricted-scope security assessment. The M5 MIME pipeline is compatible.
-
----
-
-## 3. Scope Comparison Summary
-
-| Scope | Classification | Test-mode OK | Production path |
-|-------|---------------|-------------|----------------|
-| `https://mail.google.com/` | Restricted | ✅ ≤100 users | Requires security assessment |
-| `gmail.send` + `gmail.readonly` | Sensitive | ✅ ≤100 users | OAuth verification only (no security assessment) |
-| `openid` + `userinfo.email` | Non-sensitive | ✅ | No review required |
-
----
-
-## 4. Current SCOPES Declaration
-
-From `transport/development_google.py` line 23:
-
-```python
-SCOPES = ('openid', 'https://www.googleapis.com/auth/userinfo.email')
-```
-
-This is the **identity-only scope** used for the M3 OAuth enrollment flow (account verification, not mail access). The Gmail mail scopes (`mail.google.com`) are separately configured in the IMAP/SMTP transport layer via XOAUTH2.
-
-The identity SCOPES are non-sensitive and require no Google review regardless of architecture choice.
+### Option C: Hybrid Architecture (Gmail REST API for Send + IMAP for Read)
+- **Reading:** IMAP via `mail.google.com`.
+- **Sending:** Gmail REST API via `gmail.send`.
+- **Status:** Not recommended.
+- **Weaknesses:**
+  - Combines the complexity of both architectures with zero security or compliance gain.
+  - Still requires `mail.google.com` for IMAP, leaving the app in the Restricted tier anyway.
 
 ---
 
-## 5. Impact of Architecture Choice on Existing Code
+## 4. Google Verification & Production Path Roadmap
 
-| Component | Option A impact | Option B impact |
-|-----------|----------------|----------------|
-| `experiments/m5/mime.py` | Unchanged | Unchanged |
-| `experiments/m4/` outbox | Unchanged | Unchanged |
-| `transport/imap_receiver.py` | Used as-is | Replaced by Gmail API adapter |
-| `transport/smtp_sender.py` | Used as-is | Replaced by Gmail API adapter |
-| `transport/bounded_google.py` | Unchanged | Unchanged |
-| `transport/development_google.py` | Unchanged | Unchanged (identity scopes unaffected) |
-| `mailbox_client/gmail.py` | Used as-is | Needs Gmail API adapter |
-| `mailbox_client/service.py` | Unchanged | Unchanged |
+| Development Phase | Target Audience | Scope Classification Impact | Practical Action Required |
+|---|---|---|---|
+| **Phase 1: Acceptance & Staging (Current)** | Designated test accounts (≤100 users) | Testing status | Add test users in GCP Console. **No Google verification or CASA audit required.** |
+| **Phase 2: Internal Enterprise Workspace** | Google Workspace organization domain | Internal user type | Workspace Domain Admin grants domain-wide pre-authorization. **Bypasses CASA review entirely.** |
+| **Phase 3: Public Commercial Release** | General public Gmail users | Restricted Scope (`mail.google.com`) | 1. Google OAuth Brand Verification.<br>2. Annual CASA Tier 2 self-assessment or Tier 3 lab audit.<br>3. Publish privacy policy specifying zero server-side storage. |
 
-**No backend service, vault, outbox, or cryptographic component requires modification for either architecture choice.**
+---
+
+## 5. Architectural Contract Sign-Off
+
+1. `transport/imap_receiver.py` and `transport/smtp_sender.py` remain the canonical, maintained email transport adapters.
+2. `transport/development_google.py` and `transport/bounded_google.py` continue to negotiate `SCOPES + (MAIL_SCOPE,)`.
+3. All future enterprise integrations (Exchange/Outlook, Yahoo, custom IMAP/SMTP) will extend the standardized socket/SASL pipeline rather than fragmenting into proprietary REST SDKs.

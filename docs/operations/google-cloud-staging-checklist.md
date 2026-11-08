@@ -46,12 +46,12 @@ The required scope depends on the chosen integration architecture (see integrati
 | `openid` | Non-sensitive | No review required |
 | `userinfo.email` | Non-sensitive | No review required |
 
-### Recommended alternative — Gmail API (avoids restricted scope)
+### Alternative architecture — Gmail API
 
 | Scope | Classification | Google requirement |
 |-------|---------------|-------------------|
 | `https://www.googleapis.com/auth/gmail.send` | **Sensitive** | Verification required for public app; test-mode OK for ≤100 users |
-| `https://www.googleapis.com/auth/gmail.readonly` | **Sensitive** | Same as above |
+| `https://www.googleapis.com/auth/gmail.readonly` | **Restricted** | Security assessment (CASA) required for public app; test-mode OK for ≤100 users |
 | `openid` | Non-sensitive | No review required |
 | `userinfo.email` | Non-sensitive | No review required |
 

@@ -175,3 +175,50 @@ def test_settings_close_event_does_not_lock_service(qapp):
     # service.lock must NOT have been called on closeEvent
     assert mock_service.lock.call_count == 0
     settings.dispose()
+
+
+# ---------------------------------------------------------------------------
+# 6. Onboarding Wizard Navigation
+# ---------------------------------------------------------------------------
+
+def test_onboarding_wizard_steps(qapp):
+    """
+    Verify that the OnboardingWizard initializes with 4 steps, allows step navigation,
+    and finishes cleanly.
+    """
+    from ui.onboarding_wizard import OnboardingWizard
+    from unittest.mock import Mock
+
+    mock_mailbox = Mock()
+    mock_mailbox.session.snapshot.active = None
+    wizard = OnboardingWizard(mock_mailbox)
+
+    assert wizard._stack.count() == 4
+    assert wizard._stack.currentIndex() == 0
+
+    # Advance through steps
+    wizard._go_step(1)
+    assert wizard._stack.currentIndex() == 1
+    wizard._go_step(2)
+    assert wizard._stack.currentIndex() == 2
+    wizard._go_step(0)
+    assert wizard._stack.currentIndex() == 0
+
+    wizard.close()
+
+
+# ---------------------------------------------------------------------------
+# 7. MailActions Secure Compose UI Enhancements
+# ---------------------------------------------------------------------------
+
+def test_mail_actions_secure_compose_elements():
+    """
+    Verify that MailActions has the end-to-end encryption badge and
+    the Send Securely button.
+    """
+    import inspect
+    import ui.mail_actions as ma
+    source = inspect.getsource(ma.MailActions.__init__)
+    assert "End-to-End Encrypted (OpenPGP)" in source
+    assert "Send Securely" in source
+    assert hasattr(ma.MailActions, "send_securely")

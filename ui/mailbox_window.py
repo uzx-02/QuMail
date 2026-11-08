@@ -1,4 +1,5 @@
-"""Gmail-first development inbox. No sample data, demo account or automatic send."""
+"""Gmail-first development inbox with corporate UX enhancements.
+No sample data, demo account or automatic send."""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -6,7 +7,7 @@ import threading
 import time
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QTableWidget, QTableWidgetItem, QPlainTextEdit, QAbstractItemView, QFileDialog)
+    QComboBox, QTableWidget, QTableWidgetItem, QPlainTextEdit, QAbstractItemView, QFileDialog, QLineEdit)
 from experiments.m4.model import AccountAccess
 from experiments.m5.model import Budget
 from experiments.m5.provider import Provider
@@ -15,7 +16,7 @@ from mailbox_client.service import MailboxService
 from mailbox_client.model import Display, Failure, Code
 from .identity_settings import IdentitySettings
 from .mail_actions import MailActions
-from .mail_accessibility import configure,error_message
+from .mail_accessibility import configure, error_message
 
 
 class MailboxWindow(QWidget):
@@ -36,55 +37,90 @@ class MailboxWindow(QWidget):
         self.settings.contacts_ready.connect(self.settings_contacts)
         self.service_factory = service_factory or self.production_service
         self.setWindowTitle('QuMail')
-        self.resize(1000, 720)
-        # Retain the presentation shell's restrained dark palette, not its fixture workflow.
+        self.resize(1060, 750)
         self.setStyleSheet('QWidget { background:#0B1220; color:#E5EDF6; } '
-            'QPushButton,QComboBox { background:#17263B; padding:7px; } '
+            'QPushButton,QComboBox { background:#17263B; padding:7px; border-radius:6px; } '
+            'QPushButton:hover { background:#253852; } '
             'QTableWidget,QPlainTextEdit { background:#111D2E; selection-background-color:#254B70; } '
             'QPushButton:disabled { color:#8290A3; } QPushButton:focus,QComboBox:focus,QLineEdit:focus,QPlainTextEdit:focus { border:2px solid #78B9FF; }')
         layout = QVBoxLayout(self)
         self.banner = QLabel('🔒️  ' + ('Gmail submission enabled' if gmail_enabled else 'Gmail submission disabled — launch with --dev-gmail-submit to send'))
-        self.banner.setStyleSheet(f'color: #818CF8; background: #1E2238; padding: 5px 12px; font-size: 11px;')
+        self.banner.setStyleSheet('color: #818CF8; background: #1E2238; padding: 5px 12px; font-size: 11px;')
         layout.addWidget(self.banner)
         self.accounts = QComboBox(); layout.addWidget(self.accounts)
         self.accounts.currentIndexChanged.connect(self.select_account)
+
+        # Top Action Bar
         bar = QHBoxLayout(); layout.addLayout(bar)
         self.buttons = {}
-        for text, action in [('Settings', self.settings.show), ('Refresh headers', lambda:self.start('headers')),
-            ('Older', lambda:self.start('older')), ('Open selected', lambda:self.start('open')),
-            ('Mark read', lambda:self.start('read')), ('Mark unread', lambda:self.start('unread')),
-            ('Cancel', self.cancel), ('Lock', self.identity.lock)]:
-            button = QPushButton(text); button.clicked.connect(lambda checked=False, fn=action:fn())
-            self.buttons[text] = button; bar.addWidget(button)
+        top_specs = [
+            ('⚙️ Settings', 'Settings', self.settings.show),
+            ('✨ Setup Guide', 'Setup Guide', self.show_onboarding),
+            ('🔄 Refresh headers', 'Refresh headers', lambda:self.start('headers')),
+            ('⏮️ Older', 'Older', lambda:self.start('older')),
+            ('📖 Open selected', 'Open selected', lambda:self.start('open')),
+            ('✉️ Mark read', 'Mark read', lambda:self.start('read')),
+            ('📩 Mark unread', 'Mark unread', lambda:self.start('unread')),
+            ('⏹️ Cancel', 'Cancel', self.cancel),
+            ('🔒 Lock', 'Lock', self.identity.lock),
+        ]
+        for label, canonical, action in top_specs:
+            btn = QPushButton(label); btn.clicked.connect(lambda checked=False, fn=action:fn())
+            self.buttons[label] = btn
+            self.buttons[canonical] = btn
+            bar.addWidget(btn)
+
         self.status = QLabel('Open Settings to unlock or connect your Google account.')
         self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True); layout.addWidget(self.status)
+
+        # Quick Filter Bar
+        self.search = QLineEdit()
+        self.search.setPlaceholderText('🔍  Filter loaded headers by sender or subject…')
+        self.search.setStyleSheet('background:#111D2E; border:1px solid #21262D; border-radius:6px; padding:6px 12px; color:#E5EDF6;')
+        self.search.textChanged.connect(self.filter_headers)
+        layout.addWidget(self.search)
+
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(['Read state', 'From (transport claim)', 'Subject (transport claim)', 'Date', 'Verified reference thread'])
+        self.table.setHorizontalHeaderLabels(['Status', 'From', 'Subject', 'Date', 'Security / Thread'])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.itemSelectionChanged.connect(self.selection_changed)
+        self.table.cellDoubleClicked.connect(lambda row, col: self.start('open'))
         layout.addWidget(self.table)
+
         layout.addWidget(QLabel('Protected mail: local certificate lookup, or select a certificate. Signature verification never grants identity trust.'))
         self.signers = QComboBox(); self.signers.currentIndexChanged.connect(self.selection_changed); layout.addWidget(self.signers)
         self.security = QLabel(); self.security.setTextFormat(Qt.TextFormat.PlainText)
         self.security.setWordWrap(True); layout.addWidget(self.security)
         self.content = QPlainTextEdit(); self.content.setReadOnly(True); layout.addWidget(self.content)
         self.content.setTabChangesFocus(True)
-        self.attachments=QComboBox(); layout.addWidget(self.attachments)
-        self.actions=MailActions(self,workflow_factory,gmail_enabled)
-        bar=QHBoxLayout(); layout.addLayout(bar)
-        for text,fn in [('Compose / outbox',self.actions.show),('Reply',lambda:self.actions.derive(self.display)),
-                        ('Forward',lambda:self.actions.derive(self.display,True)),('Save attachment as…',self.export_attachment),
-                        ('Group opened threads',self.group_threads)]:
-            button=QPushButton(text); button.clicked.connect(lambda checked=False,action=fn:action()); bar.addWidget(button)
-            self.buttons[text]=button
+        self.attachments = QComboBox(); layout.addWidget(self.attachments)
+        self.actions = MailActions(self, workflow_factory, gmail_enabled)
+
+        # Bottom Bar
+        bottom_bar = QHBoxLayout(); layout.addLayout(bottom_bar)
+        bottom_specs = [
+            ('✏️ New message / Outbox', 'Compose / outbox', self.actions.show),
+            ('↩️ Reply', 'Reply', lambda:self.actions.derive(self.display)),
+            ('↪️ Forward', 'Forward', lambda:self.actions.derive(self.display, True)),
+            ('💾 Save attachment as…', 'Save attachment as…', self.export_attachment),
+            ('🧵 Group opened threads', 'Group opened threads', self.group_threads),
+        ]
+        for label, canonical, fn in bottom_specs:
+            btn = QPushButton(label); btn.clicked.connect(lambda checked=False, action=fn:action())
+            self.buttons[label] = btn
+            self.buttons[canonical] = btn
+            bottom_bar.addWidget(btn)
+
         layout.addWidget(QLabel('PEEK preserves read state. HTML/resources are blocked. Attachments never auto-open. Routing, timing and size remain exposed.'))
-        configure(self,[(self.accounts,'Selected mailbox account'),(self.table,'Inbox headers — transport claims'),
-            (self.signers,'Local signer certificate; selection does not grant trust'),(self.content,'Opened message plain text'),
-            (self.attachments,'Verified attachments; file types are untrusted'),(self.security,'Signature and identity status'),
-            (self.status,'Mailbox operation status')],[self.accounts,*list(self.buttons.values())[:8],self.table,
-            self.signers,self.content,self.attachments,*list(self.buttons.values())[8:]])
+
+        unique_buttons = list(dict.fromkeys(self.buttons.values()))
+        configure(self, [(self.accounts, 'Selected mailbox account'), (self.table, 'Inbox headers — transport claims'),
+            (self.signers, 'Local signer certificate; selection does not grant trust'), (self.content, 'Opened message plain text'),
+            (self.attachments, 'Verified attachments; file types are untrusted'), (self.security, 'Signature and identity status'),
+            (self.status, 'Mailbox operation status')], [self.accounts, *unique_buttons[:9], self.search, self.table,
+            self.signers, self.content, self.attachments, *unique_buttons[9:]])
         identity.session.changed.connect(self.session_changed)
         self.timer = QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(50)
         self.session_changed(identity.session.snapshot)
@@ -93,17 +129,34 @@ class MailboxWindow(QWidget):
         helper = Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
         return MailboxService(self.identity.require(), self.access, self.identity.google, GmailMailbox(), Provider(helper))
 
+    def show_onboarding(self):
+        from .onboarding_wizard import OnboardingWizard
+        wizard = OnboardingWizard(self.identity, self)
+        wizard.exec()
+
+    def filter_headers(self, text):
+        query = (text or '').strip().lower()
+        for i in range(self.table.rowCount()):
+            if not query:
+                self.table.setRowHidden(i, False)
+                continue
+            sender_item = self.table.item(i, 1)
+            subject_item = self.table.item(i, 2)
+            sender = sender_item.text().lower() if sender_item else ''
+            subject = subject_item.text().lower() if subject_item else ''
+            self.table.setRowHidden(i, query not in sender and query not in subject)
+
     def cancel(self, clear_actions=True):
         self.epoch += 1
         if self.cancel_event: self.cancel_event.set()
         self.content.clear(); self.security.clear()
-        self.display=None; self.attachments.clear()
-        if clear_actions and hasattr(self,'actions'): self.actions.stop(True)
+        self.display = None; self.attachments.clear()
+        if clear_actions and hasattr(self, 'actions'): self.actions.stop(True)
         self.status.setText('Cancelled. A dispatched flag change may have reached Gmail; refresh to confirm.')
 
     def selection_changed(self):
         self.cancel(clear_actions=False)
-        if hasattr(self,'actions') and self.actions.pending: self.actions.stop(True)
+        if hasattr(self, 'actions') and self.actions.pending: self.actions.stop(True)
         self.status.setText('Selection changed. Open explicitly; read state is unchanged.')
 
     def session_changed(self, snapshot):
@@ -112,7 +165,7 @@ class MailboxWindow(QWidget):
         self.rows = (); self.page = None
         self.threads = {}
         self.table.setRowCount(0)
-        if hasattr(self,'actions'): self.actions.reset()
+        if hasattr(self, 'actions'): self.actions.reset()
         self.accounts.blockSignals(True); self.accounts.clear()
         for row in snapshot.accounts: self.accounts.addItem(row.address, row.context.account)
         if snapshot.active: self.accounts.setCurrentIndex(snapshot.accounts.index(snapshot.active))
@@ -120,18 +173,18 @@ class MailboxWindow(QWidget):
         self.signers.blockSignals(True); self.signers.clear()
         self.signers.addItem('Resolve local certificate (untrusted outer hint)', None)
         if self.lease:
-            self.signers.addItem(snapshot.active.address+' · own root',snapshot.active.address)
+            self.signers.addItem(snapshot.active.address+' · own root', snapshot.active.address)
         self.signers.blockSignals(False)
-        self.status.setText('Selected account. Refresh headers explicitly.' if self.lease else 'Locked / no account. Open Settings.')
+        self.status.setText('Selected account. Refresh headers explicitly.' if self.lease else 'Locked / no account. Open Settings or Setup Guide.')
         self.update_controls()
 
-    def settings_contacts(self,generation,owner,contacts):
-        snapshot=self.identity.session.snapshot
-        if snapshot.generation!=generation or snapshot.active!=owner or not owner or not self.lease: return
+    def settings_contacts(self, generation, owner, contacts):
+        snapshot = self.identity.session.snapshot
+        if snapshot.generation != generation or snapshot.active != owner or not owner or not self.lease: return
         self.signers.blockSignals(True); self.signers.clear()
-        self.signers.addItem('Resolve local certificate (untrusted outer hint)',None)
-        self.signers.addItem(owner.address+' · own root',owner.address)
-        for address,root,state in contacts: self.signers.addItem(address+' · '+state,address)
+        self.signers.addItem('Resolve local certificate (untrusted outer hint)', None)
+        self.signers.addItem(owner.address+' · own root', owner.address)
+        for address, root, state in contacts: self.signers.addItem(address+' · '+state, address)
         self.signers.blockSignals(False)
 
     def select_account(self, index):
@@ -191,7 +244,7 @@ class MailboxWindow(QWidget):
                     self.status.setText('Server read flag confirmed.')
             except Exception as error:
                 self.content.clear(); self.security.clear()
-                self.display=None; self.attachments.clear()
+                self.display = None; self.attachments.clear()
                 code = getattr(error, 'code', None)
                 self.status.setText(error_message(error))
                 if isinstance(error, Failure) and error.code in (Code.STALE, Code.MISSING):
@@ -199,22 +252,30 @@ class MailboxWindow(QWidget):
         self.update_controls()
 
     def update_controls(self):
-        ready=self.lease is not None and not self.identity.session.snapshot.locked
-        idle=ready and not self.pending
-        selected=0<=self.table.currentRow()<len(self.rows)
-        for name in ('Refresh headers','Compose / outbox'): self.buttons[name].setEnabled(idle)
-        for name in ('Open selected','Mark read','Mark unread'): self.buttons[name].setEnabled(idle and selected)
-        self.buttons['Older'].setEnabled(idle and self.page is not None and self.page.before is not None)
-        self.buttons['Lock'].setEnabled(ready)
-        self.buttons['Reply'].setEnabled(idle and self.display is not None and
-            (self.display.protected is None or self.display.protected.verified_confidential))
-        self.buttons['Forward'].setEnabled(idle and self.display is not None)
-        self.buttons['Save attachment as…'].setEnabled(idle and self.display is not None and self.attachments.count()>0)
-        self.buttons['Group opened threads'].setEnabled(idle and bool(self.threads))
+        ready = self.lease is not None and not self.identity.session.snapshot.locked
+        idle = ready and not self.pending
+        selected = 0 <= self.table.currentRow() < len(self.rows)
+        for name in ('Refresh headers', 'Compose / outbox'):
+            if name in self.buttons: self.buttons[name].setEnabled(idle)
+        for name in ('Open selected', 'Mark read', 'Mark unread'):
+            if name in self.buttons: self.buttons[name].setEnabled(idle and selected)
+        if 'Older' in self.buttons:
+            self.buttons['Older'].setEnabled(idle and self.page is not None and self.page.before is not None)
+        if 'Lock' in self.buttons:
+            self.buttons['Lock'].setEnabled(ready)
+        if 'Reply' in self.buttons:
+            self.buttons['Reply'].setEnabled(idle and self.display is not None and
+                (self.display.protected is None or self.display.protected.verified_confidential))
+        if 'Forward' in self.buttons:
+            self.buttons['Forward'].setEnabled(idle and self.display is not None)
+        if 'Save attachment as…' in self.buttons:
+            self.buttons['Save attachment as…'].setEnabled(idle and self.display is not None and self.attachments.count() > 0)
+        if 'Group opened threads' in self.buttons:
+            self.buttons['Group opened threads'].setEnabled(idle and bool(self.threads))
         self.actions.update_controls()
 
-    def show_display(self,result):
-        self.display=result
+    def show_display(self, result):
+        self.display = result
         self.security.setText(result.security+('\nAuthenticated reference thread: '+result.thread if result.thread else
                              '\nNo verified thread relationship established.'))
         self.content.setPlainText(result.subject+'\n\n'+result.body)
@@ -223,34 +284,33 @@ class MailboxWindow(QWidget):
             for a in result.protected.attachments:
                 self.attachments.addItem(f'{a.name} · {len(a.data)} bytes · claimed {a.media_type}')
         if result.key:
-            if result.thread: self.threads[result.key]=result.thread
-            else: self.threads.pop(result.key,None)
-            for index,row in enumerate(self.rows):
-                if row.key==result.key:
-                    self.table.setItem(index,4,QTableWidgetItem(result.thread or 'Unverified / none'))
+            if result.thread: self.threads[result.key] = result.thread
+            else: self.threads.pop(result.key, None)
+            for index, row in enumerate(self.rows):
+                if row.key == result.key:
+                    self.table.setItem(index, 4, QTableWidgetItem(result.thread or 'Unverified / none'))
 
     def render_rows(self):
         self.table.blockSignals(True); self.table.setRowCount(len(self.rows))
-        for index,row in enumerate(self.rows):
-            for column,value in enumerate(('Read' if row.seen else 'Unread',row.sender,row.subject,row.date,
-                                           self.threads.get(row.key,''))):
-                self.table.setItem(index,column,QTableWidgetItem(value))
+        for index, row in enumerate(self.rows):
+            for column, value in enumerate(('Read' if row.seen else 'Unread', row.sender, row.subject, row.date,
+                                           self.threads.get(row.key, ''))):
+                self.table.setItem(index, column, QTableWidgetItem(value))
         self.table.resizeColumnsToContents(); self.table.blockSignals(False)
 
     def group_threads(self):
         self.cancel(clear_actions=False)
-        self.rows=tuple(sorted(self.rows,key=lambda row:(0,self.threads[row.key],row.key.uid)
-            if row.key in self.threads else (1,'',row.key.uid)))
+        self.rows = tuple(sorted(self.rows, key=lambda row:(0, self.threads[row.key], row.key.uid)
+            if row.key in self.threads else (1, '', row.key.uid)))
         self.render_rows(); self.table.clearSelection()
         self.status.setText('Grouped only authenticated references from verified identities opened on this page. References express author claims, not proof of another message.')
 
     def export_attachment(self):
-        if self.display is None or self.attachments.currentIndex()<0: return
-        # Never construct a path from a sender-provided filename.
-        path,_=QFileDialog.getSaveFileName(self,'Save verified attachment to a NEW file')
+        if self.display is None or self.attachments.currentIndex() < 0: return
+        path, _ = QFileDialog.getSaveFileName(self, 'Save verified attachment to a NEW file')
         if path:
             self.actions.show()
-            self.actions.start('export',source=self.display,index=self.attachments.currentIndex(),destination=path)
+            self.actions.start('export', source=self.display, index=self.attachments.currentIndex(), destination=path)
 
     def update_seen(self, key, seen):
         self.rows = tuple(replace(r, seen=seen) if r.key == key else r for r in self.rows)

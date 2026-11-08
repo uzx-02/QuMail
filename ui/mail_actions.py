@@ -25,8 +25,16 @@ class MailActions(QDialog):
         self.setWindowTitle('QuMail — Secure Compose')
         self.resize(900, 800)
         layout = QVBoxLayout(self)
-        self.notice = QLabel('🔒  Encrypted · No Bcc · Up to 3 recipients · Body limit 8 KiB · Up to 4 attachments (16 KiB total)')
-        self.notice.setWordWrap(True); layout.addWidget(self.notice)
+        # Header Security Badge & Policy Notice
+        badge_layout = QHBoxLayout()
+        self.badge = QLabel("🔒  End-to-End Encrypted (OpenPGP)")
+        self.badge.setStyleSheet("color: #22C55E; background: #052E16; border: 1px solid #166534; border-radius: 6px; padding: 4px 10px; font-weight: bold; font-size: 12px;")
+        badge_layout.addWidget(self.badge)
+        badge_layout.addStretch()
+        self.notice = QLabel('No Bcc · Up to 3 recipients · Body limit 8 KiB · Up to 4 attachments (16 KiB total)')
+        self.notice.setStyleSheet("color: #8B949E; font-size: 11px;")
+        badge_layout.addWidget(self.notice)
+        layout.addLayout(badge_layout)
         self.to = QLineEdit(); self.cc = QLineEdit(); self.subject = QLineEdit()
         for name, widget in [('To (comma separated)',self.to),('Cc',self.cc),('Subject',self.subject)]:
             label=QLabel('&'+name); label.setBuddy(widget); layout.addWidget(label); layout.addWidget(widget)
@@ -36,6 +44,11 @@ class MailActions(QDialog):
         self.files = QListWidget(); self.files.setMaximumHeight(80); layout.addWidget(self.files)
         bar = QHBoxLayout(); layout.addLayout(bar)
         self.editor_buttons=[]
+        self.send_secure_btn = QPushButton("🚀 Send Securely")
+        self.send_secure_btn.setStyleSheet("background-color: #4F46E5; color: #FFFFFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.send_secure_btn.clicked.connect(self.send_securely)
+        bar.addWidget(self.send_secure_btn)
+        self.editor_buttons.append(self.send_secure_btn)
         for name, fn in [('New draft',self.new),('Add attachment',self.add_attachment),('Remove attachment',self.remove_attachment),
                          ('Verify recipients',lambda:self.start('verify')),('Save encrypted draft',lambda:self.start('save'))]:
             b=QPushButton(name); b.clicked.connect(lambda checked=False, action=fn:action()); bar.addWidget(b)
@@ -132,6 +145,34 @@ class MailActions(QDialog):
         i=self.files.currentRow()
         if i>=0: self.attachments=self.attachments[:i]+self.attachments[i+1:]; self.show_files()
 
+    def send_securely(self):
+        draft = self.draft()
+        if not draft.to:
+            self.status.setText('Enter at least one recipient in the To field before sending.')
+            return
+        to_recipients = ", ".join(draft.to)
+        if self.submission_enabled:
+            reply = QMessageBox.question(
+                self,
+                'Confirm Secure Send',
+                f'Encrypt with verified recipient keys and send to:\n\n{to_recipients}\n\nProceed with transmission?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        else:
+            reply = QMessageBox.information(
+                self,
+                'Prepare Secure Message',
+                f'Message will be encrypted and stored in the local Outbox for:\n\n{to_recipients}\n\nNote: SMTP submission is disabled in development mode without --dev-gmail-submit.',
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Ok
+            )
+            if reply != QMessageBox.StandardButton.Ok:
+                return
+        self.start('send_securely')
+
     def selected(self):
         i=self.table.currentRow()
         return self.rows[i].operation if 0<=i<len(self.rows) else None
@@ -153,7 +194,7 @@ class MailActions(QDialog):
             if QMessageBox.question(self,'Explicit action',text)!=QMessageBox.StandardButton.Yes: return
             acknowledge=True
         try:
-            service=self.factory(); draft=self.draft() if action in ('save','verify') else None
+            service=self.factory(); draft=self.draft() if action in ('save','verify','send_securely') else None
         except Exception:
             self.status.setText('Vault/provider unavailable.'); return
         if action=='archive': self.window.cancel(clear_actions=False)
@@ -165,6 +206,13 @@ class MailActions(QDialog):
         def work():
             if action=='save': return service.save(lease,draft,budget,editing)
             if action=='verify': return service.recipients(lease,draft,budget)
+            if action=='send_securely':
+                op = service.save(lease, draft, budget, editing)
+                service.prepare(lease, op, key, budget)
+                if self.submission_enabled:
+                    res = service.submit(lease, op, budget)
+                    return ('submitted', res)
+                return ('prepared', op)
             if action=='list': return service.outbox(lease,budget)
             if action=='load': return service.load(lease,operation,budget)
             if action=='prepare': return service.prepare(lease,operation,key,budget)
@@ -206,6 +254,16 @@ class MailActions(QDialog):
                     self.clear_draft(); self.status.setText('Prepared and durably frozen. Refresh outbox; submission is a separate action.')
                 elif action=='submit':
                     self.status.setText(f'{value.state.value}: {value.reason}. Refresh outbox. No automatic retry.')
+                elif action=='send_securely':
+                    mode, res = value
+                    self.clear_draft()
+                    if mode == 'submitted':
+                        from ui.outbox_state_labels import label_for_state
+                        state_label = label_for_state(res.state.value)
+                        self.status.setText(f'Protected email sent! State: {state_label} ({res.reason}).')
+                    else:
+                        self.status.setText('Message encrypted & prepared in Outbox. (Submission disabled in current mode).')
+                    self.start('list')
                 else: self.status.setText(str(value))
             except Exception as error:
                 self.status.setText(error_message(error))
