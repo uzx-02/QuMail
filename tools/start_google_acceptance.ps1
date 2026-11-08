@@ -87,7 +87,7 @@ try {
     }
 
     if ($CheckOnly) {
-        Write-Host 'Preflight passed. Application not launched; vault contents not read; no database created; no credentials read.'
+        Write-Host 'Preflight passed. Application not launched; Google client configuration validated; no user tokens accessed; no vault database, directory, or Credential Manager entry created or accessed.'
         return
     }
 

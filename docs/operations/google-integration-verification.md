@@ -266,17 +266,21 @@ The exact user-facing disclosure text distinguishing local processing, external 
 > - **Private Keys:** Your OpenPGP private signing and decryption keys are generated locally, stored exclusively inside your local encrypted vault, and are never transmitted to Google, QuMail developers, or any third party [Verified].
 >
 > **4. Server Infrastructure & Telemetry Substantiation:**  
-> Source-code inspection of the modern QuMail desktop codebase (`main.py`, `ui/`, `mailbox_client/`, `transport/development_google.py`, `experiments/m3/` through `m6/`) substantiates that:  
+> Source-code inspection of active modern application paths in the QuMail desktop codebase (`main.py`, `ui/`, `mailbox_client/`, `transport/development_google.py`, `experiments/m3/` through `m6/`) substantiates that:  
 > - QuMail operates with **no developer-hosted backend servers** for ordinary email operations [Verified].  
 > - No telemetry collection SDKs (e.g. Sentry, Bugsnag, Datadog), usage analytics trackers, or remote crash-reporting backends are integrated into or contacted by the desktop application runtime [Verified].  
-> - Active network traffic from the desktop application runtime is strictly constrained to Google’s documented OAuth, IMAP, and SMTP endpoints (`*.google.com`, `*.googleapis.com`) and the local loopback interface (`127.0.0.1`) used during browser OAuth callback handling [Verified].
+> - Active network traffic from the desktop application runtime is strictly constrained to Google’s documented OAuth, IMAP, and SMTP endpoints (`*.google.com`, `*.googleapis.com`) and the local loopback interface (`127.0.0.1`) used during browser OAuth callback handling [Verified].  
+> *(Note: This substantiation is based on exhaustive source-code and dependency inspection of active application paths, not an external network-wide penetration test).*
 
 ---
 
 ## 5. Corrected Acceptance Matrix & Semantic Clarifications
 
 ### A. Operational Clarifications
-- **`M12-PRE-01` Preflight (Option A Contract):** Validates runtime Python interpreter, native provider binaries (`qumail-m5-provider.exe`), and client JSON syntax without requiring an existing vault file or creating any directories. It returns exit code 0 in pre-vault check mode. Zero directories, zero files, zero credential writes, and zero network calls are performed.
+- **`M12-PRE-01` Preflight (Option A Contract):**
+  * Validates the local Python runtime environment, native provider binaries (`qumail-m5-provider.exe`), and reads and validates the Google OAuth client configuration JSON (client ID and secret syntax) without requiring an existing vault file or creating any directories.
+  * It returns exit code 0 in pre-vault check mode.
+  * *Precise Credential & State Boundaries:* Zero Google user access tokens or refresh tokens are accessed; zero vault-stored account credentials or secrets are accessed; Windows Credential Manager is neither read nor modified; zero OAuth exchanges or Google network connections occur; zero vault databases, directories, or other filesystem artifacts are created.
 - **`M12-VAULT-01` UI State (Sending Disabled):**
   - Launched **WITHOUT** `-EnableGmailSubmit`.
   - In `IdentitySettings`: displays `Unlocked · sending disabled` (by design, Settings never provides a mail send interface).
@@ -286,7 +290,13 @@ The exact user-facing disclosure text distinguishing local processing, external 
   - `ACCEPTED` in the outbox represents **Google SMTP server acceptance** (`250 2.0.0 OK`).
   - It does **not** prove recipient inbox arrival, decryption, or signature validity.
   - Recipient arrival, decryption, signature validation, and attachment verification are evaluated as separate, observable acceptance steps.
-  - **Explicit Stop Condition for Ambiguous Submission:** If an outbox operation transitions to `UNKNOWN` (`unknown_submission_outcome`), the operator must **HALT IMMEDIATELY**. Do not click retry. Reconcile with the recipient out-of-band and inspect the Gmail Sent Mail folder before taking any further action.
+  - **Explicit Stop Condition for Ambiguous Submission:** If an outbox operation transitions to `UNKNOWN` (`interrupted_acceptance_unknown`), the operator must **HALT IMMEDIATELY**. Do not click retry. Reconcile with the recipient out-of-band and inspect the Gmail Sent Mail folder before taking any further action.
+- **Interrupted-Submission UI Enforcement (`M12-ISOL-04`):**
+  - *Detection & Transition:* `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) scans for outbox records in `SUBMITTING` state on startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
+  - *UI Submission Prevention:* `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
+  - *Explicit Retry Gating:* In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which triggers a blocking confirmation dialog (`QMessageBox.question`): *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  - *Synthetic Offline Fixture Gating:* Because creating a real interrupted submission in a live environment requires intentionally killing the process during SMTP transmission (which risks corrupting live vault state and sending duplicate emails to real accounts), `M12-ISOL-04` is executed as an offline synthetic test against a dedicated SQLite fixture and is explicitly gated by the project owner.
+  - *Out-of-Band Reconciliation Requirement:* An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (due to transit delays, greylisting, or spam filters). The operator must inspect the Gmail web interface **Sent Mail** folder and verify delivery status with the recipient out-of-band before considering an explicit retry.
 
 ### B. Six-Level State & Authorization Classification
 Every acceptance test is classified into one of six operational tiers:
@@ -303,7 +313,7 @@ Every acceptance test is classified into one of six operational tiers:
 
 | Test ID | Tier | Operation Category | Preconditions | Procedure | Expected Observable Result | Modifies State? | Requires Owner Approval? | Stop Condition |
 |---|---|---|---|---|---|:---:|:---:|---|
-| **M12-PRE-01** | **Tier 1** | Pure Dry-Run Preflight (Option A) | Local environment configured; client JSON present; launcher present. | Run `start_google_acceptance.ps1 -CheckOnly -GoogleClient <path> -Vault <path>` (omitting `-AllowNewVault`). | Script validates Python runtime, native Sequoia helper, and client JSON; reports pre-vault check mode; exits 0 without creating files or directories. | None (0 files/dirs, 0 network, 0 credentials) | No | Non-zero exit code or any filesystem/network mutation. |
+| **M12-PRE-01** | **Tier 1** | Pure Dry-Run Preflight (Option A) | Local environment configured; client JSON present; launcher present. | Run `start_google_acceptance.ps1 -CheckOnly -GoogleClient <path> -Vault <path>` (omitting `-AllowNewVault`). | Script validates Python runtime, native Sequoia helper, and reads/validates Google client configuration JSON; reports pre-vault check mode; exits 0 without creating files or directories; accesses no user tokens; reads/modifies no Credential Manager entries; performs no network calls. | None (Reads client JSON config; 0 user tokens, 0 Credential Manager access, 0 files/dirs created, 0 network calls) | No | Non-zero exit code or any filesystem/network mutation. |
 | **M12-VAULT-01** | **Tier 3** | Vault Creation (Sending Disabled) | `M12-PRE-01` verified; disposable path chosen; `-EnableGmailSubmit` omitted. | Launch QuMail via `start_google_acceptance.ps1 -Vault <path> -GoogleClient <path> -AllowNewVault` (NO `-EnableGmailSubmit`); click **"Create vault"** in Settings; enter passphrase. | Parent directory created; `%LOCALAPPDATA%\...\acceptance.sqlite` created; master key written to Windows Credential Manager (`QuMail M3 local vault`). Settings displays `Unlocked · sending disabled`; Mailbox displays safe state without Gmail submission enabled. | Persistent Disk & Credential Store | **Yes** | Failure to initialize database or unexpected network socket connection. |
 | **M12-AUTH-01** | **Tier 4** | OAuth Enrollment (Account A) | Vault unlocked; Account A configured as Test User in Google Cloud Console. | In Settings, select **"Enroll account"**; set Alias `A`; click **"Authorize with Google"**; complete browser consent within 180s. | Loopback listener accepts code; ID token validated; Sequoia PGP root key generated; tokens stored encrypted in SQLite. | Persistent Vault (Account A row) | **Yes** | Clock skew failure, token rejection, or failure to generate local root key. |
 | **M12-AUTH-02** | **Tier 4** | OAuth Enrollment (Account B) | Account A enrolled; Account B configured as Test User in Google Cloud Console. | In Settings, select **"Enroll account"**; set Alias `B`; click **"Authorize with Google"**; complete browser consent within 180s. | Loopback listener accepts code; ID token validated; distinct Sequoia PGP root key generated; tokens stored encrypted. | Persistent Vault (Account B row) | **Yes** | Root fingerprint collision with Account A or token rejection. |
@@ -320,17 +330,18 @@ Every acceptance test is classified into one of six operational tiers:
 | **M12-SEND-02** | **Tier 6** | Controlled Reply & Forward (B → A) | Original message opened in Account B; sending enabled. | Click **"Reply"**; add text; save, prepare, submit once. Reopen; click **"Forward"**; select A; save, prepare, submit once. | Both submissions transition to `ACCEPTED`. Account A refreshes headers and decrypts both messages successfully. | Persistent Vault & Remote Google SMTP | **Yes** | Ambiguous SMTP outcome or signature mismatch. |
 | **M12-FLAG-01** | **Tier 5** | IMAP Flag Mutation | Test message present in mailbox. | Select message; click **"Mark read"** → refresh (verify read). Click **"Mark unread"** → refresh (verify unread). Click **"Open selected"** → refresh (verify remains unread). | Server flags updated only upon explicit button click; opening message preserves prior unread state. | Remote Gmail IMAP Mailbox Flags | **Yes** | Opening message alters unread flag on Gmail server. |
 | **M12-ISOL-03** | **Tier 3** | Restart Durability (Accepted Records) | Outbox contains accepted/sent records from Stage E. | Close QuMail application; restart via live launcher; unlock vault. | All historical outbox operations, attempts, digests, and delivery receipts reload bit-for-bit from SQLite; zero network calls. | None (Read-only verification of SQLite) | **Yes** | Missing outbox records or automatic network transmission on restart. |
-| **M12-ISOL-04** | **Tier 3** | Startup Outbox Recovery (Interrupted Submission) | Controlled offline test fixture with synthetic `SUBMITTING` outbox row. | Launch against test fixture; outbox recovery runs (`Workflows.outbox()` calling `offline.recover()`). | Record transitions to state `UNKNOWN`; reason set to `unknown_submission_outcome`; UI flags record; duplicate submission blocked. | Local Test Database Only (0 Network) | **Yes** | Automatic resubmission or failure to transition interrupted state to `UNKNOWN`. |
+| **M12-ISOL-04** | **Tier 3** | Startup Outbox Recovery (Interrupted Submission) | Controlled offline test fixture with synthetic `SUBMITTING` outbox row (owner gated). | Launch against offline test fixture; outbox recovery runs (`Workflows.outbox()` calling `offline.recover()`). Inspect UI outbox controls and retry behavior. | Record transitions to state `UNKNOWN` with reason `interrupted_acceptance_unknown`; UI blocks `submit`; `retry` requires explicit confirmation of duplicate risk; zero automatic resubmissions occur. Out-of-band reconciliation required before retry. | Local Test Database Only (0 Network) | **Yes** | Automatic resubmission, transition failure, or unconfirmed retry. |
 
 ---
 
 ## 7. Staged Execution Plan with Separate Gates
 
-The 17 acceptance tests are strictly partitioned into six sequential stages, each gated by explicit verification before subsequent stages can be authorized. Approval for any single stage does **not** authorize subsequent stages:
+The 18 acceptance tests are strictly partitioned into six sequential stages, each gated by explicit verification before subsequent stages can be authorized. Approval for any single stage does **not** authorize subsequent stages:
 
 ### Stage A — Offline & Local Preparation (Tier 1)
 - **Tests Included:** `M12-PRE-01` (Option A pure dry-run preflight).
-- **Scope:** Validates local environment, Python venv, client JSON syntax, and native binary availability without application launch.
+- **Scope:** Validates local environment, Python venv, native Sequoia helper availability, and reads/validates Google OAuth client configuration JSON (client ID/secret syntax) without application launch.
+- **Credential & State Boundary:** Accesses zero Google user access or refresh tokens; accesses zero vault-stored account credentials; reads/modifies zero Windows Credential Manager entries; performs zero OAuth exchanges or network calls; creates zero vault databases, directories, or filesystem artifacts.
 - **Launcher Mode:** `tools/start_google_acceptance.ps1 -CheckOnly -GoogleClient <path> -Vault <path>` (omitting `-AllowNewVault`).
 - **Gate 1:** Zero side effects; preflight confirms client JSON syntax and runtime components; exits 0; zero files/directories created; zero network calls.
 
@@ -367,11 +378,17 @@ The 17 acceptance tests are strictly partitioned into six sequential stages, eac
   - `M12-ISOL-03` (Restart durability for accepted records) [Tier 3]  
   - `M12-ISOL-04` (Startup outbox recovery for interrupted submission) [Tier 3]  
 - **Scope:** Evaluates in-memory view purging on account switch, vault locking while idle, token auto-renewal, simulated token failure, non-destructive reauthorization, two-way reply/forward threading, explicit read flag mutation, restart persistence, and startup outbox recovery.
+- **Interrupted Submission Recovery Architecture & UI Enforcement (`M12-ISOL-04`):**
+  * *Transition & Recovery:* `experiments/m4/services.py:117-132` (`SubmitOutbox.recover()`) detects outbox records in `SUBMITTING` state upon startup (`mailbox_client/workflows.py:113`) and transitions them within a SQLite transaction to `UNKNOWN` with reason `'interrupted_acceptance_unknown'`. No timeout-based stealing or automatic resubmission occurs.
+  * *UI Submission Prevention:* `SubmitOutbox.submit()` (`experiments/m4/services.py:72-78`) strictly enforces that only rows in `PREPARED` state can be submitted, raising `Failure(Error.TRANSITION)` if called on an `UNKNOWN` record. In `ui/mail_actions.py`, clicking "Submit once" cannot submit an `UNKNOWN` row.
+  * *Explicit Retry Gating:* In `ui/mail_actions.py:138-143`, an operator must explicitly click "Explicit retry", which displays a blocking warning: *"Prepare the SAME bytes for a separate retry? Unknown may already have been accepted; another submission can duplicate mail."* Only upon explicit operator confirmation (`QMessageBox.StandardButton.Yes`) does `SubmitOutbox.retry()` (`experiments/m4/services.py:134-140`) re-transition the operation to `PREPARED` with `acknowledge_duplicate_risk=True`, reusing the exact prepared ciphertext bytes.
+  * *Synthetic Offline Fixture Gating:* Because creating a real interrupted submission in a live environment requires intentionally killing the process during SMTP transmission (which risks corrupting live vault state and sending duplicate emails to real accounts), `M12-ISOL-04` is executed as an offline synthetic test against a dedicated SQLite fixture and is explicitly gated by the project owner.
+  * *Out-of-Band Reconciliation Requirement:* An `UNKNOWN` state cannot be resolved simply by noting the absence of the email in the recipient inbox (due to transit delays, greylisting, or spam filters). The operator must inspect the Gmail web interface **Sent Mail** folder and verify delivery status with the recipient out-of-band before considering an explicit retry.
 - **Gate 6:** Each extended test is executed only upon separate owner/authority authorization; persistence confirmed; zero duplicate sends.
 
 ---
 
-## 7. Security and Production-Readiness Clarifications
+## 8. Security and Production-Readiness Clarifications
 
 1. **Local-Only Boundary Invariant:**
    - QuMail transmits data exclusively to two endpoints: `*.google.com` (OAuth/IMAP/SMTP) and local loopback (`127.0.0.1`).
@@ -386,21 +403,21 @@ The 17 acceptance tests are strictly partitioned into six sequential stages, eac
 
 ---
 
-## 8. Summary of Documentation Updates
+## 9. Summary of Documentation Updates
 
-1. **Created:** [`docs/operations/google-integration-verification.md`](file:///c:/Users/uzx/Desktop/Aavishkar-26/QuMail/docs/operations/google-integration-verification.md) — Comprehensive technical verification document containing the complete runtime call graph, M4 historical reconciliation, and explicit answers to all 10 architectural questions.
-2. **Updated:** [`docs/operations/google-live-acceptance-plan.md`](file:///c:/Users/uzx/Desktop/Aavishkar-26/QuMail/docs/operations/google-live-acceptance-plan.md) — Updated to reflect the six-level state and authorization tiers, explicit testing-mode refresh token recovery test (`M12-TOKEN-03`), token renewal test (`M12-TOKEN-02`), and precise UI status descriptions.
+1. **Created:** [`docs/operations/google-integration-verification.md`](file:///c:/Users/uzx/Desktop/Aavishkar-26\QuMail/docs/operations/google-integration-verification.md) — Comprehensive technical verification document containing the complete runtime call graph, M4 historical reconciliation, and explicit answers to all 10 architectural questions.
+2. **Updated:** [`docs/operations/google-live-acceptance-plan.md`](file:///c:/Users/uzx/Desktop/Aavishkar-26\QuMail/docs/operations/google-live-acceptance-plan.md) — Updated to reflect the six-level state and authorization tiers, explicit testing-mode refresh token recovery test (`M12-TOKEN-03`), token renewal test (`M12-TOKEN-02`), and precise UI status descriptions.
 3. **Committed & Pushed:** The updates were committed to `codex/m7-google-live-acceptance` and pushed to `origin/codex/m7-google-live-acceptance`.
 
 ---
 
-## 9. Updated Go / No-Go Recommendation
+## 10. Updated Go / No-Go Recommendation
 
 ### Recommendation: **READY FOR CONTROLLED LIVE ACCEPTANCE (CONDITIONAL UPON OWNER PRE-CHECK)**
 
 #### Supporting Evidence:
 1. **End-to-End Runtime Pipeline Proven:** The complete path from UI compose → recipient verification → Sequoia PGP encryption → M4 durable outbox persistence → XOAUTH2 token resolution → Gmail SMTP transmission is fully verified and backed by executable tests.
-2. **Acceptance Matrix Refined:** All 16 tests now possess rigorous tier classifications (Tiers 1–6), explicit pass/fail criteria, and clear owner authorization boundaries.
+2. **Acceptance Matrix Refined:** All 18 tests now possess rigorous tier classifications (Tiers 1–6), explicit pass/fail criteria, and clear owner authorization boundaries.
 3. **Operational Preconditions Documented:** The 7-day Testing mode expiration is fully accounted for with dedicated reauthorization and recovery procedures.
 
 #### Required Owner Preconditions Before Directive Issuance:

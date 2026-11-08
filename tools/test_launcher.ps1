@@ -147,6 +147,9 @@ try {
     if ($out -notmatch "Desktop client configuration: valid") {
         throw "FAIL: Test 9 - Did not validate Desktop client JSON."
     }
+    if ($out -notmatch "Google client configuration validated; no user tokens accessed") {
+        throw "FAIL: Test 9 - Did not report precise credential access boundaries."
+    }
     Write-Host "PASS: Test 9 - Positive -CheckOnly with -AllowNewVault validated client without creating directory or database."
 } finally {
     Remove-Item -Force -Recurse -Path $testNewVaultDir -ErrorAction SilentlyContinue
