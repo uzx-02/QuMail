@@ -170,23 +170,53 @@ def test_compose_editor_text_preserved_on_failure(qapp):
 def test_compose_close_guard_when_pending(qapp):
     """
     A1: Verify that closing MailActions while an operation is pending
-    prompts the user and prevents accidental closure if rejected.
+    prompts the user with distinct, truthful messaging for transmission vs preparation
+    and prevents accidental closure if rejected.
     """
     mock_window = MockWindow()
     actions = MailActions(mock_window)
-    actions.pending.append(("active_task",))
 
+    # 1. Preparation in progress
+    actions.pending.append((1, 1, 1, Mock(), Mock(), "prepare", None, Mock()))
     close_event = QCloseEvent()
 
     # User clicks 'No' (do not cancel)
-    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
-        actions.closeEvent(close_event)
-        assert not close_event.isAccepted()  # Event was ignored; window stays open
+    captured = {}
+    def mock_question(parent, title, text, buttons, default):
+        captured["title"] = title
+        captured["text"] = text
+        return QMessageBox.StandardButton.No
 
-    # User clicks 'Yes' (confirm cancellation)
+    with patch.object(QMessageBox, "question", side_effect=mock_question):
+        actions.closeEvent(close_event)
+        assert not close_event.isAccepted()
+        assert captured["title"] == "Operation In Progress"
+        assert "Cancel preparation and close?" in captured["text"]
+
+    # User clicks 'Yes' for preparation
     with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
         actions.closeEvent(close_event)
         assert close_event.isAccepted()
+        assert "Preparation stopped before transmission" in actions.status.text()
+
+    # 2. Transmission in progress
+    actions.pending.clear()
+    actions.pending.append((1, 1, 1, Mock(), Mock(), "send_securely", None, Mock()))
+    close_event2 = QCloseEvent()
+
+    with patch.object(QMessageBox, "question", side_effect=mock_question):
+        actions.closeEvent(close_event2)
+        assert not close_event2.isAccepted()
+        assert captured["title"] == "Message Transmission In Progress"
+        assert "disconnect and close" in captured["text"].lower()
+        assert "delivery status will be marked unknown" in captured["text"].lower()
+
+    # User clicks 'Yes' for transmission disconnect
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        actions.closeEvent(close_event2)
+        assert close_event2.isAccepted()
+        assert "Disconnected while transmitting" in actions.status.text()
+        assert "Delivery status is uncertain (UNKNOWN)" in actions.status.text()
 
     actions.pending.clear()
     actions.close()

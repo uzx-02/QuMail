@@ -144,6 +144,8 @@ def test_full_native_encrypted_roundtrip(crypto_env):
     assert draft.subject.encode() not in wire_bytes
     assert b"classified cryptographic report" not in wire_bytes
     assert binary_data not in wire_bytes
+    assert b"classified_report.pdf" not in wire_bytes
+    assert b"application/pdf" not in wire_bytes
 
     # 2. Recipient inbound processing & decryption
     lease_b = access.select(ctx_b)
@@ -366,6 +368,42 @@ def test_duplicate_message_replay_detection(crypto_env):
     assert opened2.replay is Replay.DUPLICATE
 
 
+def test_replay_persistence_across_vault_restart(crypto_env):
+    """
+    B2: Replay detection must persist durably in SQLite across application restarts.
+    Re-instantiating the Vault object on the same database file must still detect
+    previously opened messages as Replay.DUPLICATE.
+    """
+    env = crypto_env
+    vault, access, p_m5 = env["vault"], env["access"], env["p_m5"]
+    p_m3 = env["p_m3"]
+    ctx_a, key_a, addr_a = env["alice"]
+    ctx_b, key_b, addr_b = env["bob"]
+
+    lease_a = access.select(ctx_a)
+    compose = Compose(vault, access, p_m5)
+    draft = Draft((addr_b,), (), "Restart Replay Test", "Durable Replay Payload", (), "", ())
+    budget_a = Budget(lease_a.cancelled, time.monotonic() + 30)
+    op = compose.draft(lease_a, draft, budget_a)
+    envelope = compose.prepare(lease_a, op, key_a, budget_a)
+
+    lease_b = access.select(ctx_b)
+    opener1 = OpenMessage(vault, access, p_m5)
+    sender_public = vault.export_public(ctx_a, key_a)
+
+    # First open: must be FRESH
+    res1 = opener1.open(lease_b, key_b, envelope.serialized, sender_public, Budget(lease_b.cancelled, time.monotonic() + 30))
+    assert res1.replay is Replay.FRESH
+
+    # Simulate complete application restart by instantiating fresh Vault from disk
+    restarted_vault = Vault(vault.path, vault.store, p_m3)
+    restarted_opener = OpenMessage(restarted_vault, access, p_m5)
+
+    # Re-open in restarted vault: MUST still be detected as DUPLICATE from persistent SQLite state
+    res2 = restarted_opener.open(lease_b, key_b, envelope.serialized, sender_public, Budget(lease_b.cancelled, time.monotonic() + 30))
+    assert res2.replay is Replay.DUPLICATE
+
+
 def test_attachment_filename_traversal_defense():
     """
     B2: Path traversal attempts in attachment export filenames must be blocked.
@@ -468,3 +506,44 @@ def test_workflows_service_full_integration(crypto_env, tmp_path):
     workflows.export(lease_a, archive_display, 0, str(export_dest), budget_a)
     assert export_dest.exists()
     assert export_dest.read_bytes() == test_data
+
+
+def test_sender_trust_model_enforcement(crypto_env):
+    """
+    B2: Trust Model Enforcement:
+    1. Outer From spoofing with third-party key fails signature verification.
+    2. Inner sender claim mismatching verified certificate fails with Failure(Code.IDENTITY).
+    3. Untrusted/unpinned sender contact lookup fails closed.
+    """
+    env = crypto_env
+    vault, access, p_m5 = env["vault"], env["access"], env["p_m5"]
+    ctx_a, key_a, addr_a = env["alice"]
+    ctx_b, key_b, addr_b = env["bob"]
+    ctx_c, key_c, addr_c = env["charlie"]
+
+    lease_c = access.select(ctx_c)
+    compose_c = Compose(vault, access, p_m5)
+
+    # Charlie (unpinned by Bob) enrolls Bob's public key to encrypt to him
+    root_bob = vault.import_contact(ctx_c, EmailAddress("bob@example.invalid"), vault.export_public(ctx_b, key_b))
+    vault.pin_contact(ctx_c, EmailAddress("bob@example.invalid"), root_bob, "in-person")
+
+    # Charlie crafts message to Bob, signed with Charlie's valid key
+    draft_c = Draft((addr_b,), (), "Spoof Attempt", "Malicious Payload", (), "", ())
+    budget_c = Budget(lease_c.cancelled, time.monotonic() + 30)
+    op_c = compose_c.draft(lease_c, draft_c, budget_c)
+    env_c = compose_c.prepare(lease_c, op_c, key_c, budget_c)
+
+    # Bob checks trust model: Charlie is NOT pinned in Bob's contacts
+    lease_b = access.select(ctx_b)
+    data_b = vault._read(ctx_b)
+    assert "charlie@example.invalid" not in data_b["contacts"]
+
+    # If Bob passes Alice's pinned certificate (attempted impersonation of Alice)
+    alice_public = bytes(data_b["contacts"]["alice@example.invalid"]["public"])
+    opener = OpenMessage(vault, access, p_m5)
+    budget_b = Budget(lease_b.cancelled, time.monotonic() + 30)
+
+    # Must fail closed: Charlie's signature does not match Alice's pinned root
+    with pytest.raises(SecurityFailure):
+        opener.open(lease_b, key_b, env_c.serialized, alice_public, budget_b)

@@ -135,14 +135,46 @@ class MailActions(QDialog):
         return Workflows(self.window.identity.require(),self.window.access,Provider(helper),
                          self.window.identity.google,gmail_enabled=self.gmail_enabled)
 
+    def _is_submitting_pending(self):
+        return any(item[5] in ('submit', 'send_securely') for item in self.pending if len(item) > 5)
+
+    def _confirm_close_or_cancel(self):
+        if not self.pending:
+            return True
+        if self._is_submitting_pending():
+            title = 'Message Transmission In Progress'
+            text = (
+                'A message is currently being transmitted to the mail server.\n\n'
+                'Closing this window will disconnect the client, but the mail server '
+                'may still accept and deliver the message.\n\n'
+                'If disconnected, delivery status will be marked UNKNOWN and cannot be recalled.\n\n'
+                'Do you want to disconnect and close the window?'
+            )
+        else:
+            title = 'Operation In Progress'
+            text = (
+                'Cryptographic preparation is currently in progress.\n\n'
+                'Closing this window will stop preparation before any message is sent.\n\n'
+                'Cancel preparation and close?'
+            )
+        return QMessageBox.question(
+            self, title, text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        ) == QMessageBox.StandardButton.Yes
+
     def stop(self, clear=False):
+        was_submitting = self._is_submitting_pending()
         self.epoch+=1
         if self.cancel_event: self.cancel_event.set()
         if clear:
             self.clear_draft()
             self.window.content.clear(); self.window.security.clear()
             self.window.display=None; self.window.attachments.clear()
-        self.status.setText('Cancelled. Refresh outbox to inspect the durable result; cancellation cannot recall accepted mail.')
+        if was_submitting:
+            self.status.setText('Disconnected while transmitting. Delivery status is uncertain (UNKNOWN); check outbox. Disconnecting cannot recall mail if accepted by server.')
+        else:
+            self.status.setText('Cancelled. Preparation stopped before transmission.')
 
     def clear_draft(self):
         self.operation=None; self.attachments=(); self.references=(); self.in_reply_to=''
@@ -353,12 +385,8 @@ class MailActions(QDialog):
             button.setEnabled(idle and allowed)
 
     def reject(self):
-        if self.pending:
-            if QMessageBox.question(self, 'Operation in Progress',
-                'A secure cryptographic or transmission operation is currently in progress.\n\nCancel active work and close?',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-                return
+        if not self._confirm_close_or_cancel():
+            return
         self.close()
 
     def derive(self,source,forward=False):
@@ -373,12 +401,8 @@ class MailActions(QDialog):
         self.show(); self.start('forward' if forward else 'reply',source=source,recipients=recipients,confirmed=confirmed)
 
     def closeEvent(self,event):
-        if self.pending:
-            if QMessageBox.question(self, 'Operation in Progress',
-                'A secure cryptographic or transmission operation is currently in progress.\n\nClosing this window will cancel active work. Are you sure you want to cancel?',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-                event.ignore()
-                return
+        if not self._confirm_close_or_cancel():
+            event.ignore()
+            return
         self.stop(True)
         event.accept()

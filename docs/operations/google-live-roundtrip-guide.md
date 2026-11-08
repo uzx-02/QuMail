@@ -50,34 +50,70 @@ The application adheres to honest corporate delivery semantics. It never present
 
 ### 3. TM-07: Retrieve and Decrypt Protected Message Procedure
 
-This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/encrypted` OpenPGP message from Gmail IMAP over TLS using read-only PEEK, verify the sender's Ed25519 signature against the local vault, and decrypt the payload locally.
+This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/encrypted` OpenPGP message from Gmail IMAP over TLS using read-only PEEK, verify the sender's Ed25519 signature against the local vault, decrypt the payload locally, and render the verified content safely.
 
-1. **Preconditions:**  
-   - Vault unlocked with active recipient identity (`uzair.valiacollege@gmail.com`).
-   - Sender public key (`uzair.shaikh.sec@gmail.com`) pinned in recipient's contact store.
-   - At least one valid protected message exists in the Gmail Inbox.
-2. **Exact User Action:**  
-   - In Mailbox window, click **"🔄 Refresh headers"**.
-   - Select the target protected message row in the table.
-   - Double-click or click **"📖 Open selected"**.
-3. **Expected Result:**  
-   - IMAP `BODY.PEEK[]` fetches message wire bytes over TLS without clearing the `\Seen` flag on Gmail.
-   - Reader renders message subject and plaintext body.
-   - Security panel displays: `🔒 End-to-End Encrypted (OpenPGP) · Verified Sender: uzair.shaikh.sec@gmail.com · Valid signature`.
-   - Any attachments are listed in the attachment selector with valid byte sizes.
-4. **Failure Conditions:**  
-   - Network timeout or TLS handshake failure.
-   - Unknown sender certificate (`Failure(Error.POLICY)`): Displays clear guidance to import certificate in Settings.
-   - Corrupted ciphertext or tampered payload: Fails closed without releasing unverified plaintext.
-5. **Evidence to Capture:**  
-   - Screen capture of opened message with security verification panel.
-   - Message UID and Date header.
-   - Console/log verification showing PEEK query.
-6. **Rollback or Safe-Stop Procedure:**  
-   - Click **"⏹️ Cancel"** to stop pending socket worker.
-   - PEEK ensures Gmail mailbox state is unaltered; no server rollback needed.
-7. **Authorization Required:**  
-   - Explicit Project Owner approval to fetch message bodies from `uzair.valiacollege@gmail.com`.
+1. **Exact Prerequisites:**  
+   - Acceptance Vault: `C:\Users\uzx\Desktop\Aavishkar-26\qumail_acceptance_vault.sqlite` exists and is unlocked.
+   - Client Secrets: `C:\Users\uzx\Desktop\Aavishkar-26\client_secret_953431543574-t137vvqsic9jbrddt9dr1t3g5hjkj5p3.apps.googleusercontent.com.json` is configured.
+   - Recipient Account: `uzair.valiacollege@gmail.com` (Account B) is enrolled with active private key in vault.
+   - Sender Trust Pinning: The public certificate of `uzair.shaikh.sec@gmail.com` (Account A) is pinned in Account B's contact store.
+   - Authorized Message Fixture: Exactly one authentic protected test message exists in the Inbox of `uzair.valiacollege@gmail.com`.
+
+2. **Precise Mailbox & Account Boundaries:**  
+   - **Active Reading Account:** `uzair.valiacollege@gmail.com` (Account B) ONLY.
+   - **Expected Authenticated Sender:** `uzair.shaikh.sec@gmail.com` (Account A).
+   - **Strict Mailbox Isolation:** Under no circumstances may any message other than the designated test fixture be opened, fetched, or inspected.
+
+3. **Protected-Message Test Fixture Identification:**  
+   - **Subject Identifier:** The subject line begins with `[QuMail-TM07-Acceptance]` (e.g., `[QuMail-TM07-Acceptance] Confidential Q7 Architecture Proposal`).
+   - **Sender Address:** `From: uzair.shaikh.sec@gmail.com`.
+   - **Content Type:** `multipart/encrypted; protocol="application/pgp-encrypted"`.
+   - **Operator Action Rule:** The operator MUST visually match both the `[QuMail-TM07-Acceptance]` subject prefix and the authorized sender address before selecting or opening the row.
+
+4. **Sequential Execution Pipeline & Architectural Distinctions:**  
+   QuMail enforces four distinct, decoupled stages. Each stage must pass independently before the next begins:
+   - **Stage 1 — IMAP Retrieval:** Executes `UID FETCH <uid> (BODY.PEEK[])` over TLS to `imap.gmail.com:993`. The `BODY.PEEK[]` command guarantees that Gmail's `\Seen` flag is **never modified** on the remote server.
+   - **Stage 2 — MIME Parsing & Armor Extraction:** The raw bytes are parsed by `experiments/m5/mime.py`. It confirms `Kind.MODERN` classification, parses the outer headers, extracts the OpenPGP ASCII armor block, and verifies that outer MIME boundaries are intact.
+   - **Stage 3 — Cryptographic Decryption & Signature Verification:**  
+     - Invokes native Rust provider `qumail-m5-provider.exe` (`decrypt_and_verify`).
+     - Decrypts ciphertext using Account B's private key (`key_handle`).
+     - Verifies sender Ed25519 signature against Account A's pinned certificate (`data['contacts']['uzair.shaikh.sec@gmail.com']['public']`).
+     - Verifies inner MIME headers: authenticated inner sender address matches the certificate identity (`sender in signer['addresses']`).
+     - Verifies recipient address: Account B address appears in inner `draft.to` or `draft.cc`.
+     - Replay check: Computes SHA-256 digest of decrypted inner payload and checks SQLite `m5_seen_v1` store (`Replay.FRESH`).
+   - **Stage 4 — User-Visible GUI Rendering:**  
+     - Renders decrypted subject and body in the reading pane.
+     - Displays truthful verified security badge with sender identity and signature status.
+     - Populates attachment selector with verified filenames and byte lengths.
+
+5. **Expected UI Result:**  
+   - **Status Bar:** `Signature valid; identity: Trusted Contact; replay: Fresh; outer mismatches: none; archive: False`.
+   - **Reading Pane:** Decrypted plain text displayed clearly without cryptographic escape characters.
+   - **Security Badge:** Green shield indicator: `🔒 End-to-End Encrypted (OpenPGP) · Verified Sender: uzair.shaikh.sec@gmail.com · Valid signature`.
+   - **Attachment Area:** Attachment listed with matching byte size (if attached).
+
+6. **Failure & Stop Conditions:**  
+   - **Network Timeout / IMAP Connection Loss:** Worker terminates cleanly; UI displays network retry status; mailbox state is unaltered.
+   - **Untrusted Sender Certificate (`Failure(Code.SIGNER)`):** If sender key is missing or unpinned, QuMail **stops immediately and fails closed**. No ciphertext is decrypted, and no unverified plaintext is released.
+   - **Corrupted Armor / Tampered Ciphertext (`SecurityFailure`):** If ciphertext bits are flipped, decryption aborts with cryptographic error. Zero plaintext released.
+   - **Signature Verification Failure (`Failure(Code.PROVIDER)`):** If signature does not match sender certificate, verification fails closed.
+   - **Replay Conflict (`Replay.CONFLICT`):** Message ID matches previously seen message with different payload digest; flags potential replay attack.
+
+7. **Privacy-Preserving Evidence Collection:**  
+   - **Masking Mandatory:** When capturing screenshots of the mailbox view, the operator MUST crop or mask all unrelated inbox message rows (personal, institutional, or third-party emails).
+   - **No Credential Exposure:** Screenshots, screen recordings, and log outputs must NEVER display OAuth access tokens, refresh tokens, client secrets, or private key material.
+   - **Required Artifacts:**
+     1. Cropped screenshot of the reading pane showing the decrypted `[QuMail-TM07-Acceptance]` body and green verified security badge.
+     2. Verification of message UID and Date header from log output.
+     3. Console log snippet confirming IMAP read-only `BODY.PEEK[]` command.
+
+8. **Rollback & Safe-Stop Procedure:**  
+   - In-flight retrieval can be stopped cleanly by clicking **"⏹️ Cancel"**.
+   - Because `BODY.PEEK[]` is strictly read-only, Gmail server state is unchanged. No remote rollback or flag reset is required.
+
+9. **Authorization Required:**  
+   - **STOP:** Execution of TM-07 is NOT authorized by this milestone audit.
+   - Requires explicit, separate authorization from the Project Owner (Mohammed Uzair Shaikh) before any live IMAP fetch of message bodies is initiated.
 
 ---
 
