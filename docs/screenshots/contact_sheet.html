@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuMail 1.0 — Visual Design & Verification Contact Sheet</title>
+    <style>
+        :root {
+            --bg-base: #0B1220;
+            --bg-card: #161B22;
+            --border: #30363D;
+            --text-primary: #E6EDF3;
+            --text-secondary: #8B949E;
+            --accent: #6366F1;
+            --online: #22C55E;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 40px;
+        }
+        header {
+            max-width: 1200px;
+            margin: 0 auto 40px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 24px;
+        }
+        h1 { font-size: 28px; margin: 0 0 8px; color: #FFF; }
+        p.subtitle { color: var(--text-secondary); margin: 0; font-size: 14px; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-title { font-size: 16px; font-weight: 600; }
+        .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: #1E2238;
+            color: var(--accent);
+        }
+        .img-container {
+            padding: 16px;
+            background: #0D1117;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .card-body {
+            padding: 16px 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .card-body ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+        .card-body li {
+            margin-bottom: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>QuMail 1.0 — Corporate UX Visual Contact Sheet</h1>
+        <p class="subtitle">Pixel-rendered verification captures across all core views (Module 1.5 Workstream C). Verified authentic PyQt6 widget rendering.</p>
+    </header>
+
+    <div class="grid">
+        <!-- 01 Welcome Screen -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">1. Welcome Screen</span>
+                <span class="badge">800×600 · FIRST RUN</span>
+            </div>
+            <div class="img-container">
+                <img src="01_welcome_screen.png" alt="Welcome Screen">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Hierarchy:</b> Centered brand shield ('Q' logo) with high-contrast title and call-to-action.</li>
+                    <li><b>Copy:</b> Business-oriented value proposition; zero cryptographic jargon.</li>
+                    <li><b>Action:</b> Clear primary action button guiding user to setup.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 02 How Protected Email Works -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">2. Onboarding: How It Works</span>
+                <span class="badge">620×520 · WIZARD STEP 2</span>
+            </div>
+            <div class="img-container">
+                <img src="02_how_it_works_guide.png" alt="How It Works Guide">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Educational Cards:</b> 3 distinct pillars (Local Encryption, Cryptographic Verification, Honest Delivery States).</li>
+                    <li><b>Clarity:</b> Eliminates confusion about server delivery vs recipient decryption.</li>
+                    <li><b>Navigation:</b> Step progress counter and Back/Next navigation.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 03 Account Connection & Permissions -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">3. Permission Transparency & Connection</span>
+                <span class="badge">620×520 · WIZARD STEP 3</span>
+            </div>
+            <div class="img-container">
+                <img src="03_account_connection_permissions.png" alt="Account Connection & Permissions">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Transparency:</b> Explicitly discloses why IMAP PEEK and SMTP scopes are requested.</li>
+                    <li><b>Security Hardening:</b> Requires explicit confirmation before vault creation/unlocking; zero silent actions.</li>
+                    <li><b>Safe Cancel:</b> Clean cancellation without dangling background workers.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 04 Main Inbox Workspace -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">4. Main Email Workspace</span>
+                <span class="badge">1060×750 · INBOX VIEW</span>
+            </div>
+            <div class="img-container">
+                <img src="04_main_inbox_workspace.png" alt="Main Inbox Workspace">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Workspace Layout:</b> Prominent top action bar, account switcher, and active status banner.</li>
+                    <li><b>Search Bar:</b> Real-time filtering by sender or subject.</li>
+                    <li><b>Table Clarity:</b> Clean columns (Status, From, Subject, Date, Security / Thread) with double-click opening.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 05 Message Reader Pane -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">5. Message Reader & Verification</span>
+                <span class="badge">1060×750 · READING PANE</span>
+            </div>
+            <div class="img-container">
+                <img src="05_message_reader_pane.png" alt="Message Reader Pane">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Truthful Verification:</b> Clear panel showing signature validity, sender trust, and thread reference.</li>
+                    <li><b>Readability:</b> Distraction-free plaintext reading area with formatted headers.</li>
+                    <li><b>Attachments:</b> Verified attachment list with secure 'Save attachment as…' action.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 06 Compose Protected Email -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">6. Secure Compose Experience</span>
+                <span class="badge">900×800 · COMPOSE VIEW</span>
+            </div>
+            <div class="img-container">
+                <img src="06_compose_protected_email.png" alt="Secure Compose Window">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Truthful Indicator:</b> Dynamic badge reflects true cryptographic state (e.g., 'Recipient Keys Verified').</li>
+                    <li><b>Send Securely:</b> One-click primary button automates Save → Prepare → Submit.</li>
+                    <li><b>Data Safety:</b> Retains user input on failure/unknown; close guard prevents accidental work cancellation.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 07 Outbox Queue Status -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">7. Outbox Operations & Delivery States</span>
+                <span class="badge">900×800 · OUTBOX QUEUE</span>
+            </div>
+            <div class="img-container">
+                <img src="07_outbox_queue_status.png" alt="Outbox Queue Status">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Human-Readable Labels:</b> Mapped states ('Accepted by mail server', 'Ready to send', 'Draft').</li>
+                    <li><b>Auditability:</b> Shows exact attempt count and durable transition reason.</li>
+                    <li><b>Safety Controls:</b> Disables automatic retries on UNKNOWN; requires explicit duplicate acknowledgment.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 08 Account Settings Window -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">8. Account Identity & Settings</span>
+                <span class="badge">600×480 · SETTINGS</span>
+            </div>
+            <div class="img-container">
+                <img src="08_account_settings.png" alt="Account Settings Window">
+            </div>
+            <div class="card-body">
+                <b>Design Evaluation:</b>
+                <ul>
+                    <li><b>Decoupled Lifecycle:</b> Closing Settings does not lock the active mailbox session.</li>
+                    <li><b>Transparency:</b> Displays active Google email, root OpenPGP fingerprint, and vault path.</li>
+                    <li><b>Key Management:</b> Clear controls for contact pinning, key export, and certificate verification.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

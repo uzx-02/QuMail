@@ -126,6 +126,7 @@ def main():
     actions.body.setPlainText("Thanks Uzair,\n\nI have reviewed the attached proposal and the cryptographic specifications look solid.\nProceeding with the next milestone.\n\nRegards,\nMohammed Uzair Shaikh")
     actions.attachments = (Attachment("review_notes.pdf", "application/pdf", b"%PDF fake notes"),)
     actions.show_files()
+    actions.set_security_badge("keys_verified")
     actions.resize(900, 800)
     actions.show()
     app.processEvents()

@@ -48,7 +48,10 @@ class Session(QObject):
         self.tqr_level = TQR_DEFAULT
         self.last_key_uuid = None
         self.last_cert_path = None
-        self.account_changed.emit("")
+        try:
+            self.account_changed.emit("")
+        except RuntimeError:
+            pass
 
 
 # Single shared instance imported by other modules.

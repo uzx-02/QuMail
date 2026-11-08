@@ -27,8 +27,8 @@ class MailActions(QDialog):
         layout = QVBoxLayout(self)
         # Header Security Badge & Policy Notice
         badge_layout = QHBoxLayout()
-        self.badge = QLabel("🔒  End-to-End Encrypted (OpenPGP)")
-        self.badge.setStyleSheet("color: #22C55E; background: #052E16; border: 1px solid #166534; border-radius: 6px; padding: 4px 10px; font-weight: bold; font-size: 12px;")
+        self.badge = QLabel()
+        self.set_security_badge('draft')
         badge_layout.addWidget(self.badge)
         badge_layout.addStretch()
         self.notice = QLabel('No Bcc · Up to 3 recipients · Body limit 8 KiB · Up to 4 attachments (16 KiB total)')
@@ -89,6 +89,47 @@ class MailActions(QDialog):
             (self.status,'Compose and outbox operation status')],
             [self.to,self.cc,self.subject,self.body,self.archive,self.files,*self.editor_buttons,self.table,*list(dict.fromkeys(self.buttons.values())),stop])
 
+    def set_security_badge(self, state: str, details: str = ""):
+        configs = {
+            'draft': (
+                "✏️  Draft · Plaintext in local editor · Not yet encrypted",
+                "color: #8B949E; background: #161B22; border: 1px solid #30363D; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;"
+            ),
+            'keys_verified': (
+                "🔑  Recipient Keys Verified · OpenPGP",
+                "color: #818CF8; background: #1E2238; border: 1px solid #4F46E5; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;"
+            ),
+            'keys_unverified': (
+                "⚠️  Recipient Keys Unverified / Missing · No Bypass",
+                "color: #F59E0B; background: #2D1B00; border: 1px solid #78350F; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;"
+            ),
+            'encrypted_prepared': (
+                "🔒  End-to-End Encrypted (OpenPGP) & Frozen · Ready to Send",
+                "color: #22C55E; background: #052E16; border: 1px solid #166534; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11px;"
+            ),
+            'submitting': (
+                "📤  Sending Securely over TLS…",
+                "color: #F59E0B; background: #2D1B00; border: 1px solid #78350F; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;"
+            ),
+            'accepted': (
+                "✅  Accepted by Mail Server (Transit En Route)",
+                "color: #22C55E; background: #052E16; border: 1px solid #166534; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11px;"
+            ),
+            'failed': (
+                "❌  Send Failed · Preserved in Outbox",
+                "color: #EF4444; background: #2D1B1B; border: 1px solid #7F1D1D; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;"
+            ),
+            'unknown': (
+                "⚠️  Delivery Uncertain · Check Sent Folder Before Retry",
+                "color: #F59E0B; background: #2D1B00; border: 1px solid #78350F; border-radius: 6px; padding: 4px 10px; font-weight: 700; font-size: 11px;"
+            ),
+        }
+        text, style = configs.get(state, configs['draft'])
+        if hasattr(self, 'badge'):
+            self.badge.setText(text)
+            self.badge.setStyleSheet(style)
+            if details: self.badge.setToolTip(details)
+
     def service(self):
         helper=Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
         return Workflows(self.window.identity.require(),self.window.access,Provider(helper),
@@ -107,6 +148,7 @@ class MailActions(QDialog):
         self.operation=None; self.attachments=(); self.references=(); self.in_reply_to=''
         for field in (self.to,self.cc,self.subject,self.body): field.clear()
         self.files.clear(); self.archive.setChecked(True)
+        self.set_security_badge('draft')
 
     def reset(self):
         self.stop(True); self.rows=(); self.table.setRowCount(0)
@@ -124,6 +166,7 @@ class MailActions(QDialog):
         self.subject.setText(draft.subject); self.body.setPlainText(draft.body)
         self.attachments=draft.attachments; self.references=draft.references; self.in_reply_to=draft.in_reply_to
         self.archive.setChecked(draft.archive); self.show_files()
+        self.set_security_badge('draft')
 
     def show_files(self):
         self.files.clear()
@@ -223,6 +266,7 @@ class MailActions(QDialog):
             if action=='export': return service.export(lease,source,index,destination,budget)
             return service.derive(lease,source,budget,forward=action=='forward',recipients=recipients,confirmed=confirmed)
         self.pending.append((epoch,parent_epoch,generation,lease,cancel,action,operation,self.window.pool.submit(work)))
+        if action in ('send_securely','submit'): self.set_security_badge('submitting')
         self.status.setText('Working…')
         self.update_controls()
 
@@ -248,25 +292,48 @@ class MailActions(QDialog):
                     self.install(value); self.status.setText('Draft loaded. Review recipients, save, then prepare.'); self.show()
                 elif isinstance(value,Display):
                     self.window.show_display(value); self.status.setText('Sender archive verified and opened.')
+                elif action=='verify':
+                    self.set_security_badge('keys_verified')
+                    self.status.setText(str(value))
                 elif action=='save':
                     self.operation=value; self.status.setText('Encrypted draft saved. Refresh outbox, select it, then Prepare saved.')
                 elif action=='prepare':
+                    self.set_security_badge('encrypted_prepared')
                     self.clear_draft(); self.status.setText('Prepared and durably frozen. Refresh outbox; submission is a separate action.')
                 elif action=='submit':
-                    self.status.setText(f'{value.state.value}: {value.reason}. Refresh outbox. No automatic retry.')
+                    from ui.outbox_state_labels import label_for_state
+                    state_label = label_for_state(value.state.value)
+                    if value.state.value == 'Accepted': self.set_security_badge('accepted')
+                    elif value.state.value == 'Failed': self.set_security_badge('failed')
+                    elif value.state.value == 'Unknown': self.set_security_badge('unknown')
+                    self.status.setText(f'{state_label}: {value.reason}. Refresh outbox. No automatic retry.')
                 elif action=='send_securely':
                     mode, res = value
-                    self.clear_draft()
                     if mode == 'submitted':
                         from ui.outbox_state_labels import label_for_state
                         state_label = label_for_state(res.state.value)
-                        self.status.setText(f'Protected email sent! State: {state_label} ({res.reason}).')
+                        if res.state.value == 'Accepted':
+                            self.clear_draft()
+                            self.set_security_badge('accepted')
+                            self.status.setText(f'Protected email sent! State: {state_label} ({res.reason}).')
+                        elif res.state.value == 'Failed':
+                            self.set_security_badge('failed')
+                            self.status.setText(f'Send failed ({res.reason}). Draft preserved in editor and Outbox.')
+                        elif res.state.value == 'Unknown':
+                            self.set_security_badge('unknown')
+                            self.status.setText(f'Delivery status uncertain ({res.reason}). Check Gmail Sent folder before retrying. Automatic retry disabled.')
                     else:
+                        self.clear_draft()
+                        self.set_security_badge('encrypted_prepared')
                         self.status.setText('Message encrypted & prepared in Outbox. (Submission disabled in current mode).')
                     self.start('list')
                 else: self.status.setText(str(value))
             except Exception as error:
                 self.status.setText(error_message(error))
+                if action == 'verify':
+                    self.set_security_badge('keys_unverified', error_message(error))
+                elif action in ('send_securely', 'prepare'):
+                    self.set_security_badge('failed', error_message(error))
         self.update_controls()
 
     def update_controls(self):
@@ -286,7 +353,13 @@ class MailActions(QDialog):
             button.setEnabled(idle and allowed)
 
     def reject(self):
-        self.close()  # Escape follows the same cancellation/plaintext-clearing path as X.
+        if self.pending:
+            if QMessageBox.question(self, 'Operation in Progress',
+                'A secure cryptographic or transmission operation is currently in progress.\n\nCancel active work and close?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                return
+        self.close()
 
     def derive(self,source,forward=False):
         if source is None: return
@@ -300,5 +373,12 @@ class MailActions(QDialog):
         self.show(); self.start('forward' if forward else 'reply',source=source,recipients=recipients,confirmed=confirmed)
 
     def closeEvent(self,event):
+        if self.pending:
+            if QMessageBox.question(self, 'Operation in Progress',
+                'A secure cryptographic or transmission operation is currently in progress.\n\nClosing this window will cancel active work. Are you sure you want to cancel?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
         self.stop(True)
         event.accept()

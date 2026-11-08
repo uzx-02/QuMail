@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QLinearGradient
 from PyQt6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QStackedWidget, QFrame
+    QLineEdit, QStackedWidget, QFrame, QMessageBox
 )
 
 from ui.design_system import C, GLOBAL_STYLESHEET
@@ -267,6 +267,8 @@ class OnboardingWizard(QDialog):
 
     # ── Navigation & Actions ─────────────────────────────────────────────────
     def _go_step(self, step: int) -> None:
+        if step < self._stack.currentIndex():
+            self._cancel_auth()
         self._step_label.setText(f"STEP {step + 1} OF 4")
         self._stack.setCurrentIndex(step)
 
@@ -276,22 +278,45 @@ class OnboardingWizard(QDialog):
             self._auth_status.setText("⚠️ Please enter a valid Gmail address.")
             return
 
-        self._connect_btn.setEnabled(False)
-        self._auth_status.setText("⏳ Opening browser for Google authorization…")
-
-        # Automatically ensure local vault is initialized if locked
+        # Explicit confirmation for vault lifecycle (A3 requirement: no silent vault creation or unlock)
         try:
             snapshot = self.identity.session.snapshot
             if snapshot.locked:
-                try:
+                vault_path = str(self.identity.path) if hasattr(self.identity, 'path') else 'vault.sqlite'
+                vault_exists = hasattr(self.identity, 'path') and self.identity.path.exists()
+                if vault_exists:
+                    reply = QMessageBox.question(
+                        self,
+                        'Unlock Security Vault',
+                        f'An existing security vault was found at:\n\n{vault_path}\n\n'
+                        'Unlock this vault to enroll your account?',
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.Yes
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        self._auth_status.setText('Cancelled. Existing vault was not unlocked.')
+                        return
                     self.identity.unlock(create=False)
-                except Exception:
-                    # New vault needed
+                else:
+                    reply = QMessageBox.question(
+                        self,
+                        'Create Security Vault',
+                        f'No security vault database exists at:\n\n{vault_path}\n\n'
+                        'A new encrypted local vault database will be created on disk.\n\n'
+                        'Do you want to initialize a new vault?',
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        self._auth_status.setText('Cancelled. No new vault was created.')
+                        return
                     self.identity.unlock(create=True)
         except Exception as exc:
-            self._auth_status.setText(f"⚠️ Vault initialization: {exc}")
-            self._connect_btn.setEnabled(True)
+            self._auth_status.setText(f"⚠️ Vault initialization error: {exc}")
             return
+
+        self._connect_btn.setEnabled(False)
+        self._auth_status.setText("⏳ Opening browser for Google authorization…")
 
         # Start Google authorization flow via identity operations
         if hasattr(self.parent(), 'settings') and hasattr(self.parent().settings, 'start_auth'):
@@ -306,6 +331,16 @@ class OnboardingWizard(QDialog):
             except Exception as e:
                 self._auth_status.setText(f"⚠️ Authorization start failed: {e}")
                 self._connect_btn.setEnabled(True)
+
+    def _cancel_auth(self) -> None:
+        self._connect_btn.setEnabled(True)
+        self._auth_status.setText("")
+        if hasattr(self.parent(), 'settings') and hasattr(self.parent().settings, 'cancel'):
+            self.parent().settings.cancel()
+
+    def closeEvent(self, event) -> None:
+        self._cancel_auth()
+        event.accept()
 
     def _on_session_changed(self, snapshot) -> None:
         if snapshot.active and not snapshot.locked:

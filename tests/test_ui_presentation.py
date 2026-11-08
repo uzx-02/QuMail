@@ -213,12 +213,16 @@ def test_onboarding_wizard_steps(qapp):
 
 def test_mail_actions_secure_compose_elements():
     """
-    Verify that MailActions has the end-to-end encryption badge and
-    the Send Securely button.
+    Verify that MailActions has truthful security indicator states,
+    the end-to-end encryption badge on prepared state, and the Send Securely button.
     """
     import inspect
     import ui.mail_actions as ma
-    source = inspect.getsource(ma.MailActions.__init__)
-    assert "End-to-End Encrypted (OpenPGP)" in source
-    assert "Send Securely" in source
+    init_source = inspect.getsource(ma.MailActions.__init__)
+    badge_source = inspect.getsource(ma.MailActions.set_security_badge)
+    assert "Send Securely" in init_source
+    assert "set_security_badge" in init_source
+    assert "End-to-End Encrypted (OpenPGP)" in badge_source
+    assert "Draft · Plaintext in local editor" in badge_source
     assert hasattr(ma.MailActions, "send_securely")
+    assert hasattr(ma.MailActions, "set_security_badge")
