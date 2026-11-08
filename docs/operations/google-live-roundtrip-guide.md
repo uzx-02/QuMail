@@ -62,18 +62,45 @@ This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/enc
 2. **Precise Mailbox & Account Boundaries:**  
    - **Active Reading Account:** `uzair.valiacollege@gmail.com` (Account B) ONLY.
    - **Expected Authenticated Sender:** `uzair.shaikh.sec@gmail.com` (Account A).
+   - **Target IMAP Folder:** `INBOX`.
    - **Strict Mailbox Isolation:** Under no circumstances may any message other than the designated test fixture be opened, fetched, or inspected.
 
-3. **Protected-Message Test Fixture Identification:**  
-   - **Subject Identifier:** The subject line begins with `[QuMail-TM07-Acceptance]` (e.g., `[QuMail-TM07-Acceptance] Confidential Q7 Architecture Proposal`).
-   - **Sender Address:** `From: uzair.shaikh.sec@gmail.com`.
-   - **Content Type:** `multipart/encrypted; protocol="application/pgp-encrypted"`.
-   - **Operator Action Rule:** The operator MUST visually match both the `[QuMail-TM07-Acceptance]` subject prefix and the authorized sender address before selecting or opening the row.
+3. **Message Provenance Documentation:**  
+   The test fixture must have a verifiable, documented origin:
+   - **Author / Sender Identity:** Generated and signed exclusively by Account A (`uzair.shaikh.sec@gmail.com`) using its active Ed25519 signing key.
+   - **Ingestion Pathway:**
+     - *Primary Pathway (TM-08 $\rightarrow$ TM-07 Sequence):* The message was composed in QuMail by Account A, prepared via M5 OpenPGP provider, encrypted to Account B's public key, and transmitted to `smtp.gmail.com` via live TM-08 submission.
+     - *Alternative Pathway (Controlled Pre-Staged Injection):* The message was constructed using the QuMail native pipeline (`experiments/m5/services.py:Compose`) with authentic Account A keys and delivered to Account B's mailbox through a verified MTA channel.
+   - **Payload Invariants:** The body contains known, benign acceptance text and an optional known test attachment; zero sensitive personal data.
 
-4. **Sequential Execution Pipeline & Architectural Distinctions:**  
+4. **Mandatory Exact-Fixture Identification Step (Singleton Enforcement):**  
+   The sender-plus-subject-prefix rule is strictly an initial filter. Before fetching any message body, the operator must verify all six identification criteria against the header list:
+
+   | Fixture Identification Parameter | Expected Exact Value | Source / Verification Method |
+   |---|---|---|
+   | **Target Account** | `uzair.valiacollege@gmail.com` | Active account selector in UI |
+   | **Target IMAP Folder** | `INBOX` | Active folder context |
+   | **Expected Sender** | `uzair.shaikh.sec@gmail.com` | Message table `From` column |
+   | **Exact Subject** | `[QuMail-TM07-Acceptance] Confidential Q7 Architecture Proposal` | Operator-specified exact subject string |
+   | **RFC 5322 Message-ID** | `[OPERATOR-SUPPLIED PREREQUISITE AT LIVE RUN]` | Recorded from outbound TM-08 receipt or web header |
+   | **IMAP Message UID** | `[OPERATOR-SUPPLIED PREREQUISITE UPON REFRESH]` | Recorded from IMAP header fetch table row |
+
+   > [!CRITICAL]
+   > **The Singleton Rule (Mandatory Stop Condition):**
+   > Filtering the inbox headers by the exact subject and sender **must yield EXACTLY ONE matching candidate row**.
+   > - **If Zero candidates match:** **STOP.** The expected fixture has not yet arrived or has not synced. Do not guess or select another email.
+   > - **If Multiple candidates match:** **STOP.** Multiple test runs or duplicate subjects create ambiguity. The operator must inspect the candidate Message-IDs and supply the exact IMAP UID to disambiguate before opening.
+   > - **Only when exactly one candidate matches:** The operator is authorized to proceed with opening the message.
+
+5. **`BODY.PEEK[]` Wire Semantics & Privacy Protection:**  
+   - **Read-Only Server State:** IMAP `UID FETCH <uid> (BODY.PEEK[])` guarantees that Gmail's remote `\Seen` flag remains unmodified. The message remains unread on the Gmail server.
+   - **Full Wire Transmission Reality:** Although read-only on the server, `BODY.PEEK[]` **transmits the entire raw RFC 5322 message body and all attachment bytes over the TLS socket** into QuMail's memory. It is **not** a metadata-only query.
+   - **Privacy Imperative:** Because `BODY.PEEK[]` retrieves full message contents, opening an unintended row would stream unauthorized private correspondence over the network. The singleton candidate check (Step 4) is a mandatory safety barrier preventing inspection of unrelated messages.
+
+6. **Sequential Execution Pipeline & Architectural Distinctions:**  
    QuMail enforces four distinct, decoupled stages. Each stage must pass independently before the next begins:
-   - **Stage 1 — IMAP Retrieval:** Executes `UID FETCH <uid> (BODY.PEEK[])` over TLS to `imap.gmail.com:993`. The `BODY.PEEK[]` command guarantees that Gmail's `\Seen` flag is **never modified** on the remote server.
-   - **Stage 2 — MIME Parsing & Armor Extraction:** The raw bytes are parsed by `experiments/m5/mime.py`. It confirms `Kind.MODERN` classification, parses the outer headers, extracts the OpenPGP ASCII armor block, and verifies that outer MIME boundaries are intact.
+   - **Stage 1 — IMAP Retrieval:** Executes `UID FETCH <uid> (BODY.PEEK[])` over TLS to `imap.gmail.com:993`. Confirms successful socket transmission of wire bytes.
+   - **Stage 2 — MIME Parsing & Armor Extraction:** The raw bytes are parsed by `experiments/m5/mime.py`. It confirms `Kind.MODERN` classification, parses outer headers, extracts the OpenPGP ASCII armor block, and verifies that outer MIME boundaries are intact.
    - **Stage 3 — Cryptographic Decryption & Signature Verification:**  
      - Invokes native Rust provider `qumail-m5-provider.exe` (`decrypt_and_verify`).
      - Decrypts ciphertext using Account B's private key (`key_handle`).
@@ -86,20 +113,20 @@ This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/enc
      - Displays truthful verified security badge with sender identity and signature status.
      - Populates attachment selector with verified filenames and byte lengths.
 
-5. **Expected UI Result:**  
+7. **Expected UI Result:**  
    - **Status Bar:** `Signature valid; identity: Trusted Contact; replay: Fresh; outer mismatches: none; archive: False`.
    - **Reading Pane:** Decrypted plain text displayed clearly without cryptographic escape characters.
    - **Security Badge:** Green shield indicator: `🔒 End-to-End Encrypted (OpenPGP) · Verified Sender: uzair.shaikh.sec@gmail.com · Valid signature`.
    - **Attachment Area:** Attachment listed with matching byte size (if attached).
 
-6. **Failure & Stop Conditions:**  
+8. **Failure & Stop Conditions:**  
    - **Network Timeout / IMAP Connection Loss:** Worker terminates cleanly; UI displays network retry status; mailbox state is unaltered.
    - **Untrusted Sender Certificate (`Failure(Code.SIGNER)`):** If sender key is missing or unpinned, QuMail **stops immediately and fails closed**. No ciphertext is decrypted, and no unverified plaintext is released.
    - **Corrupted Armor / Tampered Ciphertext (`SecurityFailure`):** If ciphertext bits are flipped, decryption aborts with cryptographic error. Zero plaintext released.
    - **Signature Verification Failure (`Failure(Code.PROVIDER)`):** If signature does not match sender certificate, verification fails closed.
    - **Replay Conflict (`Replay.CONFLICT`):** Message ID matches previously seen message with different payload digest; flags potential replay attack.
 
-7. **Privacy-Preserving Evidence Collection:**  
+9. **Privacy-Preserving Evidence Collection:**  
    - **Masking Mandatory:** When capturing screenshots of the mailbox view, the operator MUST crop or mask all unrelated inbox message rows (personal, institutional, or third-party emails).
    - **No Credential Exposure:** Screenshots, screen recordings, and log outputs must NEVER display OAuth access tokens, refresh tokens, client secrets, or private key material.
    - **Required Artifacts:**
@@ -107,13 +134,13 @@ This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/enc
      2. Verification of message UID and Date header from log output.
      3. Console log snippet confirming IMAP read-only `BODY.PEEK[]` command.
 
-8. **Rollback & Safe-Stop Procedure:**  
-   - In-flight retrieval can be stopped cleanly by clicking **"⏹️ Cancel"**.
-   - Because `BODY.PEEK[]` is strictly read-only, Gmail server state is unchanged. No remote rollback or flag reset is required.
+10. **Rollback & Safe-Stop Procedure:**  
+    - In-flight retrieval can be stopped cleanly by clicking **"⏹️ Cancel"**.
+    - Because `BODY.PEEK[]` is strictly read-only, Gmail server state is unchanged. No remote rollback or flag reset is required.
 
-9. **Authorization Required:**  
-   - **STOP:** Execution of TM-07 is NOT authorized by this milestone audit.
-   - Requires explicit, separate authorization from the Project Owner (Mohammed Uzair Shaikh) before any live IMAP fetch of message bodies is initiated.
+11. **Authorization Required:**  
+    - **STOP:** Execution of TM-07 is NOT authorized by this milestone audit.
+    - Requires explicit, separate authorization from the Project Owner (Mohammed Uzair Shaikh) before any live IMAP fetch of message bodies is initiated.
 
 ---
 
