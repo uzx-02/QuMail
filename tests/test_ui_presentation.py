@@ -148,3 +148,30 @@ def test_mail_actions_button_aliases():
     for friendly, canonical in expected_pairs:
         assert f"'{friendly}'" in source or f'"{friendly}"' in source
         assert f"'{canonical}'" in source or f'"{canonical}"' in source
+
+
+# ---------------------------------------------------------------------------
+# 5. IdentitySettings closeEvent Behavior
+# ---------------------------------------------------------------------------
+
+def test_settings_close_event_does_not_lock_service(qapp):
+    """
+    Verify that closing the Settings window does not call service.lock(),
+    ensuring that an unlocked session remains active for the mailbox.
+    """
+    from unittest.mock import Mock
+    from PyQt6.QtGui import QCloseEvent
+    from ui.identity_settings import IdentitySettings
+
+    from core.account_session import DevelopmentSession
+    mock_service = Mock()
+    mock_service.session = DevelopmentSession()
+    mock_service.google = None
+
+    settings = IdentitySettings(mock_service)
+    close_event = QCloseEvent()
+    settings.closeEvent(close_event)
+
+    # service.lock must NOT have been called on closeEvent
+    assert mock_service.lock.call_count == 0
+    settings.dispose()

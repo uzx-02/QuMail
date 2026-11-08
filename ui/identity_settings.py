@@ -248,8 +248,8 @@ class IdentitySettings(QWidget):
             self.start('revoke')
 
     def closeEvent(self,event):
-        self.cancel(); self.service.lock()
-        # Closing Settings hides it. Its timer must drain cancelled results and
+        self.cancel()
+        # Closing Settings hides it without locking active session. Its timer must drain cancelled results and
         # its executor must remain usable when the mailbox reopens Settings.
         event.accept()
 
