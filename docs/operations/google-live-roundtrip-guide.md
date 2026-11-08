@@ -65,37 +65,47 @@ This test verifies that QuMail can retrieve an authentic RFC 3156 `multipart/enc
    - **Target IMAP Folder:** `INBOX`.
    - **Strict Mailbox Isolation:** Under no circumstances may any message other than the designated test fixture be opened, fetched, or inspected.
 
-3. **Message Provenance Documentation:**  
+3. **Message Provenance & Provisioning Status:**  
    The test fixture must have a verifiable, documented origin:
    - **Author / Sender Identity:** Generated and signed exclusively by Account A (`uzair.shaikh.sec@gmail.com`) using its active Ed25519 signing key.
-   - **Ingestion Pathway:**
-     - *Primary Pathway (TM-08 $\rightarrow$ TM-07 Sequence):* The message was composed in QuMail by Account A, prepared via M5 OpenPGP provider, encrypted to Account B's public key, and transmitted to `smtp.gmail.com` via live TM-08 submission.
-     - *Alternative Pathway (Controlled Pre-Staged Injection):* The message was constructed using the QuMail native pipeline (`experiments/m5/services.py:Compose`) with authentic Account A keys and delivered to Account B's mailbox through a verified MTA channel.
-   - **Payload Invariants:** The body contains known, benign acceptance text and an optional known test attachment; zero sensitive personal data.
+   - **Ingestion Pathway Status:**
+     - *Primary Pathway (TM-08 $\rightarrow$ TM-07 Live Sequence):* Composed in QuMail by Account A, prepared via M5 OpenPGP provider, encrypted to Account B's public key, and transmitted to `smtp.gmail.com` via live TM-08 submission.  
+       **CURRENT STATUS: UNAVAILABLE.** TM-08 has not been authorized or executed. This pathway remains documented as a future option only and cannot currently provide a test fixture for TM-07.
+     - *Alternative Pathway (Controlled Pre-Staged Injection):* The message was constructed using the QuMail native pipeline (`experiments/m5/services.py:Compose`) with authentic Account A keys and delivered to Account B's mailbox through a verified MTA channel.  
+       **CURRENT STATUS: DOCUMENTED PROCEDURE ONLY, NOT COMPLETED.** While the local offline cryptographic construction procedure is fully implemented and tested, no live external injection or delivery into Account B's mailbox has actually been executed or verified.
+   - **Outstanding Prerequisite:** Because neither pathway has yet produced an authorized, verified message in Account B's live mailbox, **TM-07 has an outstanding fixture-provisioning prerequisite**. TM-07 cannot be executed until a verifiable test fixture is provisioned through a separately authorized procedure.
 
-4. **Mandatory Exact-Fixture Identification Step (Singleton Enforcement):**  
-   The sender-plus-subject-prefix rule is strictly an initial filter. Before fetching any message body, the operator must verify all six identification criteria against the header list:
+4. **Mandatory Exact-Fixture Identification Step (Full 7-Element Matrix):**  
+   The sender-plus-subject-prefix rule is strictly a preliminary filter. Before fetching any message body, the operator must verify all seven identification criteria against the header list:
 
    | Fixture Identification Parameter | Expected Exact Value | Source / Verification Method |
    |---|---|---|
-   | **Target Account** | `uzair.valiacollege@gmail.com` | Active account selector in UI |
-   | **Target IMAP Folder** | `INBOX` | Active folder context |
-   | **Expected Sender** | `uzair.shaikh.sec@gmail.com` | Message table `From` column |
-   | **Exact Subject** | `[QuMail-TM07-Acceptance] Confidential Q7 Architecture Proposal` | Operator-specified exact subject string |
-   | **RFC 5322 Message-ID** | `[OPERATOR-SUPPLIED PREREQUISITE AT LIVE RUN]` | Recorded from outbound TM-08 receipt or web header |
-   | **IMAP Message UID** | `[OPERATOR-SUPPLIED PREREQUISITE UPON REFRESH]` | Recorded from IMAP header fetch table row |
+   | **1. Target Mailbox Account** | `uzair.valiacollege@gmail.com` | Active account selector in UI |
+   | **2. Target IMAP Folder** | `INBOX` | Active folder context |
+   | **3. Expected Sender** | `uzair.shaikh.sec@gmail.com` | Message table `From` column |
+   | **4. Exact Subject** | `[QuMail-TM07-Acceptance] Confidential Q7 Architecture Proposal` | Operator-specified exact subject string |
+   | **5. RFC 5322 Message-ID** | `[OPERATOR-SUPPLIED PREREQUISITE AT LIVE RUN]` | Recorded from outbound TM-08 receipt or raw header |
+   | **6. IMAP Message UID** | `[OPERATOR-SUPPLIED PREREQUISITE UPON REFRESH]` | Recorded from IMAP header fetch table row |
+   | **7. IMAP UIDVALIDITY** | `[OPERATOR-SUPPLIED PREREQUISITE UPON FOLDER SELECT]` | Recorded from IMAP SELECT/EXAMINE response |
+
+   > [!IMPORTANT]
+   > **UID and UIDVALIDITY Scoping (RFC 3501 §2.3.1.1):**
+   > An IMAP `UID` alone is not a sufficient durable mailbox identifier without its corresponding `UIDVALIDITY`. If the server changes `UIDVALIDITY` (e.g. mailbox rebuilt or re-indexed), existing UIDs may be reassigned or reordered. Therefore, `UID` and `UIDVALIDITY` must always be verified and recorded as an indivisible pair.
 
    > [!CRITICAL]
-   > **The Singleton Rule (Mandatory Stop Condition):**
-   > Filtering the inbox headers by the exact subject and sender **must yield EXACTLY ONE matching candidate row**.
-   > - **If Zero candidates match:** **STOP.** The expected fixture has not yet arrived or has not synced. Do not guess or select another email.
-   > - **If Multiple candidates match:** **STOP.** Multiple test runs or duplicate subjects create ambiguity. The operator must inspect the candidate Message-IDs and supply the exact IMAP UID to disambiguate before opening.
-   > - **Only when exactly one candidate matches:** The operator is authorized to proceed with opening the message.
+   > **The Strict Disambiguation & Stop Protocol:**
+   > Before dispatching any `BODY.PEEK[]` query:
+   > 1. Identify candidate messages using permitted header information only (From, Subject, Date).
+   > 2. Require **exactly one** candidate matching the expected sender and exact subject.
+   > 3. Verify the expected RFC 5322 `Message-ID` against that single candidate.
+   > 4. Record the `UID` and `UIDVALIDITY` pair for that candidate.
+   > 5. **STOP if any required identifier is absent, mismatched, or ambiguous.** (If 0 candidates match, stop; if multiple candidates match, stop).
+   > 6. **No Substitute Rule:** A unique sender-and-subject match must **never** be used as a substitute for verifying the remaining identifiers (`Message-ID`, `UID`, and `UIDVALIDITY`). All seven parameters must be validated before body retrieval.
 
 5. **`BODY.PEEK[]` Wire Semantics & Privacy Protection:**  
    - **Read-Only Server State:** IMAP `UID FETCH <uid> (BODY.PEEK[])` guarantees that Gmail's remote `\Seen` flag remains unmodified. The message remains unread on the Gmail server.
    - **Full Wire Transmission Reality:** Although read-only on the server, `BODY.PEEK[]` **transmits the entire raw RFC 5322 message body and all attachment bytes over the TLS socket** into QuMail's memory. It is **not** a metadata-only query.
-   - **Privacy Imperative:** Because `BODY.PEEK[]` retrieves full message contents, opening an unintended row would stream unauthorized private correspondence over the network. The singleton candidate check (Step 4) is a mandatory safety barrier preventing inspection of unrelated messages.
+   - **Privacy Imperative:** Because `BODY.PEEK[]` retrieves full message contents, opening an unintended row would stream unauthorized private correspondence over the network. The full 7-parameter identification check (Step 4) is a mandatory safety barrier preventing inspection of unrelated messages.
 
 6. **Sequential Execution Pipeline & Architectural Distinctions:**  
    QuMail enforces four distinct, decoupled stages. Each stage must pass independently before the next begins:

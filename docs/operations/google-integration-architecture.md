@@ -69,39 +69,39 @@ Under the Cloud Application Security Assessment (CASA) framework, requirements a
 - **CASA Assurance Level 2 (AL2):**  
   An independent third-party technical assessment conducted by an App Defense Alliance Authorized Lab (e.g., Bishop Fox, Leviathan Security Group, NCC Group). Required for applications with broader data exposure, higher user volume, or multi-tenant cloud processing. Assessment pricing is not universal or fixed by Google; lab pricing varies based on codebase complexity, architecture (pure desktop vs. cloud-hosted backend), and specific API scopes utilized.
 
-### 3.1 Deployment Models & Compliance Realities: Testing Mode, Internal Workspace, Domain-Wide Install, and Public Distribution
+### 3.1 Deployment Models & Governance: QuMail Explanatory Taxonomy
 
-Google OAuth 2.0 policy establishes four distinct operational categories for applications requesting user data. They must not be conflated:
+To evaluate development and deployment options under Google's OAuth 2.0 and API policies, QuMail utilizes a four-category explanatory taxonomy. *(Note: These four categories represent QuMail's operational model for architectural clarity and evaluation; they are not four formal categories defined as such by Google).*
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                        GOOGLE OAUTH 2.0 DEPLOYMENT & COMPLIANCE TIERS                  │
+│                          (QuMail Explanatory Operational Model)                        │
 ├──────────────────────────┬──────────────────────────┬──────────────────────────────────┤
 │ Category                 │ Scope / Identity Rules   │ Compliance & Assessment Burden   │
 ├──────────────────────────┼──────────────────────────┼──────────────────────────────────┤
-│ 1. External Testing Mode │ Personal Gmail or        │ • No OAuth verification or CASA  │
-│    (Active Development)  │ unverified project;      │   required for testing.          │
+│ 1. External Testing Mode │ Personal Gmail or        │ • Standard verification waived   │
+│    (Active Development)  │ unverified project;      │   for testing phase only.        │
 │                          │ User Type: "External",   │ • Hard cap of 100 Test Users.    │
 │                          │ Status: "Testing".       │ • 7-day refresh token lifespan.  │
 │                          │                          │ • "Unverified app" screen.       │
 ├──────────────────────────┼──────────────────────────┼──────────────────────────────────┤
-│ 2. Internal Organization │ Project owned by Google  │ • EXEMPT from OAuth Verification │
-│    Application           │ Workspace / Cloud        │   and CASA assessment.           │
-│    (Enterprise Intranet) │ Identity Organization;   │ • Tokens do not expire in 7 days.│
-│                          │ User Type: "Internal".   │ • No 100-user cap.               │
-│                          │                          │ • Accessible ONLY within domain. │
+│ 2. Internal Organization │ Project owned by Google  │ • Exempt from public OAuth brand │
+│    Application           │ Workspace / Cloud        │   verification consent flow.     │
+│    (Enterprise Intranet) │ Identity Organization;   │ • Security assessment (CASA/ASVS)│
+│                          │ User Type: "Internal".   │   depends on architecture & data │
+│                          │                          │   routing (not automatic waiver).│
 ├──────────────────────────┼──────────────────────────┼──────────────────────────────────┤
 │ 3. Domain-Wide Admin     │ External multi-tenant    │ • Bypasses individual user       │
 │    Installation          │ app installed domain-    │   consent prompts.               │
-│    (Workspace Admin      │ wide by customer domain  │ • DOES NOT grant developer an    │
-│    Delegation)           │ administrator.           │   automatic exemption from CASA  │
-│                          │                          │   if distributed externally.     │
+│    (Workspace Admin      │ wide by customer domain  │ • DOES NOT remove restricted-    │
+│    Approval)             │ administrator.           │   scope verification/CASA        │
+│                          │                          │   requirements for developer.    │
 ├──────────────────────────┼──────────────────────────┼──────────────────────────────────┤
 │ 4. Public External       │ User Type: "External",   │ • Mandatory Google Trust & Safety│
 │    Distribution          │ Status: "In Production", │   OAuth App Verification.        │
-│    (General Commercial)  │ multi-tenant consumer    │ • Mandatory CASA AL1 or AL2 lab  │
-│                          │ and business users.      │   assessment for Restricted      │
-│                          │                          │   scopes (mail.google.com).      │
+│    (General Commercial)  │ multi-tenant consumer    │ • Mandatory CASA assessment for  │
+│                          │ and business users.      │   Restricted scopes.             │
 └──────────────────────────┴──────────────────────────┴──────────────────────────────────┘
 ```
 
@@ -111,26 +111,28 @@ Google OAuth 2.0 policy establishes four distinct operational categories for app
    - **Configuration:** Project created under developer account; User Type = "External", Publishing Status = "Testing".
    - **Explicit User Allowlist:** Strictly limited to up to **100 explicitly invited Test Users** listed by email in Google Cloud Console. Unlisted accounts are rejected with `403 access_denied: QuMail has not completed the Google verification process`.
    - **Consent Experience:** Displays the unverified app warning interstitial (*"Google hasn't verified this app"*). Users must explicitly click *Advanced* $\rightarrow$ *"Go to QuMail (unsafe)"*.
-   - **Token Lifetime:** Refresh tokens expire automatically after **7 days** (per Google policy for unverified projects in Testing mode with external user type). Staging accounts must re-authenticate weekly.
-   - **Regulatory Scope:** Testing mode is strictly an engineering sandbox; it does **not** grant a blanket waiver from Google API Services User Data Policies or local data privacy laws.
+   - **Token Lifetime:** Refresh tokens expire automatically after **7 days** (per Google policy for unverified projects in Testing mode with external user type and sensitive/restricted scopes). Staging accounts must re-authenticate weekly.
+   - **Regulatory Scope:** Testing mode is strictly an engineering sandbox; it does **not** grant a blanket waiver from Google API Services User Data Policies or applicable security obligations.
 
-2. **Category 2: Internal-Only Organization Applications (Corporate Intranet Exemption)**
+2. **Category 2: Internal-Only Organization Applications (Corporate Intranet Exception)**
    - **Strict Prerequisite Conditions:**
      1. The Google Cloud project **must be owned by a verified Google Workspace or Cloud Identity Organization resource** (not a personal `@gmail.com` account).
-     2. The OAuth consent screen User Type **must be set to "Internal"** (this option is only available when an Organization resource owns the project).
-     3. Authentication is programmatically restricted to users belonging to that specific Workspace domain (or trusted internal organizational units).
-   - **Verification Waiver:** When these three conditions are met, Google grants an official exemption from OAuth App Verification and CASA assessments because data access is confined entirely within the enterprise that owns the application. Tokens do not expire after 7 days, there is no 100-user limit, and employees encounter no "unverified app" warnings.
+     2. The OAuth consent screen User Type **must be explicitly configured as "Internal"** (an option available solely when an Organization resource owns the project).
+     3. Authentication is programmatically restricted to users belonging to that specific Google Workspace or Cloud Identity organization.
+   - **OAuth Verification vs. Security Assessment Applicability:**
+     - *OAuth Verification Exemption:* Google officially waives the public OAuth brand/app verification process for Internal applications because data access is confined within the enterprise owning the project. Tokens do not expire in 7 days, there is no 100-user limit, and employees do not encounter the unverified-app warning screen.
+     - *Security Assessment (CASA) Reality:* Internal application status does **not** categorically exempt an organization from all CASA or security-assessment obligations. If an internal application routes restricted data through a third-party server, relies on external cloud backends, or integrates with third-party software vendors, enterprise security policies, Cloud Marketplace rules, or API governance frameworks may still trigger CASA or independent security assessment requirements. The applicable obligations must be determined based on the actual deployment architecture, hosting environment, and data flows.
 
 3. **Category 3: Domain-Wide Installation by a Workspace Administrator (Admin Pre-Approval)**
-   - **Mechanism:** A Workspace domain administrator can install an application for all or specific organizational units via Google Workspace Marketplace or configure API Controls / Security Settings.
-   - **Operational Effect:** Administrative installation grants pre-authorization on behalf of domain users, suppressing individual consent dialogs.
-   - **Critical Compliance Clarification:** Domain-wide admin installation does **not** automatically exempt an external third-party software provider from Google verification or CASA obligations. If an externally hosted or distributed multi-tenant application accesses Restricted scopes (`https://mail.google.com/` or `https://www.googleapis.com/auth/gmail.readonly`), Google requires the developer to complete OAuth App Verification and a CASA assessment before the app can be listed on the public Workspace Marketplace, unless the app is published exclusively as a private enterprise app within the customer's own domain or deployed via customized internal service-account delegation.
+   - **Mechanism:** A Workspace domain administrator can install an application for all or specific organizational units via Google Workspace Marketplace or configure administrative API Controls / Security Settings.
+   - **Operational Effect:** Administrative installation grants pre-authorization on behalf of domain users, which can remove brand-verification warning dialogs in documented enterprise scenarios.
+   - **Critical Scope Verification Reality:** Domain-wide admin installation is fundamentally distinct from the Internal user type. It does **not** automatically remove Google's restricted-scope or sensitive-scope verification requirements for the developer of an external application. An external application requesting Restricted scopes (`https://mail.google.com/` or `https://www.googleapis.com/auth/gmail.readonly`) remains subject to Google Trust & Safety review and applicable CASA assessments before general marketplace availability.
 
 4. **Category 4: Public External Distribution (Commercial Release)**
-   - **Requirements:** For broad deployment across consumer Gmail accounts (`@gmail.com`) and unmanaged third-party domains, the application must complete:
+   - **Requirements:** For broad distribution across consumer Gmail accounts (`@gmail.com`) and unmanaged third-party domains, the application must complete:
      - Google Trust & Safety Brand & Domain Verification (Search Console domain ownership, published privacy policy, video walkthrough).
-     - Cloud Application Security Assessment (CASA Tier 2 / AL2 authorized lab testing or AL1 self-assessment, depending on risk profile and data handling architecture).
-   - **Operational Benefit:** Permanent refresh tokens, unlimited global user base, verified Google brand badge.
+     - Cloud Application Security Assessment (CASA Tier 2 / AL2 authorized lab testing or AL1 self-assessment, depending on risk profile, scopes, and data handling architecture as determined by the App Defense Alliance framework).
+   - **Operational Benefit:** Permanent refresh tokens, unlimited global user base, verified Google brand trust status.
 
 ---
 
