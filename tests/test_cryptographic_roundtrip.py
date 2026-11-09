@@ -27,8 +27,9 @@ from mailbox_client.workflows import Workflows, export_path
 SecurityFailure = (M4Failure, M5Failure, BoundaryError)
 
 ROOT = Path(__file__).resolve().parents[1]
-M3_PROVIDER_BIN = ROOT / "tmp/m2/target/debug/qumail-m3-provider.exe"
-M5_PROVIDER_BIN = ROOT / "tmp/m2/target/debug/qumail-m5-provider.exe"
+from core.provider_resolver import resolve_provider
+M3_PROVIDER_BIN = resolve_provider("qumail-m3-provider")
+M5_PROVIDER_BIN = resolve_provider("qumail-m5-provider")
 
 
 class IsolatedMemoryStore:

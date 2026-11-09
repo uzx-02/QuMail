@@ -53,6 +53,11 @@ Rather than dozens of disjointed patches, work is organized into **seven substan
 
 ### WS-01: Production Baseline & Native Engine Hygiene
 * **Identifier:** `WS-01`
+* **Status:** **COMPLETED** (2026-11-09)
+* **Implementation Branch:** `codex/m7-module-1-6-ws01`
+* **Verification Evidence:** 47/47 automated tests passing (`tests/test_startup.py`, `tests/test_ws01_bootstrap_hygiene.py`, `tests/test_cryptographic_roundtrip.py`, `tests/test_cancellation_submission_semantics.py`).
+* **Implementation Report:** [m7-module-1-6-ws01-implementation-report.md](m7-module-1-6-ws01-implementation-report.md)
+* **Operations Guide:** [native-provider-build-and-distribution.md](native-provider-build-and-distribution.md)
 * **Target Gate:** Gate 0 (Immediate Pre-Pilot Gate)
 * **Objective:** Eliminate all developer-environment artifacts, invert application entry points, compile hardened native release binaries, and scrub diagnostic console output.
 * **Problems Addressed:** `M16-ONB-002`, `M16-OPS-001`, `M16-SEC-001`, `M16-INB-004`.
@@ -275,9 +280,9 @@ flowchart TD
 
 ## 4. Resource Allocation and Complexity Estimates
 
-| Workstream | Identifier | Priority | Target Gate | Estimated Complexity | Engineering Days | Primary Files |
-|---|---|---|---|---|---|---|
-| **Production Baseline & Hygiene** | WS-01 | P0 | Gate 0 | Low | 1–2 days | `main.py`, `service.py`, `Cargo.toml` |
+| Workstream | Identifier | Priority | Target Gate | Status | Engineering Days | Primary Files |
+|---|---|---|---|:---:|---|---|
+| **Production Baseline & Hygiene** | WS-01 | P0 | Gate 0 | **COMPLETED** | Completed | `main.py`, `service.py`, `bin/`, `core/` |
 | **Identity, Profile & Trust** | WS-02 | P1 | Gate 1 | Medium | 3–4 days | `model.py`, `mime.py`, `identity_service.py` |
 | **Inbound Sync & 15 MiB Limits** | WS-03 | P1 | Gate 1 | High | 5–6 days | `gmail.py`, `provider.py`, `mailbox_window.py` |
 | **Outbox Reconciliation & Resilience**| WS-04 | P1 | Gate 1 | Medium | 3–4 days | `model.py`, `workflows.py`, `mail_actions.py` |

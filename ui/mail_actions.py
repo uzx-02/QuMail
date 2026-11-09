@@ -11,6 +11,7 @@ from experiments.m5.provider import Provider
 from mailbox_client.model import Display
 from mailbox_client.workflows import Workflows, import_attachment
 from .mail_accessibility import configure,error_message
+from core.provider_resolver import resolve_provider
 
 
 class MailActions(QDialog):
@@ -131,7 +132,7 @@ class MailActions(QDialog):
             if details: self.badge.setToolTip(details)
 
     def service(self):
-        helper=Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
+        helper = resolve_provider("qumail-m5-provider")
         return Workflows(self.window.identity.require(),self.window.access,Provider(helper),
                          self.window.identity.google,gmail_enabled=self.gmail_enabled)
 

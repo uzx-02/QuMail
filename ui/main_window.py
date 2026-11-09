@@ -323,7 +323,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._nav_buttons: list[QPushButton] = []
 
-        self.setWindowTitle(f"{APP_NAME}")
+        self.setWindowTitle(f"{APP_NAME} [LEGACY RESEARCH SIMULATOR - NOT SECURE]")
         self.setMinimumSize(1100, 680)
         self.resize(1280, 760)
 
@@ -343,10 +343,10 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
 
         # Pre-release notice shown only when legacy/unauthenticated mode is active
-        notice = QLabel("⚠️  Legacy mode — unauthenticated messages only. Use nonsensitive test data.")
+        notice = QLabel("[WARNING] LEGACY RESEARCH SIMULATOR: Unauthenticated loopback CSPRNG keys. This is NOT the secure QuMail product.")
         notice.setWordWrap(True)
         notice.setStyleSheet("color: #FDE68A; background: #332B10; padding: 5px 12px; font-size: 11px;")
-        notice.setVisible(False)
+        notice.setVisible(True)
         outer.addWidget(notice)
         self._legacy_notice = notice
 

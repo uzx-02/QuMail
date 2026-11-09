@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 *.pem
 *.pyd
+*.exe
+bin/*.exe
+!bin/.gitkeep
 .pytest_cache/
 venv/
 .venv*/

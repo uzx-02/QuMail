@@ -17,6 +17,10 @@ from mailbox_client.model import Display, Failure, Code
 from .identity_settings import IdentitySettings
 from .mail_actions import MailActions
 from .mail_accessibility import configure, error_message
+from core.provider_resolver import resolve_provider
+from core.logging_config import get_logger, log_sanitized_error
+
+logger = get_logger("ui.mailbox")
 
 
 class MailboxWindow(QWidget):
@@ -126,7 +130,7 @@ class MailboxWindow(QWidget):
         self.session_changed(identity.session.snapshot)
 
     def production_service(self):
-        helper = Path(__file__).resolve().parents[1]/'tmp/m2/target/debug/qumail-m5-provider.exe'
+        helper = resolve_provider("qumail-m5-provider")
         return MailboxService(self.identity.require(), self.access, self.identity.google, GmailMailbox(), Provider(helper))
 
     def show_onboarding(self):
@@ -243,14 +247,10 @@ class MailboxWindow(QWidget):
                     self.update_seen(key, result)
                     self.status.setText('Server read flag confirmed.')
             except Exception as error:
-                import traceback
-                print(f"\n[QUMAIL EXCEPTION in {action}]:")
-                traceback.print_exc()
+                log_sanitized_error(logger, action, error)
                 self.content.clear(); self.security.clear()
                 self.display = None; self.attachments.clear()
-                code = getattr(error, 'code', None)
-                err_detail = f" [{type(error).__name__}: {getattr(code, 'value', code) or error}]"
-                self.status.setText(error_message(error) + err_detail)
+                self.status.setText(error_message(error))
                 if isinstance(error, Failure) and error.code in (Code.STALE, Code.MISSING):
                     self.rows = (); self.page = None; self.table.setRowCount(0)
         self.update_controls()

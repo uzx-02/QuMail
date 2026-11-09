@@ -8,6 +8,9 @@ from experiments.m5.services import OpenMessage
 from .model import *
 from .gmail import MAIL_SCOPE, field
 from transport.bounded_google import BoundedGoogleAuthorization
+from core.logging_config import get_logger
+
+logger = get_logger("service")
 
 
 class Credentials:
@@ -113,15 +116,13 @@ class MailboxService:
             else:
                 contact = data['contacts'].get(signer_address)
                 if contact is None:
-                    print(f"[service.open] Contact missing in vault for signer: {signer_address!r}")
+                    logger.warning("Contact lookup failed: signer not found in local vault")
                     raise Failure(Code.SIGNER)
                 public = bytes(contact['public'])
             try:
                 opened = self.opener.open(lease, key_handle, raw, public, budget)
             except Exception as e:
-                import traceback
-                print(f"[service.open] Opener.open failed with {type(e).__name__}: {e}")
-                traceback.print_exc()
+                logger.error("Cryptographic message verification failed with %s", type(e).__name__)
                 raise
             result = Display(key, opened.subject, opened.body,
                 f'Signature valid; identity: {opened.identity_trust}; replay: {opened.replay.value}; '

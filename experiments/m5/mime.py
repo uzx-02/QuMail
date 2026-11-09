@@ -12,6 +12,9 @@ from email.utils import parsedate_to_datetime
 import re
 from experiments.m3.types import EmailAddress
 from .model import *
+from core.logging_config import get_logger
+
+logger = get_logger("mime")
 
 POLICY=SMTP.clone(max_line_length=78,raise_on_defect=True)
 REQUIRED=('From','To','Subject','Date','Message-ID','X-QuMail-Profile','X-QuMail-Archive')
@@ -23,7 +26,7 @@ SINGLETONS={x.lower() for x in REQUIRED+OPTIONAL+STRUCTURAL}
 def fail(code=Code.INVALID, reason=""):
     import inspect
     frame = inspect.currentframe().f_back
-    print(f"[MIME FAIL]: code={code} at line {frame.f_lineno} reason={reason!r}")
+    logger.debug("MIME parse rejected with code=%s at line %s (reason=%r)", code, frame.f_lineno, reason)
     raise Failure(code)
 
 

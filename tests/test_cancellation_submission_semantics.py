@@ -42,8 +42,9 @@ from ui.mail_actions import MailActions
 from tests.test_ui_hardening import MockWindow
 
 ROOT = Path(__file__).resolve().parents[1]
-M3_PROVIDER_BIN = ROOT / "tmp/m2/target/debug/qumail-m3-provider.exe"
-M5_PROVIDER_BIN = ROOT / "tmp/m2/target/debug/qumail-m5-provider.exe"
+from core.provider_resolver import resolve_provider
+M3_PROVIDER_BIN = resolve_provider("qumail-m3-provider")
+M5_PROVIDER_BIN = resolve_provider("qumail-m5-provider")
 
 
 class IsolatedMemoryStore:
