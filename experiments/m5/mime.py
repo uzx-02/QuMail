@@ -17,7 +17,7 @@ POLICY=SMTP.clone(max_line_length=78,raise_on_defect=True)
 REQUIRED=('From','To','Subject','Date','Message-ID','X-QuMail-Profile','X-QuMail-Archive')
 OPTIONAL=('Cc','In-Reply-To','References')
 STRUCTURAL=('content-type','content-transfer-encoding','mime-version','content-disposition')
-REPEATABLE=('hp-outer','received','x-received','authentication-results','arc-seal','arc-message-signature','arc-authentication-results')
+SINGLETONS={x.lower() for x in REQUIRED+OPTIONAL+STRUCTURAL}
 
 
 def fail(code=Code.INVALID, reason=""):
@@ -128,7 +128,8 @@ def parse(raw, maximum):
             h=BytesHeaderParser(policy=POLICY).parsebytes(head+b'\r\n\r\n')
             if h.defects: fail()
             for name in h.keys():
-                if name.lower() not in REPEATABLE and len(h.get_all(name))!=1: fail()
+                if name.lower() in SINGLETONS and len(h.get_all(name))!=1:
+                    fail(reason=f"duplicate singleton header {name}")
                 if any(getattr(value,'defects',()) for value in h.get_all(name)): fail()
             for name,value in h.raw_items():
                 if name.lower() in ('content-type','content-disposition'):
