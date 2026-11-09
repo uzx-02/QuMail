@@ -93,6 +93,25 @@ class MailboxService:
             data['m6_mailbox_v1'] = dict(mailbox='INBOX', uidvalidity=page.uidvalidity,
                 rows=[dict(uid=r.key.uid, sender=r.sender, subject=r.subject, date=r.date, size=r.size, seen=r.seen)
                       for r in page.headers])
+            # Update modern m7_mailbox_index_v1 in synchronization
+            from core.mailbox_index import MailboxIndex, IndexedMessage
+            idx = MailboxIndex.load_from_vault(data, lease.context.account.value, 'INBOX')
+            idx.uidvalidity = page.uidvalidity
+            for r in page.headers:
+                disp, addr = parseaddr(r.sender)
+                idx.upsert_message(IndexedMessage(
+                    uid=r.key.uid,
+                    uidvalidity=page.uidvalidity,
+                    mailbox='INBOX',
+                    account_id=lease.context.account.value,
+                    sender_display=disp or addr,
+                    sender_address=addr,
+                    subject=r.subject,
+                    date=r.date,
+                    size=r.size,
+                    seen=r.seen,
+                ))
+            idx.save_to_vault(data)
             self.check(lease, budget)
         self.check(lease, budget)
         return page
@@ -165,5 +184,46 @@ class MailboxService:
             if cache.get('uidvalidity') == key.uidvalidity:
                 for row in cache.get('rows', []):
                     if row['uid'] == key.uid: row['seen'] = actual
+            # Also update m7_mailbox_index_v1
+            from core.mailbox_index import MailboxIndex
+            idx = MailboxIndex.load_from_vault(data, lease.context.account.value, key.mailbox)
+            if idx.uidvalidity == key.uidvalidity:
+                idx.set_seen(key.uid, actual)
+                idx.save_to_vault(data)
             self.check(lease, budget, key)
         return actual
+
+    def get_indexed_messages(self, lease, budget, limit=50, before_uid=None, unread_only=False, query=""):
+        """Retrieve metadata-first indexed messages from encrypted vault for WS-05."""
+        self.check(lease, budget)
+        data = self.vault._read(lease.context)
+        from core.mailbox_index import MailboxIndex
+        idx = MailboxIndex.load_from_vault(data, lease.context.account.value, "INBOX")
+        return idx.list_messages(limit=limit, before_uid=before_uid, unread_only=unread_only, query=query)
+
+    def get_unread_counts(self, lease, budget, mailbox="INBOX"):
+        """Retrieve authoritative unread and total message counts for WS-05."""
+        self.check(lease, budget)
+        data = self.vault._read(lease.context)
+        from core.mailbox_index import MailboxIndex
+        idx = MailboxIndex.load_from_vault(data, lease.context.account.value, mailbox)
+        return idx.get_unread_count(), idx.get_total_count()
+
+    def fetch_message_body(self, lease, key, budget):
+        """Fetch raw message bytes on demand using non-mutating BODY.PEEK[]."""
+        self.check(lease, budget, key)
+        raw, seen = self.mailbox.fetch(self.resolver.resolve(lease, budget), key, budget)
+        self.check(lease, budget, key)
+        return raw, seen
+
+    def export_attachment(self, lease, key, attachment_index, destination_path, budget):
+        """Export an opened message attachment safely with atomic no-clobber write."""
+        self.check(lease, budget, key)
+        display = self.open(lease, key, None, None, budget)
+        if display.protected is None or not display.protected.signature_valid:
+            raise Failure(Code.PROTOCOL)
+        attachments = display.protected.attachments
+        if not 0 <= attachment_index < len(attachments):
+            raise Failure(Code.PROTOCOL)
+        from core.attachment_pipeline import AttachmentPipeline
+        return AttachmentPipeline.export_attachment(attachments[attachment_index].data, destination_path)
