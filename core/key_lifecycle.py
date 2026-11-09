@@ -20,11 +20,11 @@ from typing import Callable
 
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID, ExtendedKeyUsageOID
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type import univ
-from pyasn1_modules import rfc2459, rfc3161, rfc5652
+from pyasn1_modules import rfc2459, rfc3161, rfc5035, rfc5652
 
 from core.logging_config import get_logger
 
@@ -251,23 +251,26 @@ def verify_rfc3161_token_offline(
     1. Parse ASN.1 CMS ContentInfo (id-signedData) / SignedData (id-ct-TSTInfo) / TSTInfo.
     2. Enforce TSA policy: If required_policy_oid is specified, token policy must match.
     3. Message-Imprint Matching: Token's hashedMessage must strictly match expected_message_digest.
-    4. SignerInfo Matching: Matches SignerInfo.sid (issuerAndSerialNumber or subjectKeyIdentifier)
-       to exactly one certificate in SignedData.certificates. Rejects absent or ambiguous matches.
-    5. TSA Certificate Validation:
+    4. SignerInfo Single-Signer Enforcement: Enforces exactly one SignerInfo in SignedData (no multiple signers).
+    5. SignerInfo Matching: Matches SignerInfo.sid (issuerAndSerialNumber or subjectKeyIdentifier)
+       to candidate certificate in SignedData.certificates. Rejects absent or ambiguous matches.
+    6. TSA Certificate Profile (RFC 3161 §2.3):
        - Enforces critical-extension handling (fails closed on unrecognized critical extensions).
        - Enforces KeyUsage (if present) has digitalSignature or contentCommitment, and no keyCertSign or crlSign.
-       - Enforces ExtendedKeyUsage includes timeStamping (OID 1.3.6.1.5.5.7.3.8).
+       - Enforces exactly one ExtendedKeyUsage extension, marked critical, exclusively containing timeStamping.
        - Enforces certificate validity at token genTime.
        - Validates genuine cryptographic certificate path to configured trust anchors (with BasicConstraints,
          pathLenConstraint, issuing CA keyCertSign, and no weak hash algorithms).
-    6. Mandatory CMS Signed Attributes Validation:
+    7. Mandatory CMS Signed Attributes Validation (RFC 3161 §2.4.2 & RFC 5816):
        - Mandates CMS signedAttrs in SignerInfo (direct signature fallback is forbidden per RFC 3161).
        - Requires exactly one id-contentType attribute whose value is id-ct-TSTInfo.
        - Requires exactly one id-messageDigest attribute matching recomputed hash of encapsulated TSTInfo.
+       - Requires exactly one SigningCertificate (ESSCertID) or SigningCertificateV2 (ESSCertIDv2) attribute
+         binding the exact TSA certificate via certHash.
        - Re-encodes signedAttrs as SET OF (0x31) for signature verification.
-    7. TSA Digital Signature Verification:
+    8. TSA Digital Signature Verification:
        - Cryptographically validates RSA/ECDSA digital signature using validated TSA public key.
-    8. Rejects malformed, tampered, expired, mismatched, or unauthorized tokens.
+    9. Rejects malformed, tampered, expired, mismatched, or unauthorized tokens.
     """
     if not isinstance(token_der, bytes) or len(token_der) == 0:
         return RFC3161VerificationResult(is_valid=False, error="Token is empty or not bytes")
@@ -345,6 +348,13 @@ def verify_rfc3161_token_offline(
     signer_infos_comp = signed_data.getComponentByName("signerInfos")
     if signer_infos_comp is None or not signer_infos_comp.isValue or len(signer_infos_comp) == 0:
         return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="No SignerInfo found in SignedData")
+    if len(signer_infos_comp) != 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error=f"RFC 3161 requires exactly one SignerInfo in SignedData (found {len(signer_infos_comp)})",
+        )
 
     signer_info = signer_infos_comp[0]
     sid = signer_info["sid"]
@@ -424,13 +434,40 @@ def verify_rfc3161_token_offline(
     except x509.ExtensionNotFound:
         pass
 
-    # Check timeStamping ExtendedKeyUsage
-    try:
-        eku_ext = tsa_cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
-        if ExtendedKeyUsageOID.TIME_STAMPING not in eku_ext.value:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
-    except Exception:
-        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
+    # Check timeStamping ExtendedKeyUsage (RFC 3161 §2.3)
+    eku_exts = [e for e in tsa_cert.extensions if e.oid == ExtensionOID.EXTENDED_KEY_USAGE]
+    if len(eku_exts) == 0:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="TSA certificate missing required timeStamping ExtendedKeyUsage extension",
+        )
+    if len(eku_exts) > 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="TSA certificate contains duplicate ExtendedKeyUsage extensions",
+        )
+
+    eku_ext = eku_exts[0]
+    if not eku_ext.critical:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="TSA certificate ExtendedKeyUsage extension must be marked critical per RFC 3161 §2.3",
+        )
+
+    eku_purposes = list(eku_ext.value)
+    if len(eku_purposes) != 1 or eku_purposes[0] != ExtendedKeyUsageOID.TIME_STAMPING:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error=f"TSA certificate ExtendedKeyUsage must exclusively contain timeStamping (found {[p.dotted_string for p in eku_purposes]})",
+        )
 
     # Check Certificate Validity Period against token generation time
     not_before = int(tsa_cert.not_valid_before_utc.timestamp())
@@ -471,8 +508,12 @@ def verify_rfc3161_token_offline(
 
     content_type_count = 0
     message_digest_count = 0
+    signing_cert_v1_count = 0
+    signing_cert_v2_count = 0
     content_type_seen = None
     message_digest_seen = None
+    signing_cert_v1_seen = None
+    signing_cert_v2_seen = None
 
     for attr in signed_attrs:
         attr_type = attr["attrType"]
@@ -514,6 +555,44 @@ def verify_rfc3161_token_offline(
                     policy_oid=policy_oid,
                     error=f"Malformed id-messageDigest attribute: {exc}",
                 )
+        elif attr_type == rfc5035.id_aa_signingCertificate:
+            signing_cert_v1_count += 1
+            if len(attr["attrValues"]) != 1:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="Signed attribute id-aa-signingCertificate must have exactly one value",
+                )
+            try:
+                sc_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=rfc5035.SigningCertificate())
+                signing_cert_v1_seen = sc_val
+            except Exception as exc:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error=f"Malformed id-aa-signingCertificate attribute: {exc}",
+                )
+        elif attr_type == rfc5035.id_aa_signingCertificateV2:
+            signing_cert_v2_count += 1
+            if len(attr["attrValues"]) != 1:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="Signed attribute id-aa-signingCertificateV2 must have exactly one value",
+                )
+            try:
+                sc2_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=rfc5035.SigningCertificateV2())
+                signing_cert_v2_seen = sc2_val
+            except Exception as exc:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error=f"Malformed id-aa-signingCertificateV2 attribute: {exc}",
+                )
 
     if content_type_count == 0:
         return RFC3161VerificationResult(
@@ -551,6 +630,119 @@ def verify_rfc3161_token_offline(
             policy_oid=policy_oid,
             error="Signed attributes contains duplicate id-messageDigest attributes",
         )
+
+    # Signer certificate identifier check (RFC 3161 §2.4.2 & RFC 5816)
+    total_signing_cert_attrs = signing_cert_v1_count + signing_cert_v2_count
+    if total_signing_cert_attrs == 0:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes missing mandatory signer-certificate identifier (SigningCertificate or SigningCertificateV2 required per RFC 3161 §2.4.2 / RFC 5816)",
+        )
+    if signing_cert_v1_count > 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes contains duplicate SigningCertificate attributes",
+        )
+    if signing_cert_v2_count > 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes contains duplicate SigningCertificateV2 attributes",
+        )
+    if signing_cert_v1_count >= 1 and signing_cert_v2_count >= 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes contains ambiguous conflicting SigningCertificate and SigningCertificateV2 attributes",
+        )
+
+    # Validate certificate hash against TSA certificate DER bytes
+    tsa_cert_der = tsa_cert.public_bytes(serialization.Encoding.DER)
+
+    if signing_cert_v1_seen is not None:
+        certs_seq = signing_cert_v1_seen.getComponentByName("certs")
+        if certs_seq is None or not certs_seq.isValue or len(certs_seq) == 0:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="SigningCertificate certs sequence is empty",
+            )
+        first_ess = certs_seq[0]
+        expected_cert_hash = hashlib.sha1(tsa_cert_der).digest()
+        actual_cert_hash = bytes(first_ess["certHash"])
+        if actual_cert_hash != expected_cert_hash:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="SigningCertificate ESSCertID certHash mismatch for TSA certificate",
+            )
+        issuer_serial = first_ess.getComponentByName("issuerSerial")
+        if issuer_serial is not None and issuer_serial.isValue:
+            if int(issuer_serial["serialNumber"]) != tsa_cert.serial_number:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="SigningCertificate ESSCertID issuerSerial serialNumber mismatch",
+                )
+
+    if signing_cert_v2_seen is not None:
+        certs_seq = signing_cert_v2_seen.getComponentByName("certs")
+        if certs_seq is None or not certs_seq.isValue or len(certs_seq) == 0:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="SigningCertificateV2 certs sequence is empty",
+            )
+        first_ess2 = certs_seq[0]
+        hash_algo_comp = first_ess2.getComponentByName("hashAlgorithm")
+        if hash_algo_comp is not None and hash_algo_comp.isValue:
+            algo_oid = str(hash_algo_comp["algorithm"])
+        else:
+            algo_oid = "2.16.840.1.101.3.4.2.1"  # Default id-sha256
+
+        if algo_oid == "2.16.840.1.101.3.4.2.1":  # SHA-256
+            expected_cert_hash = hashlib.sha256(tsa_cert_der).digest()
+        elif algo_oid == "2.16.840.1.101.3.4.2.2":  # SHA-384
+            expected_cert_hash = hashlib.sha384(tsa_cert_der).digest()
+        elif algo_oid == "2.16.840.1.101.3.4.2.3":  # SHA-512
+            expected_cert_hash = hashlib.sha512(tsa_cert_der).digest()
+        elif algo_oid == "1.3.14.3.2.26":  # SHA-1
+            expected_cert_hash = hashlib.sha1(tsa_cert_der).digest()
+        else:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error=f"Unsupported hash algorithm OID in ESSCertIDv2: {algo_oid}",
+            )
+
+        actual_cert_hash = bytes(first_ess2["certHash"])
+        if actual_cert_hash != expected_cert_hash:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="SigningCertificateV2 ESSCertIDv2 certHash mismatch for TSA certificate",
+            )
+        issuer_serial = first_ess2.getComponentByName("issuerSerial")
+        if issuer_serial is not None and issuer_serial.isValue:
+            if int(issuer_serial["serialNumber"]) != tsa_cert.serial_number:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="SigningCertificateV2 ESSCertIDv2 issuerSerial serialNumber mismatch",
+                )
 
     # Determine digest algorithm from signer_info['digestAlgorithm']
     digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])

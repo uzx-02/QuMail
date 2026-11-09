@@ -31,7 +31,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from pyasn1.codec.der import decoder, encoder
 from pyasn1.type import univ, useful
-from pyasn1_modules import rfc2459, rfc3161, rfc5652
+from pyasn1_modules import rfc2459, rfc3161, rfc5035, rfc5652
 
 from core.enterprise_trust import (
     EnterpriseContactRecord,
@@ -922,6 +922,8 @@ def _make_synthetic_rfc3161_token(
     message_digest: bytes,
     gen_time_dt: datetime.datetime | None = None,
     include_eku: bool = True,
+    eku_critical: bool = True,
+    extra_eku_oids: list[x509.ObjectIdentifier] | None = None,
     cert_valid_not_before_dt: datetime.datetime | None = None,
     cert_valid_not_after_dt: datetime.datetime | None = None,
     corrupt_sig: bool = False,
@@ -934,6 +936,14 @@ def _make_synthetic_rfc3161_token(
     omit_message_digest: bool = False,
     duplicate_message_digest: bool = False,
     corrupt_message_digest_attr: bool = False,
+    include_signing_cert: bool = True,
+    signing_cert_version: int = 2,
+    corrupt_signing_cert_hash: bool = False,
+    signing_cert_hash_algo_oid: str = "2.16.840.1.101.3.4.2.1",
+    duplicate_signing_cert: bool = False,
+    conflicting_signing_certs: bool = False,
+    omit_signing_cert: bool = False,
+    signing_cert_empty_certs: bool = False,
     custom_digest_algo_oid: str = "2.16.840.1.101.3.4.2.1",
     custom_policy_oid: str = "1.2.3.4.5",
     extra_certs: list[x509.Certificate] | None = None,
@@ -942,6 +952,7 @@ def _make_synthetic_rfc3161_token(
     leaf_key_usage_content_commitment: bool = True,
     leaf_key_usage_key_cert_sign: bool = False,
     leaf_key_usage_crl_sign: bool = False,
+    multiple_signer_infos: bool = False,
 ) -> tuple[bytes, x509.Certificate, rsa.RSAPrivateKey]:
     """Helper to generate authentic or intentionally flawed RFC 3161 TimeStampToken DER bytes."""
     key = custom_key or rsa.generate_private_key(65537, 2048)
@@ -961,9 +972,12 @@ def _make_synthetic_rfc3161_token(
             .not_valid_after(na)
         )
         if include_eku:
+            eku_list = [ExtendedKeyUsageOID.TIME_STAMPING]
+            if extra_eku_oids:
+                eku_list.extend(extra_eku_oids)
             builder = builder.add_extension(
-                x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]),
-                critical=False,
+                x509.ExtendedKeyUsage(eku_list),
+                critical=eku_critical,
             )
         if include_leaf_key_usage:
             builder = builder.add_extension(
@@ -1068,6 +1082,76 @@ def _make_synthetic_rfc3161_token(
                 dup_md["attrValues"].append(rfc5652.AttributeValue(encoder.encode(univ.OctetString(md_bytes))))
                 si["signedAttrs"].append(dup_md)
 
+        if include_signing_cert and not omit_signing_cert:
+            if signing_cert_version == 1:
+                sc1 = rfc5035.SigningCertificate()
+                sc1.setComponentByName("certs")
+                if not signing_cert_empty_certs:
+                    ess1 = rfc5035.ESSCertID()
+                    h1 = hashlib.sha1(cert_der).digest()
+                    if corrupt_signing_cert_hash:
+                        h1 = b"\x00" * 20
+                    ess1["certHash"] = h1
+                    sc1["certs"].append(ess1)
+
+                attr_sc1 = rfc5652.Attribute()
+                attr_sc1["attrType"] = rfc5035.id_aa_signingCertificate
+                attr_sc1.setComponentByName("attrValues")
+                attr_sc1["attrValues"].append(rfc5652.AttributeValue(encoder.encode(sc1)))
+                si["signedAttrs"].append(attr_sc1)
+
+                if duplicate_signing_cert:
+                    si["signedAttrs"].append(attr_sc1)
+            else:
+                sc2 = rfc5035.SigningCertificateV2()
+                sc2.setComponentByName("certs")
+                if not signing_cert_empty_certs:
+                    ess2 = rfc5035.ESSCertIDv2()
+                    if signing_cert_hash_algo_oid == "2.16.840.1.101.3.4.2.1":
+                        h2 = hashlib.sha256(cert_der).digest()
+                    elif signing_cert_hash_algo_oid == "2.16.840.1.101.3.4.2.2":
+                        ess2["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
+                        ess2["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier(signing_cert_hash_algo_oid)
+                        h2 = hashlib.sha384(cert_der).digest()
+                    elif signing_cert_hash_algo_oid == "2.16.840.1.101.3.4.2.3":
+                        ess2["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
+                        ess2["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier(signing_cert_hash_algo_oid)
+                        h2 = hashlib.sha512(cert_der).digest()
+                    elif signing_cert_hash_algo_oid == "1.3.14.3.2.26":
+                        ess2["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
+                        ess2["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier(signing_cert_hash_algo_oid)
+                        h2 = hashlib.sha1(cert_der).digest()
+                    else:
+                        ess2["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
+                        ess2["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier(signing_cert_hash_algo_oid)
+                        h2 = b"\x00" * 32
+
+                    if corrupt_signing_cert_hash:
+                        h2 = b"\xff" * len(h2)
+                    ess2["certHash"] = h2
+                    sc2["certs"].append(ess2)
+
+                attr_sc2 = rfc5652.Attribute()
+                attr_sc2["attrType"] = rfc5035.id_aa_signingCertificateV2
+                attr_sc2.setComponentByName("attrValues")
+                attr_sc2["attrValues"].append(rfc5652.AttributeValue(encoder.encode(sc2)))
+                si["signedAttrs"].append(attr_sc2)
+
+                if duplicate_signing_cert:
+                    si["signedAttrs"].append(attr_sc2)
+
+            if conflicting_signing_certs:
+                conf_sc1 = rfc5035.SigningCertificate()
+                conf_sc1.setComponentByName("certs")
+                conf_ess1 = rfc5035.ESSCertID()
+                conf_ess1["certHash"] = hashlib.sha1(cert_der).digest()
+                conf_sc1["certs"].append(conf_ess1)
+                attr_conf = rfc5652.Attribute()
+                attr_conf["attrType"] = rfc5035.id_aa_signingCertificate
+                attr_conf.setComponentByName("attrValues")
+                attr_conf["attrValues"].append(rfc5652.AttributeValue(encoder.encode(conf_sc1)))
+                si["signedAttrs"].append(attr_conf)
+
         signed_attrs_der = encoder.encode(si["signedAttrs"])
         if signed_attrs_der.startswith(b"\xa0"):
             signed_attrs_der = b"\x31" + signed_attrs_der[1:]
@@ -1085,9 +1169,15 @@ def _make_synthetic_rfc3161_token(
 
     sd["signerInfos"] = rfc5652.SignerInfos()
     sd["signerInfos"].append(si)
+    if multiple_signer_infos:
+        sd["signerInfos"].append(si)
 
     # 3. ContentInfo
     ci = rfc5652.ContentInfo()
+    ci["contentType"] = rfc5652.id_signedData
+    ci["content"] = encoder.encode(sd)
+
+    return encoder.encode(ci), cert, key
     ci["contentType"] = rfc5652.id_signedData
     ci["content"] = encoder.encode(sd)
 
@@ -1337,7 +1427,7 @@ def test_rfc3161_offline_verification_multi_cert_bundle_and_path_validation():
         .not_valid_before(now_utc - datetime.timedelta(days=5))
         .not_valid_after(now_utc + datetime.timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .sign(root_k, hashes.SHA256())
     )
 
@@ -1383,7 +1473,7 @@ def test_rfc3161_offline_verification_fake_root_same_subject_rejected():
         .not_valid_before(now_utc - datetime.timedelta(days=5))
         .not_valid_after(now_utc + datetime.timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .sign(root_k, hashes.SHA256())
     )
 
@@ -1620,7 +1710,7 @@ def test_rfc3161_offline_verification_ca_key_usage_and_basic_constraints():
         .not_valid_before(now_utc - datetime.timedelta(days=5))
         .not_valid_after(now_utc + datetime.timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .sign(root_k, hashes.SHA256())
     )
 
@@ -1707,7 +1797,7 @@ def test_rfc3161_offline_verification_ca_path_len_constraint_exceeded():
         .not_valid_before(now_utc - datetime.timedelta(days=2))
         .not_valid_after(now_utc + datetime.timedelta(days=2))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .sign(sub_k, hashes.SHA256())
     )
 
@@ -1738,7 +1828,7 @@ def test_rfc3161_offline_verification_unrecognized_critical_extension():
         .serial_number(1)
         .not_valid_before(now_utc - datetime.timedelta(days=1))
         .not_valid_after(now_utc + datetime.timedelta(days=1))
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .add_extension(x509.UnrecognizedExtension(x509.ObjectIdentifier("2.999.1.2.3"), b"secret-ext"), critical=True)
         .sign(key, hashes.SHA256())
     )
@@ -1778,7 +1868,7 @@ def test_rfc3161_offline_verification_prohibited_weak_hash_algorithm():
         .not_valid_before(now_utc - datetime.timedelta(days=5))
         .not_valid_after(now_utc + datetime.timedelta(days=5))
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .sign(root_k, hashes.SHA256())
     )
 
@@ -1790,3 +1880,118 @@ def test_rfc3161_offline_verification_prohibited_weak_hash_algorithm():
         res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_c])
         assert res.is_valid is False
         assert "weak or prohibited hash algorithm 'sha1'" in res.error
+
+
+def test_rfc3161_offline_verification_non_critical_eku_rejected():
+    """64. TSA certificate with non-critical ExtendedKeyUsage is strictly rejected (RFC 3161 §2.3)."""
+    digest = b"\x12" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, eku_critical=False)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "ExtendedKeyUsage extension must be marked critical per RFC 3161 §2.3" in res.error
+
+
+def test_rfc3161_offline_verification_eku_additional_purposes_rejected():
+    """65. TSA certificate containing additional EKU purposes (e.g. serverAuth) is rejected."""
+    digest = b"\x23" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        extra_eku_oids=[ExtendedKeyUsageOID.SERVER_AUTH],
+    )
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "ExtendedKeyUsage must exclusively contain timeStamping" in res.error
+
+
+def test_rfc3161_offline_verification_valid_critical_eku_accepted():
+    """66. TSA certificate with critical, timeStamping-only EKU is verified successfully."""
+    digest = b"\x34" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, eku_critical=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is True
+    assert res.error == ""
+
+
+def test_rfc3161_offline_verification_missing_signing_certificate_rejected():
+    """67. TimeStampToken missing mandatory SigningCertificate / SigningCertificateV2 is rejected."""
+    digest = b"\x45" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, omit_signing_cert=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Signed attributes missing mandatory signer-certificate identifier" in res.error
+
+
+def test_rfc3161_offline_verification_duplicate_and_conflicting_signing_certs_rejected():
+    """68. Duplicated or conflicting SigningCertificate attributes fail closed."""
+    digest = b"\x56" * 32
+
+    # Duplicate SigningCertificateV2
+    tok_dup, _, _ = _make_synthetic_rfc3161_token(digest, duplicate_signing_cert=True)
+    res_dup = verify_rfc3161_token_offline(tok_dup, digest)
+    assert res_dup.is_valid is False
+    assert "contains duplicate SigningCertificateV2 attributes" in res_dup.error
+
+    # Conflicting SigningCertificate (v1) and SigningCertificateV2
+    tok_conf, _, _ = _make_synthetic_rfc3161_token(digest, conflicting_signing_certs=True)
+    res_conf = verify_rfc3161_token_offline(tok_conf, digest)
+    assert res_conf.is_valid is False
+    assert "ambiguous conflicting SigningCertificate and SigningCertificateV2" in res_conf.error
+
+
+def test_rfc3161_offline_verification_ess_cert_id_v1_valid_and_mismatch():
+    """69. ESSCertID (v1) SHA-1 certificate hash matching and mismatch validation."""
+    digest = b"\x67" * 32
+
+    # Valid ESSCertID (v1)
+    tok_v1, _, _ = _make_synthetic_rfc3161_token(digest, signing_cert_version=1)
+    res_v1 = verify_rfc3161_token_offline(tok_v1, digest)
+    assert res_v1.is_valid is True
+    assert res_v1.error == ""
+
+    # Mismatched ESSCertID (v1) certHash
+    tok_bad, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        signing_cert_version=1,
+        corrupt_signing_cert_hash=True,
+    )
+    res_bad = verify_rfc3161_token_offline(tok_bad, digest)
+    assert res_bad.is_valid is False
+    assert "SigningCertificate ESSCertID certHash mismatch for TSA certificate" in res_bad.error
+
+
+def test_rfc3161_offline_verification_ess_cert_id_v2_valid_and_mismatch():
+    """70. ESSCertIDv2 certificate hash matching (SHA-256 and SHA-384) and mismatch validation."""
+    digest = b"\x78" * 32
+
+    # Valid ESSCertIDv2 (SHA-256)
+    tok_v2_256, _, _ = _make_synthetic_rfc3161_token(digest, signing_cert_version=2)
+    res_v2_256 = verify_rfc3161_token_offline(tok_v2_256, digest)
+    assert res_v2_256.is_valid is True
+
+    # Valid ESSCertIDv2 (SHA-384)
+    tok_v2_384, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        signing_cert_version=2,
+        signing_cert_hash_algo_oid="2.16.840.1.101.3.4.2.2",
+    )
+    res_v2_384 = verify_rfc3161_token_offline(tok_v2_384, digest)
+    assert res_v2_384.is_valid is True
+
+    # Mismatched ESSCertIDv2 certHash
+    tok_bad, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        signing_cert_version=2,
+        corrupt_signing_cert_hash=True,
+    )
+    res_bad = verify_rfc3161_token_offline(tok_bad, digest)
+    assert res_bad.is_valid is False
+    assert "SigningCertificateV2 ESSCertIDv2 certHash mismatch for TSA certificate" in res_bad.error
+
+
+def test_rfc3161_offline_verification_multiple_signer_infos_rejected():
+    """71. TimeStampToken with multiple SignerInfos is strictly rejected (RFC 3161 §2.4.2)."""
+    digest = b"\x89" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, multiple_signer_infos=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "RFC 3161 requires exactly one SignerInfo in SignedData" in res.error

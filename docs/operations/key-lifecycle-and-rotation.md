@@ -86,17 +86,23 @@ To establish true historical validity, QuMail requires independent, authenticate
 1. **RFC 3161 Time-Stamp Protocol (TSA) — Offline Verification:**
    - Cryptographically verified TimeStampToken DER proofs (`core/key_lifecycle.py:verify_rfc3161_token_offline`).
    - Parses ASN.1 CMS `ContentInfo` (`id-signedData`, RFC 5652) and `SignedData` containing encapsulated `TSTInfo` (`id-ct-TSTInfo`, RFC 3161).
+   - **Single-Signer Enforcement:** Enforces that the TimeStampToken contains exclusively the TSA's signature (exactly one `SignerInfo` in `SignedData.signerInfos`; multiple signers are strictly rejected per RFC 3161 §2.4.2).
    - **Message-Imprint Matching:** Enforces that `TSTInfo.messageImprint.hashedMessage` strictly matches the expected message digest (`expected_message_digest`). Any mismatch causes immediate rejection.
-   - **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to exactly one certificate in `SignedData.certificates`. Rejects missing, unmatched, or ambiguous certificates.
+   - **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to candidate certificates in `SignedData.certificates`. Rejects missing, unmatched, or ambiguous certificates.
    - **Mandatory CMS Signed Attributes (`signedAttrs`):** Per RFC 3161 Section 2.4.2, CMS `signedAttrs` in `SignerInfo` are mandatory. Direct signature over encapsulated `eContent` without signed attributes is strictly rejected (no direct-signature fallback).
      * Enforces exactly one `id-contentType` attribute whose value is `id-ct-TSTInfo`. Duplicates, missing attributes, or non-matching content types are rejected.
      * Enforces exactly one `id-messageDigest` attribute. Duplicates, missing attributes, or malformed values are rejected.
      * Recomputes the digest over encapsulated `TSTInfo` bytes using the declared digest algorithm (SHA-256, SHA-384, or SHA-512) and verifies exact match against `id-messageDigest`.
+     * **Signer-Certificate Identification (RFC 3161 §2.4.2 & RFC 5816):** Mandates exactly one signer-certificate identifier attribute in `signedAttrs`:
+       - `SigningCertificate` with `ESSCertID` (RFC 2634, SHA-1 certHash).
+       - `SigningCertificateV2` with `ESSCertIDv2` (RFC 5035 / RFC 5816, default SHA-256, or declared SHA-384/SHA-512/SHA-1 certHash).
+       - Validates `certHash` directly against the DER encoding of the exact TSA certificate chosen for verification.
+       - Rejects missing, duplicate, conflicting, or mismatched signer-certificate identifiers. SignerInfo identifier matching alone is not a substitute.
      * Verifies the TSA signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
-   - **TSA Leaf Certificate Validation:**
+   - **TSA Certificate Profile (RFC 3161 §2.3):**
      * Critical extension whitelisting: fails closed on unrecognized critical extensions.
      * KeyUsage enforcement: If KeyUsage extension is present, MUST assert `digitalSignature` or `contentCommitment` (`nonRepudiation`), and MUST NOT assert `keyCertSign` or `crlSign`.
-     * ExtendedKeyUsage: Enforces that TSA certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+     * **ExtendedKeyUsage Profile:** The certificate MUST contain **exactly one** ExtendedKeyUsage extension, MUST be marked **critical**, and MUST **exclusively** contain `id-kp-timeStamping` (`1.3.6.1.5.5.7.3.8`). Rejects non-critical EKU, duplicate EKU, and additional purposes (e.g. `serverAuth`, `clientAuth`).
      * Validity period: Enforces certificate validity at timestamp generation time (`not_before <= genTime <= not_after`).
    - **Genuine Cryptographic Certificate Path Validation:** When `trusted_tsa_certificates` trust anchors are configured, validates the TSA certificate via genuine cryptographic signature verification up to a configured anchor:
      * Traverses intermediate CA certificates in `SignedData.certificates`.
@@ -108,9 +114,10 @@ To establish true historical validity, QuMail requires independent, authenticate
      * Enforces validity period of all path certificates at timestamp generation time (`not_before <= genTime <= not_after`).
      * Cryptographically verifies the digital signature of every certificate using the issuing authority's public key (`issuer_pub_key.verify()`). Does **not** treat issuer name matching or cert presence alone as chain validation.
      * Validates self-signature on root trust anchors.
-   - **Explicit PKIX Qualification Limitations (Honest Assessment):**
-     * While QuMail performs genuine cryptographic chain signature validation, CA basic constraints, path length enforcement, KeyUsage validation, EKU validation, and critical extension whitelisting, it is **not** a full RFC 5280 PKIX implementation.
-     * NameConstraints subtrees, PolicyConstraints, PolicyMappings, and online CRL/OCSP revocation checking are **not implemented** in Module 1.6 and are explicitly not claimed.
+   - **Explicit PKIX Qualification Limitations & Revocation Scope (Honest Assessment):**
+     * While QuMail performs genuine cryptographic chain signature validation, CA basic constraints, path length enforcement, KeyUsage validation, critical EKU profile validation, and critical extension whitelisting, it is **not** a full RFC 5280 PKIX implementation.
+     * NameConstraints permitted/excluded subtrees, PolicyConstraints, and PolicyMappings are **not implemented** in Module 1.6 and are explicitly not claimed.
+     * Online revocation checking (OCSP / CRL distribution points) is **not implemented** in offline verification mode; verification relies on configured local trust anchors and cryptographic certificate validity windows.
    - **TSA Policy Enforcement:** Where a required policy is configured (`required_policy_oid`), verifies that `TSTInfo.policy` matches the requirement; fails closed on mismatch.
    - **Operational Distinction:** Distinguishes offline verification of an existing token from obtaining a new token from a live TSA. Offline verification operates deterministically in zero-network environments.
 

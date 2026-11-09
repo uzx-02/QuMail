@@ -102,10 +102,10 @@ All **131 automated tests** passed cleanly:
 | `tests/test_startup.py` | Modern default launch, CLI flags, dry-run network isolation | 11 | 11 | 0 |
 | `tests/test_ws01_bootstrap_hygiene.py` | Provider resolution, PE CFG `0xc160`, PrivacyFilter, code hygiene | 14 | 14 | 0 |
 | `tests/test_ws02_identity_and_trust.py` | WKD discovery, z-base-32, TrustEngine, SecurityIndicators, Profile v1, lifecycle | 25 | 25 | 0 |
-| `tests/test_ws02_security_assurance.py` | Historical time evidence, mandatory RFC 3161 signedAttrs, certificate path validation, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 59 | 59 | 0 |
+| `tests/test_ws02_security_assurance.py` | Historical time evidence, mandatory RFC 3161 signedAttrs, certificate path validation, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 67 | 67 | 0 |
 | `tests/test_cryptographic_roundtrip.py` | End-to-end M5 crypto roundtrip, Ed25519, replay detection, MIME parser | 15 | 15 | 0 |
 | `tests/test_cancellation_submission_semantics.py` | Outbox cancellation, uncertain submission recovery, crash semantics | 7 | 7 | 0 |
-| **Total** | **Complete Modern Regression Suite** | **131** | **131** | **0** |
+| **Total** | **Complete Modern Regression Suite** | **139** | **139** | **0** |
 
 ---
 
@@ -172,8 +172,8 @@ Following targeted technical lead review of checkpoint `cd2b43e`, four critical 
 - **WKD Directory Publishing:** QuMail implements client-side WKD discovery; generating and uploading static WKD directories to corporate web servers is an administrative out-of-band operational task.
 
 ### 6.4 Test Evidence Summary
-- **Total Tests:** 131 passed.
-- **Security Tests:** 59 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
+- **Total Tests:** 139 passed.
+- **Security Tests:** 67 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
 - **Failures / Skips:** 0 failed, 0 skipped.
 
 ### 6.5 Trust Assumptions
@@ -189,16 +189,19 @@ Following targeted technical lead guidance for final WS-02 acceptance, historica
 The implementation in `core/key_lifecycle.py:verify_rfc3161_token_offline` provides strict, offline verification of existing RFC 3161 TimeStampToken DER bytes:
 1. **ASN.1 CMS Structure Validation:** Parses ASN.1 CMS `ContentInfo` with `contentType = id-signedData` (RFC 5652) and `SignedData` containing `encapContentInfo` with `eContentType = id-ct-TSTInfo` (RFC 3161). Decodes `TSTInfo` and validates GeneralizedTime `genTime`.
 2. **Message-Imprint Matching:** Compares `TSTInfo.messageImprint.hashedMessage` byte-for-byte against the expected message digest (`expected_message_digest`). Rejects any token whose message imprint does not match the exact target message digest.
-3. **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to candidate certificates in `SignedData.certificates`. Rejects tokens with absent signer certificates, no matches, or ambiguous multiple matches.
+3. **SignerInfo Identification & Single-Signer Enforcement:**
+   - Matches candidate certificates in `SignedData.certificates` via `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`). Rejects tokens with absent signer certificates, no matches, or ambiguous multiple matches.
+   - **Single Signer Mandate (RFC 3161 §2.4.2):** Strictly enforces that `SignedData.signerInfos` contains exactly one `SignerInfo`. Tokens containing multiple signers or extraneous signatures fail closed.
 4. **Mandatory CMS Signed Attributes (`signedAttrs`):** Per RFC 3161 Section 2.4.2, CMS `signedAttrs` in `SignerInfo` are mandatory. Direct signature over encapsulated `eContent` without signed attributes is strictly rejected (no direct-signature fallback).
    - Enforces exactly one `id-contentType` attribute whose value is `id-ct-TSTInfo`. Duplicates, missing attributes, or contradictory content types are rejected.
    - Enforces exactly one `id-messageDigest` attribute. Duplicates, missing attributes, or malformed values are rejected.
    - Recomputes the digest over encapsulated `TSTInfo` bytes using the declared digest algorithm (SHA-256, SHA-384, or SHA-512) and verifies exact match against `id-messageDigest`.
+   - **Signer Certificate Identification (RFC 3161 §2.4.2 & RFC 5816):** CMS `signedAttrs` MUST contain exactly one signer-certificate identifier: either `SigningCertificate` with `ESSCertID` (RFC 2634, SHA-1 certHash) or `SigningCertificateV2` with `ESSCertIDv2` (RFC 5035 / RFC 5816, default SHA-256 or declared SHA-384/SHA-512/SHA-1 certHash). Validates `certHash` directly against the DER encoding of the leaf TSA certificate. Tokens with missing, duplicate, conflicting, or mismatched certificate hashes are strictly rejected.
    - Verifies the TSA signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
-5. **TSA Leaf Certificate KeyUsage & Critical Extension Handling:**
+5. **TSA Leaf Certificate Profile & Key Usage (RFC 3161 §2.3):**
    - Critical extensions: Fails closed on unrecognized critical extensions.
    - KeyUsage: If present, MUST assert `digitalSignature` or `contentCommitment` (`nonRepudiation`), and MUST NOT assert `keyCertSign` or `crlSign`.
-   - ExtendedKeyUsage: Enforces that the TSA certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+   - ExtendedKeyUsage (RFC 3161 §2.3 profile): The certificate MUST contain exactly one Extended Key Usage extension, the extension MUST be marked critical (`critical=True`), and its only permitted KeyPurposeId must be `id-kp-timeStamping` (`1.3.6.1.5.5.7.3.8`). Rejects non-critical EKU, duplicate EKU extensions, missing EKU, or additional KeyPurposeIds (e.g. `serverAuth`, `clientAuth`).
    - Validity period: Enforces certificate validity at timestamp generation time (`not_before <= genTime <= not_after`).
 6. **Genuine Cryptographic Certificate Path Validation (`_verify_certificate_path`):**
    - Validates that the TSA certificate chains through genuine cryptographic signatures to a configured trust anchor in `trusted_tsa_certificates`.
@@ -246,6 +249,9 @@ The `TimestampEvidenceSource.TRUSTED_NOTARY` source is **unsupported in Module 1
 | **CA BasicConstraints & KeyUsage** | Checked `ca=True` only, without `pathLenConstraint` or CA `keyCertSign`. | Enforces `BasicConstraints` `ca=True`, `path_length` constraint, and `KeyUsage.keyCertSign`. | `test_rfc3161_offline_verification_ca_key_usage_and_basic_constraints`, `test_rfc3161_offline_verification_ca_path_len_constraint_exceeded` |
 | **Critical Extensions** | Did not check critical extension OIDs. | Fails closed on any unrecognized critical extension. | `test_rfc3161_offline_verification_unrecognized_critical_extension` |
 | **Prohibited Signature Hashes** | Permitted weak certificate signature hash algorithms. | Strictly rejects weak certificate signature hash algorithms (MD5, SHA-1). | `test_rfc3161_offline_verification_prohibited_weak_hash_algorithm` |
+| **TSA Extended Key Usage (RFC 3161 §2.3)** | Permitted non-critical EKU, multiple purposes, or duplicate EKU extensions. | Enforces exactly one EKU extension, marked critical, containing exclusively `id-kp-timeStamping`. Rejects non-critical EKU, extra purposes, missing EKU, and duplicate EKUs. | `test_rfc3161_offline_verification_non_critical_eku_rejected`, `test_rfc3161_offline_verification_eku_additional_purposes_rejected`, `test_rfc3161_offline_verification_valid_critical_eku_accepted` |
+| **Signer Certificate Identification (RFC 3161 §2.4.2 & RFC 5816)** | Relied solely on SignerInfo `sid` (issuer/serial or SKI) to match certificate without cryptographic binding attribute. | Enforces mandatory `SigningCertificate` (ESSCertID) or `SigningCertificateV2` (ESSCertIDv2) attribute in `signedAttrs`. Cryptographically binds `certHash` to DER of leaf TSA cert. Fails closed on missing, duplicated, conflicting, or mismatched certHash. | `test_rfc3161_offline_verification_missing_signing_certificate_rejected`, `test_rfc3161_offline_verification_duplicate_and_conflicting_signing_certs_rejected`, `test_rfc3161_offline_verification_ess_cert_id_v1_valid_and_mismatch`, `test_rfc3161_offline_verification_ess_cert_id_v2_valid_and_mismatch` |
+| **Single Signer Enforcement (RFC 3161 §2.4.2)** | Did not constrain `SignedData.signerInfos` count. | Enforces single-signer rule: exactly one `SignerInfo` allowed in TimeStampToken. Fails closed if multiple SignerInfos are present. | `test_rfc3161_offline_verification_multiple_signer_infos_rejected` |
 
 ### 7.2 Explicit PKIX Qualification Limitations
 
