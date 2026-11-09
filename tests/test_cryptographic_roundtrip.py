@@ -547,3 +547,60 @@ def test_sender_trust_model_enforcement(crypto_env):
     # Must fail closed: Charlie's signature does not match Alice's pinned root
     with pytest.raises(SecurityFailure):
         opener.open(lease_b, key_b, env_c.serialized, alice_public, budget_b)
+
+
+def test_live_mta_trace_headers_accepted(crypto_env):
+    """
+    Verify that authentic emails delivered through live MTAs (such as Google / Gmail)
+    with multiple Received, X-Received, and Authentication-Results headers parse and
+    decrypt successfully without false-positive INVALID rejection.
+    """
+    env = crypto_env
+    vault, access, p_m5 = env["vault"], env["access"], env["p_m5"]
+    ctx_a, key_a, addr_a = env["alice"]
+    ctx_b, key_b, addr_b = env["bob"]
+
+    # Alice composes and prepares message for Bob
+    lease_a = access.select(ctx_a)
+    compose = Compose(vault, access, p_m5)
+    draft = Draft(
+        to=("bob@example.invalid",),
+        cc=(),
+        subject="Confidential Architecture Review",
+        body="This is an authentic encrypted payload routed through live MTAs.",
+        attachments=(),
+        archive=True,
+    )
+    budget_a = Budget(lease_a.cancelled, time.monotonic() + 30)
+    op = compose.draft(lease_a, draft, budget_a)
+    envelope = compose.prepare(lease_a, op, key_a, budget_a)
+
+    # Simulate realistic MTA trace headers inserted during live Google SMTP/IMAP transport
+    mta_prefix = (
+        b"Delivered-To: bob@example.invalid\r\n"
+        b"Received: by 2002:a05:6838:148f:b0:3a0:1234:5678 with SMTP id abcdef.123;\r\n"
+        b"        Mon, 09 Nov 2026 01:00:05 -0800 (PST)\r\n"
+        b"X-Received: by 2002:a05:6838:... with SMTP id ...;\r\n"
+        b"        Mon, 09 Nov 2026 01:00:04 -0800 (PST)\r\n"
+        b"ARC-Seal: i=1; a=rsa-sha256; t=1731110000; cv=none; d=google.com; s=arc-20240605; b=dummy\r\n"
+        b"ARC-Authentication-Results: i=1; mx.google.com; dkim=pass\r\n"
+        b"Received: from mail-pj1-f45.google.com by mx.google.com with SMTPS id 123456\r\n"
+        b"        for <bob@example.invalid>; Mon, 09 Nov 2026 01:00:04 -0800 (PST)\r\n"
+        b"Authentication-Results: mx.google.com; dkim=pass; spf=pass\r\n"
+    )
+    live_wire = mta_prefix + envelope.serialized
+
+    # Bob opens and decrypts the message
+    lease_b = access.select(ctx_b)
+    data_b = vault._read(ctx_b)
+    sender_public = bytes(data_b["contacts"]["alice@example.invalid"]["public"])
+    opener = OpenMessage(vault, access, p_m5)
+    budget_b = Budget(lease_b.cancelled, time.monotonic() + 30)
+
+    opened = opener.open(lease_b, key_b, live_wire, sender_public, budget_b)
+    assert opened.signature_valid is True
+    assert opened.verified_confidential is True
+    assert opened.body == draft.body
+    assert opened.subject == draft.subject
+    assert opened.replay is Replay.FRESH
+
