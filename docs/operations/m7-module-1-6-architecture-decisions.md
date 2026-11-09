@@ -22,10 +22,10 @@ These proposals resolve ambiguities surrounding deployment models, multi-provide
 |---|---|---|---|
 | **ADR 010** | Standalone Native Client vs. Local Decryption Proxy | **Proposed** | Retain standalone native client architecture; reject proxy model. |
 | **ADR 011** | Unified Multi-Provider Transport Interface | **Proposed** | Abstract IMAP/SMTP transport beyond Gmail to support Microsoft 365 & standard IMAP. |
-| **ADR 012** | Enterprise Contact Discovery & Scaling | **Proposed** | Hybrid Web Key Directory (WKD) + DNS DANE/OPENPGPKEY + manual pin fallback. |
+| **ADR 012** | Enterprise Contact Discovery & Scaling | **Approved & Implemented (WS-02)** | Hybrid Web Key Directory (WKD) + Enterprise Directory with strict separation of discovery and trust. |
 | **ADR 013** | Mailbox Synchronization & Local Index Model | **Proposed** | SQLite FTS5 encrypted index cache for headers; bodies fetched on demand via `BODY.PEEK`. |
 | **ADR 014** | Multi-Device Key Hierarchy & Enrollment | **Proposed** | Single master root key certifying distinct, non-exportable per-device subkeys. |
-| **ADR 015** | Standardization of Wire Profile to `QM-OPENPGP-PQ-v1` | **Proposed** | Transition from `EXPERIMENT-M5` to versioned `v1` with backward compatibility. |
+| **ADR 015** | Standardization of Wire Profile to `QM-OPENPGP-PQ-v1` | **Approved & Implemented (WS-02)** | Standardized production profile `QM-OPENPGP-PQ-v1` with dual-read backward compatibility. |
 
 ---
 
@@ -111,6 +111,9 @@ Currently, contact public keys must be manually imported by pasting armored ASCI
 #### Recommendation
 **Adopt Option B (Standard Web Key Directory).**  
 WKD is supported natively by major secure mail ecosystems (GnuPG, ProtonMail) and allows any enterprise to publish their employees' post-quantum public keys using static files on their existing corporate web server, requiring zero QuMail backend infrastructure.
+
+#### Implementation Status (WS-02)
+Implemented in `core/key_discovery.py`, `core/enterprise_trust.py`, `core/trust_engine.py`, and `core/security_indicators.py`. RFC 9580 z-base-32 WKD lookup, in-memory bounded caching with TTL, and enterprise root anchor directory support are verified by `tests/test_ws02_identity_and_trust.py`. Strict separation of discovery and trust ensures WKD never grants silent TOFU.
 
 ---
 
@@ -198,3 +201,6 @@ The Module 1.5 roundtrip implementation marks outer MIME headers with `X-QuMail-
 #### Recommendation
 **Adopt Option B (Versioned Production Profile `QM-OPENPGP-PQ-v1`).**  
 Guarantees permanent readability for historical Module 1.5 test correspondence while establishing a formal, production-grade protocol version for all future communications.
+
+#### Implementation Status (WS-02)
+Implemented in `experiments/m5/model.py`, `experiments/m5/mime.py`, and `experiments/m5/services.py`. Outbound compositions emit `QM-OPENPGP-PQ-v1`. Inbound message parser accepts both `QM-OPENPGP-PQ-v1` and historical `QM-OPENPGP-PQ-1-EXPERIMENT-M5` while strictly rejecting unregistered profile markers. Verified in `tests/test_ws02_identity_and_trust.py`.

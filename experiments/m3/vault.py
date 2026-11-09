@@ -270,7 +270,7 @@ class Vault:
         return RootIdentity(info['fingerprint'])
 
     def pin_contact(self,ctx,address,fingerprint:RootIdentity,method:str):
-        if method not in ('in-person','independent-voice','independent-qr'):
+        if method not in ('in-person','independent-voice','independent-qr','enterprise-directory'):
             raise BoundaryError(Code.TRUST)
         with self.transaction(ctx) as data:
             contact=data['contacts'].get(address.value)

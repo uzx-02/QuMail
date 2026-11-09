@@ -70,6 +70,7 @@ class Display:
     protected: object | None = None  # Immutable M5 OpenedMessage, only after verification.
     author_claim: str = ''
     owner: AccountContext | None = None
+    indicator: object | None = None
 
     @property
     def thread(self):

@@ -63,7 +63,7 @@ class OperationTransport:
 
 
 class Workflows:
-    def __init__(self, vault, access, provider, google=None, *, gmail_enabled=False, transport_factory=None):
+    def __init__(self, vault, access, provider, google=None, *, gmail_enabled=False, transport_factory=None, discovery=None, trust_engine=None):
         self.vault, self.access = vault, access
         self.compose = Compose(vault, access, provider)
         self.repository = self.compose.repository
@@ -72,6 +72,10 @@ class Workflows:
         # Factory is a controlled protocol-test seam, never fixture state in UI.
         self.transport_factory = transport_factory or (GmailSMTP if gmail_enabled else None)
         self.offline = SubmitOutbox(self.repository, None)
+        from core.key_discovery import CachedKeyDiscoveryService
+        from core.trust_engine import TrustPolicyEngine
+        self.discovery = discovery or CachedKeyDiscoveryService()
+        self.trust_engine = trust_engine or TrustPolicyEngine(self.discovery)
 
     def check(self, lease, budget):
         self.access.check(lease, budget.deadline); budget.check()
@@ -100,6 +104,14 @@ class Workflows:
         # Use the cancellable M5 repository adapter; no trust from a UI label.
         with self.repository.transaction(lease, budget.deadline) as account:
             for address in draft.to+draft.cc:
+                contact = account._data.get('contacts', {}).get(address)
+                if not contact:
+                    disc = self.discovery.discover(address)
+                    if disc.ok and disc.key:
+                        account._vault.import_contact(account.context, EmailAddress(address), disc.key.public_key_bytes)
+                        if hasattr(self.discovery, "enterprise") and self.discovery.enterprise.is_certified_by_enterprise(address, disc.key.fingerprint):
+                            from experiments.m3.types import RootIdentity
+                            account._vault.pin_contact(account.context, EmailAddress(address), RootIdentity(disc.key.fingerprint), "enterprise-directory")
                 account._vault.recipient(account._data, EmailAddress(address))
             self.check(lease, budget)
         return 'Every recipient has a currently verified certificate. Preparation rechecks all keys.'

@@ -113,6 +113,30 @@ class IdentityService:
         view=self.active()
         return self.vault.import_contact(view.context,EmailAddress(address),public)
 
+    def discover_and_import_contact(self, address, discovery_service=None):
+        """
+        Automated key discovery for contacts (WS-02).
+        Discovers public key via WKD or enterprise directory and imports it.
+        Returns (DiscoveredKey | None, bool is_enterprise_certified).
+        """
+        from core.key_discovery import CachedKeyDiscoveryService
+        service = discovery_service or CachedKeyDiscoveryService()
+        disc = service.discover(address)
+        if not disc.ok or not disc.key:
+            return None, False
+
+        view = self.active()
+        self.vault.import_contact(view.context, EmailAddress(address), disc.key.public_key_bytes)
+
+        is_ent = (
+            getattr(service, "enterprise", None) is not None and
+            service.enterprise.is_certified_by_enterprise(address, disc.key.fingerprint)
+        )
+        if is_ent:
+            self.vault.pin_contact(view.context, EmailAddress(address), RootIdentity(disc.key.fingerprint), "enterprise-directory")
+
+        return disc.key, is_ent
+
     def verify_fingerprint(self,address,fingerprint,method):
         view=self.active()
         self.vault.pin_contact(view.context,EmailAddress(address),RootIdentity(fingerprint),method)

@@ -201,14 +201,17 @@ A foundational principle of this threat model is honest disclosure of what post-
 
 #### Scenario 5.2: Public-Key Substitution (Man-in-the-Middle on Key Discovery)
 * **Threat:** Adversary injects a rogue public key during contact exchange, enticing the sender to encrypt to the attacker's key.
-* **Required Attacker Capability:** Interception of key discovery channel.
+* **Required Attacker Capability:** Interception of key discovery channel or compromise of web server hosting WKD.
 * **Existing Mitigation:**
-  - Independent trust model: Importing a key does NOT grant trust. An explicit pinning action (`pin_contact`) requiring fingerprint confirmation is mandatory.
-  - If a contact's root key changes, sending is immediately blocked with an explicit root-replacement security warning.
-* **Evidence:** `experiments/m3/vault.py:200-230`, `docs/handover/SECURITY_CONTRACTS.md:15`.
-* **Residual Risk:** When automated WKD discovery is introduced (WS-02), a compromised domain web server could publish a rogue key.
-* **Proposed Mitigation (WS-02):** Implement domain-level key pin confirmation: first-use WKD keys prompt user to confirm domain trust; root changes always alert user.
-* **Mandatory Gate:** Controlled Pilot.
+  - Independent trust model: Importing a key does NOT grant trust. An explicit pinning action (`pin_contact`) requiring fingerprint confirmation or enterprise directory certification is mandatory.
+  - If a contact's root key changes, sending is immediately blocked with an explicit root-replacement security warning (`CHANGED_BLOCKED`).
+  - Separation of Discovery from Trust (WS-02): Discovered WKD keys are marked `EXTERNAL_CORRESPONDENT` or `ENCRYPTED_UNVERIFIED` and never granted `SECURED_BY_QUMAIL` or automatic pinning (no silent TOFU).
+  - Corporate Domain Anchors (WS-02): Admin-provisioned `EnterpriseTrustDirectory` provides corporate trust roots for company domains (`@company.com`) without manual fingerprint verification.
+  - Subkey Rotation vs Replacement (WS-02): `evaluate_key_transition` permits authentic subkey rotation signed by the same root key, but halts immediately on unauthorized primary key changes.
+* **Evidence:** `experiments/m3/vault.py:200-230`, `core/key_discovery.py`, `core/trust_engine.py`, `core/key_lifecycle.py`, `tests/test_ws02_identity_and_trust.py`.
+* **Residual Risk:** DNS/HTTPS hijacking of an unpinned external correspondent's WKD could present an unverified public key. Risk is mitigated by plain-language badge warnings (`ENCRYPTED_UNVERIFIED`) and blocking corporate-grade trust unless explicitly pinned or anchor-certified.
+* **Mitigation Status:** Implemented & Verified in WS-02 (`tests/test_ws02_identity_and_trust.py`).
+* **Mandatory Gate:** Passed for WS-02.
 
 ---
 

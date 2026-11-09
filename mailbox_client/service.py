@@ -67,10 +67,14 @@ def conventional(raw, key, seen):
 
 
 class MailboxService:
-    def __init__(self, vault, access, google, mailbox, provider, resolver=None):
+    def __init__(self, vault, access, google, mailbox, provider, resolver=None, discovery=None, trust_engine=None):
         self.vault, self.access, self.mailbox = vault, access, mailbox
         self.resolver = resolver or Credentials(vault, access, google)
         self.opener = OpenMessage(vault, access, provider)
+        from core.key_discovery import CachedKeyDiscoveryService
+        from core.trust_engine import TrustPolicyEngine
+        self.discovery = discovery or CachedKeyDiscoveryService()
+        self.trust_engine = trust_engine or TrustPolicyEngine(self.discovery)
 
     def check(self, lease, budget, key=None):
         self.access.check(lease, budget.deadline); budget.check()
@@ -116,17 +120,34 @@ class MailboxService:
             else:
                 contact = data['contacts'].get(signer_address)
                 if contact is None:
-                    logger.warning("Contact lookup failed: signer not found in local vault")
-                    raise Failure(Code.SIGNER)
-                public = bytes(contact['public'])
+                    disc = self.discovery.discover(signer_address)
+                    if disc.ok and disc.key:
+                        logger.info("Signer public key discovered via %s for %s", disc.key.source, signer_address)
+                        public = disc.key.public_key_bytes
+                    else:
+                        logger.warning("Contact lookup and discovery failed for %s", signer_address)
+                        raise Failure(Code.SIGNER)
+                else:
+                    public = bytes(contact['public'])
             try:
                 opened = self.opener.open(lease, key_handle, raw, public, budget)
             except Exception as e:
                 logger.error("Cryptographic message verification failed with %s", type(e).__name__)
                 raise
-            result = Display(key, opened.subject, opened.body,
-                f'Signature valid; identity: {opened.identity_trust}; replay: {opened.replay.value}; '
-                f'outer mismatches: {", ".join(opened.mismatches) or "none"}; archive: {opened.archive}', seen, opened)
+            decision = self.trust_engine.evaluate_inbound_message(
+                sender=opened.sender,
+                signer_fingerprint=opened.signer_root,
+                signature_valid=opened.signature_valid,
+                identity_trust=opened.identity_trust,
+                replay_state=opened.replay.value,
+                mismatches=opened.mismatches,
+                is_archive=opened.archive,
+            )
+            sec_text = (
+                f"[{decision.indicator.headline}] {decision.indicator.description} "
+                f"({decision.indicator.action_advice}) | Replay: {opened.replay.value}"
+            )
+            result = Display(key, opened.subject, opened.body, sec_text, seen, opened, indicator=decision.indicator)
         elif kind is Kind.LEGACY:
             result = Display(key, 'Legacy encrypted message', '[Original bytes retained on server; use the isolated legacy reader.]',
                              'Legacy: unverified compatibility; no modern verification claim.', seen)

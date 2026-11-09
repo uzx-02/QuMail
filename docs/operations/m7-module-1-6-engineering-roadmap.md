@@ -85,8 +85,14 @@ Rather than dozens of disjointed patches, work is organized into **seven substan
 
 ### WS-02: Cryptographic Identity, Profile & Enterprise Trust
 * **Identifier:** `WS-02`
+* **Status:** **COMPLETED** (2026-11-09)
+* **Implementation Branch:** `codex/m7-module-1-6-ws02`
+* **Verification Evidence:** 72/72 automated tests passing (`tests/test_startup.py`, `tests/test_ws01_bootstrap_hygiene.py`, `tests/test_ws02_identity_and_trust.py`, `tests/test_cryptographic_roundtrip.py`, `tests/test_cancellation_submission_semantics.py`).
+* **Implementation Report:** [m7-module-1-6-ws02-implementation-report.md](m7-module-1-6-ws02-implementation-report.md)
+* **Security Specifications:** [identity-discovery-and-trust-policy.md](../security/identity-discovery-and-trust-policy.md) | [qm-openpgp-pq-v1-profile.md](../security/qm-openpgp-pq-v1-profile.md)
+* **Operations Guide:** [key-lifecycle-and-rotation.md](key-lifecycle-and-rotation.md)
 * **Target Gate:** Gate 1 (Pilot Readiness)
-* **Objective:** Standardize the post-quantum wire profile, implement automated contact discovery via Web Key Directory (WKD), enforce subkey expiration tracking, and support time-aware historical verification.
+* **Objective:** Standardize the post-quantum wire profile, implement automated contact discovery via Web Key Directory (WKD) and enterprise directory, enforce subkey expiration tracking, and support time-aware historical verification.
 * **Problems Addressed:** `M16-KEY-001`, `M16-ONB-001`, `M16-KEY-002`, `M16-KEY-004`.
 * **Components Affected:** `experiments/m5/model.py`, `experiments/m5/mime.py`, `experiments/m5/services.py`, `core/identity_service.py`, `experiments/m3/vault.py`, `ui/identity_settings.py`.
 * **Dependencies:** `WS-01`.
@@ -283,7 +289,7 @@ flowchart TD
 | Workstream | Identifier | Priority | Target Gate | Status | Engineering Days | Primary Files |
 |---|---|---|---|:---:|---|---|
 | **Production Baseline & Hygiene** | WS-01 | P0 | Gate 0 | **COMPLETED** | Completed | `main.py`, `service.py`, `bin/`, `core/` |
-| **Identity, Profile & Trust** | WS-02 | P1 | Gate 1 | Medium | 3–4 days | `model.py`, `mime.py`, `identity_service.py` |
+| **Identity, Profile & Trust** | WS-02 | P1 | Gate 1 | **COMPLETED** | Completed | `core/key_discovery.py`, `core/trust_engine.py`, `core/security_indicators.py` |
 | **Inbound Sync & 15 MiB Limits** | WS-03 | P1 | Gate 1 | High | 5–6 days | `gmail.py`, `provider.py`, `mailbox_window.py` |
 | **Outbox Reconciliation & Resilience**| WS-04 | P1 | Gate 1 | Medium | 3–4 days | `model.py`, `workflows.py`, `mail_actions.py` |
 | **Usability & Event-Driven UX** | WS-05 | P1 | Gate 1 | Medium | 3 days | `mailbox_window.py`, `mail_accessibility.py` |

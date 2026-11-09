@@ -46,8 +46,8 @@ def decode_draft(raw):
 
 class MessageAccount(AccountTransaction):
     def binding(self,key,recipients,profile):
-        if profile!=PROFILE or not 1<=len(recipients)<=MAX_RECIPIENTS: raise Failure(Code.PROFILE)
-        return replace(super().binding(key,recipients,CRYPTO_PROFILE),profile=PROFILE)
+        if profile not in SUPPORTED_PROFILES or not 1<=len(recipients)<=MAX_RECIPIENTS: raise Failure(Code.PROFILE)
+        return replace(super().binding(key,recipients,CRYPTO_PROFILE),profile=profile)
 
 
 class Repository(VaultOutbox):

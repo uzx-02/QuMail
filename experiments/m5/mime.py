@@ -206,7 +206,7 @@ def parse_inner(raw):
     n=parse(raw,MAX_INNER); h=n.headers
     only_headers(n,{x.lower() for x in REQUIRED+OPTIONAL+('HP-Outer',)+STRUCTURAL})
     if any(h.get(name) is None for name in REQUIRED): fail()
-    if str(h['X-QuMail-Profile'])!=PROFILE: fail(Code.PROFILE)
+    if str(h['X-QuMail-Profile']) not in SUPPORTED_PROFILES: fail(Code.PROFILE)
     if h.get_param('hp')!='cipher' or h.get('MIME-Version')!='1.0': fail(Code.PROFILE)
     parameters(n,{'boundary','hp'} if n.children else {'charset','hp'})
     sender=address(str(h['From'])); to=addresses(h['To']); cc=addresses(h['Cc']) if h.get('Cc') else ()
