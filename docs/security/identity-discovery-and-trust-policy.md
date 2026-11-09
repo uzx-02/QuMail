@@ -67,16 +67,21 @@ QuMail strictly separates **Key Discovery** from **Identity Trust**:
 
 ## 3. Automated Key Discovery Engine (`core/key_discovery.py`)
 
-### 3.1 OpenPGP Web Key Directory (WKD)
-QuMail implements the standard WKD retrieval protocol specified in RFC 9580 and draft-koch-openpgp-webkey-service:
+### 3.1 OpenPGP Web Key Directory (WKD) & Network Hardening
+QuMail implements the standard WKD retrieval protocol specified in RFC 9580 and draft-koch-openpgp-webkey-service, with strict network-level security controls:
 
 * **Hash Derivation:** The local part of the email address is lowercased and hashed with SHA-1 (160 bits). The resulting 20 bytes are encoded using the 32-character z-base-32 alphabet (`ybndrfg8ejkmcpqxot1uwisza345h769`):
   $$\text{hu} = \text{zbase32}(\text{SHA-1}(\text{lowercase}(\text{local\_part})))$$
 * **Resolution Priority:**
   1. **Advanced Method:** `https://openpgpkey.<domain>/.well-known/openpgpkey/<domain>/hu/<hu>?l=<local_part>`
   2. **Direct Method:** `https://<domain>/.well-known/openpgpkey/<domain>/hu/<hu>?l=<local_part>`
+* **Host & Domain Sanitization:** Domain syntax is strictly validated against RFC 1123 / RFC 952 hostname grammar. Control characters, path traversal (`..`), spaces, colons (ports), slashes, and null bytes are rejected.
+* **Anti-SSRF Protection:** Before establishing any connection, the destination host is resolved and every returned IP address is checked against prohibited private, loopback, link-local, carrier-NAT, multicast, or reserved ranges (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `100.64.0.0/10`, `::1`, `fc00::/7`, `fe80::/10`). Destination IPs resolving to prohibited ranges abort immediately with `SecurityError`.
+* **DNS Rebinding Defense:** The client connects directly to the pre-validated IP address while verifying the TLS certificate against the SNI hostname, eliminating time-of-check to time-of-use (TOCTOU) address switching.
+* **Redirect Revalidation:** Redirects are capped at 2 hops and strictly revalidated. Redirects to insecure HTTP or to foreign hostnames outside the target domain are blocked.
+* **Resource Bounding & Content-Type:** HTTP fetch enforces a 64 KiB payload ceiling (`MAX_KEY_BYTES`) with early stream termination. Responses with `Content-Type: text/html` are rejected.
 * **Address Binding Validation:** When WKD returns an OpenPGP certificate, the client inspects its User ID packets. If the queried email address is not explicitly bound to the certificate, the key is rejected with `ADDRESS_MISMATCH`.
-* **Resource Bounding:** HTTP fetch enforces a 64 KiB payload ceiling (`MAX_KEY_BYTES`) and a 5.0-second timeout to prevent resource exhaustion or denial-of-service.
+* **Non-Blocking Architecture:** Network discovery operations are executed off the main UI thread via thread-pool backed asynchronous methods (`lookup_async`, `discover_async`).
 
 ### 3.2 Enterprise Key Directory Provider
 For corporate deployments, QuMail provides `EnterpriseDirectoryProvider`. Corporate identity directories take precedence over public WKD, allowing organizations to maintain authoritative internal key directories for all employees.
@@ -142,10 +147,26 @@ The security indicator contract defines the plain-language representations rende
 
 ---
 
-## 6. Enterprise Trust Provisioning (`core/enterprise_trust.py`)
+## 6. Enterprise Trust Provisioning & Policy Integration (`core/enterprise_trust.py`)
 
 In enterprise deployments, IT administrators provision organization-wide trust anchors (`TrustAnchor`):
-* Administrators register approved domain roots (e.g., `@acme.com`).
-* Certified employee keys are registered under active anchors (`EnterpriseContactRecord`).
-* When an employee addresses an email to a colleague in the same organization, the client recognizes the enterprise certification automatically.
-* When an anchor is revoked (e.g., during corporate restructuring or certificate authority compromise), all contacts certified under that anchor immediately lose verified status.
+
+### 6.1 Cryptographic Certification vs. Administrative Provisioning
+QuMail defines two explicit administrative trust models:
+1. **`CRYPTOGRAPHICALLY_SIGNED` (Recommended):** The enterprise trust anchor contains an administrator Ed25519 public key. Every certified employee contact enrollment is cryptographically authenticated by an administrator signature over canonical bytes:
+   $$\text{payload} = \text{"QuMail-Enterprise-Auth-v1:"} \parallel \text{anchor\_id} \parallel \text{email} \parallel \text{fingerprint} \parallel \text{expires\_at}$$
+   If the signature is missing, expired, or invalid, certification is rejected.
+2. **`LOCAL_ADMIN_PROVISIONED`:** In environments where policies are deployed via Windows Group Policy or endpoint management agents into the DPAPI-secured local vault directly, trust derives strictly from the local OS administrative security boundary. This limitation is explicitly stated rather than overclaiming cryptographic PKI certification.
+
+### 6.2 Domain Scoping & Subdomain Protection
+An anchor authorizes specific domain scopes (`domains=("acme.corp",)`). The client strictly verifies that contact email domains match the authorized scope or authorized subdomains (e.g. `eng.acme.corp`), and rejects foreign domains or spoofing attempts (e.g. `acme.corp.attacker.com`).
+
+### 6.3 Revocation & Expiration Propagation
+- When a trust anchor is revoked (`revoke_trust_anchor`), all contacts certified under that anchor immediately lose verified status.
+- When an individual contact authorization expires or is revoked, verified status is revoked immediately.
+
+### 6.4 Conflict Policy: Enterprise Precedence vs. Public WKD
+When an email address belongs to an authorized enterprise domain:
+- **Enterprise Precedence:** The authenticated enterprise directory is the authoritative source of truth. Conflicting keys returned by public WKD are rejected.
+- **Anti-Bypass Protection:** If an enterprise contact's key is revoked or expired in the corporate directory, sending is **blocked**. QuMail strictly **prohibits silent fallback to public WKD**, preventing terminated employees or compromised keys from bypassing corporate revocation.
+- **Unavailable Directory:** If the corporate directory is unavailable or disabled, public WKD keys are treated strictly as unverified `EXTERNAL_CORRESPONDENT` and cannot receive verified trust.

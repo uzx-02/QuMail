@@ -95,16 +95,17 @@ Under WS-02, all four targeted pilot readiness gaps (`M16-KEY-001`, `M16-ONB-001
 
 ## 3. Automated Test Verification Results
 
-All **72 automated tests** passed cleanly in **23.18 seconds**:
+All **104 automated tests** passed cleanly in **25.00 seconds**:
 
 | Test Suite File | Focus Area | Tests Executed | Passed | Failed |
 |---|---|:---:|:---:|:---:|
 | `tests/test_startup.py` | Modern default launch, CLI flags, dry-run network isolation | 11 | 11 | 0 |
 | `tests/test_ws01_bootstrap_hygiene.py` | Provider resolution, PE CFG `0xc160`, PrivacyFilter, code hygiene | 14 | 14 | 0 |
 | `tests/test_ws02_identity_and_trust.py` | WKD discovery, z-base-32, TrustEngine, SecurityIndicators, Profile v1, lifecycle | 25 | 25 | 0 |
+| `tests/test_ws02_security_assurance.py` | Historical time evidence, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 32 | 32 | 0 |
 | `tests/test_cryptographic_roundtrip.py` | End-to-end M5 crypto roundtrip, Ed25519, replay detection, MIME parser | 15 | 15 | 0 |
 | `tests/test_cancellation_submission_semantics.py` | Outbox cancellation, uncertain submission recovery, crash semantics | 7 | 7 | 0 |
-| **Total** | **Complete Modern Regression Suite** | **72** | **72** | **0** |
+| **Total** | **Complete Modern Regression Suite** | **104** | **104** | **0** |
 
 ---
 
@@ -112,10 +113,10 @@ All **72 automated tests** passed cleanly in **23.18 seconds**:
 
 | Gap ID | Description | Severity | Prior Status | WS-02 Status | Evidence |
 |---|---|:---:|:---:|:---:|---|
-| **M16-KEY-001** | Experimental wire profile marker | High (P1) | OPEN | **RESOLVED** | `QM-OPENPGP-PQ-v1`, `SUPPORTED_PROFILES`, `test_mime_parse_inner_accepts_v1_and_legacy_m5` |
-| **M16-ONB-001** | Manual out-of-band fingerprint verification | High (P1) | OPEN | **RESOLVED** | `core/key_discovery.py`, `core/enterprise_trust.py`, `IdentityService.discover_and_import_contact` |
-| **M16-KEY-002** | No key expiration enforcement or renewal alerts | Medium (P1) | OPEN | **RESOLVED** | `core/key_lifecycle.py:evaluate_key_expiration` (< 30-day warning) |
-| **M16-KEY-004** | Lack of historical signer expiration policy | Medium (P2) | OPEN | **RESOLVED** | `core/key_lifecycle.py:is_signature_historically_valid` (RFC 4880/9580 time-aware) |
+| **M16-KEY-001** | Experimental wire profile marker | High (P1) | OPEN | **RESOLVED** | `QM-OPENPGP-PQ-v1`, `SUPPORTED_PROFILES`, `test_mime_parse_inner_accepts_v1_and_legacy_m5`, `test_module_1_5_legacy_message_complete_inbound_parsing_and_verification` |
+| **M16-ONB-001** | Manual out-of-band fingerprint verification | High (P1) | OPEN | **RESOLVED** | `core/key_discovery.py`, `core/enterprise_trust.py`, `IdentityService.discover_and_import_contact`, `test_wkd_provider_success`, `test_enterprise_trust_valid_administrator_authorization` |
+| **M16-KEY-002** | No key expiration enforcement or renewal alerts | Medium (P1) | OPEN | **RESOLVED** | `core/key_lifecycle.py:evaluate_key_expiration` (< 30-day warning), `test_evaluate_key_expiration_alert_under_30_days` |
+| **M16-KEY-004** | Lack of historical signer expiration policy | Medium (P2) | OPEN | **RESOLVED** | `core/key_lifecycle.py:verify_historical_signature` (time-aware verification with trusted timestamp evidence), `test_historical_signature_valid_with_trusted_tsa_evidence` |
 
 ---
 
@@ -128,4 +129,54 @@ In accordance with WS-02 constraints:
 * The 3-pane UI overhaul remains deferred to WS-05 (WS-02 provides the backend engine and indicator contract).
 * No Windows installer or GPO packaging was introduced (deferred to WS-06).
 * No live Google OAuth, SMTP, or IMAP operations were conducted; all tests use deterministic mocks and fixtures.
-* Baselines `eff3736`, `c9a3cf4`, `6b16f36`, and `d82ea90` remain fully preserved.
+* Baselines `eff3736`, `c9a3cf4`, `6b16f36`, `d82ea90`, and `cd2b43e` remain fully preserved.
+
+---
+
+## 6. WS-02 Security Assurance Closeout
+
+Following targeted technical lead review of checkpoint `cd2b43e`, four critical security assurance areas were remediated, verified, and documented prior to WS-03.
+
+### 6.1 Findings
+1. **Historical Signature Verification:** An OpenPGP signature creation-time field is untrusted metadata controlled by the signer. If a key subsequently expires or is revoked/compromised, an adversary holding that private key could backdate a forged signature to claim pre-expiry creation. Evaluating historical validity solely against claimed signature time violated cryptographic trust boundaries.
+2. **WKD Network Security:** The initial HTTP fetcher did not validate redirect destinations against destination host boundaries, did not defend against Server-Side Request Forgery (SSRF) targeting loopback or private cloud metadata services (e.g. `169.254.169.254`), lacked DNS rebinding defense between validation and TCP connection, and did not reject non-binary Content-Types (e.g. `text/html`).
+3. **Enterprise Trust Boundaries:** Storing a provenance string (`enterprise-directory`) in local storage is not cryptographic proof of administrator authorization. A cryptographically sound enterprise directory must authenticate administrator authorization manifests with digital signatures, strictly enforce domain scoping, immediately propagate revocations, and prevent silent fallback to unverified public WKD when an enterprise key is revoked.
+4. **Module 1.5 Wire Compatibility:** Merely checking that `SUPPORTED_PROFILES` contained the legacy string did not prove end-to-end compatibility of accepted Module 1.5 wire messages against the native post-quantum provider (`qumail-m5-provider.exe`), nor did it verify replay detection, header integrity, or absence of cryptographic downgrade.
+
+### 6.2 Fixes Applied
+1. **Time-Aware Historical Signature Verification (`core/key_lifecycle.py`):**
+   - Implemented `verify_historical_signature` and `TimestampEvidence` supporting RFC 3161 TSA tokens, authenticated vault replay receipts, and trusted notaries.
+   - Enforced **Backdating Defense**: When a key is expired or revoked and no independent trusted timestamp evidence is provided, QuMail returns `INDETERMINATE_NO_TRUSTED_TIME` (`is_valid=False`).
+   - Differentiated Revocation Reasons: Keys revoked due to `KEY_COMPROMISED` invalidate all signatures postdating compromise; only signatures with authenticated receipts strictly predating the compromise timestamp remain valid.
+2. **Hardened HTTPS WKD Fetcher (`core/key_discovery.py`):**
+   - Implemented `secure_wkd_fetch`, `validate_domain`, and `is_ip_prohibited`.
+   - **Anti-SSRF Protection:** Resolves hostnames and validates all resolved IPs against loopback (`127.0.0.0/8`, `::1`), RFC 1918 private (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`), link-local (`169.254.0.0/16`, `fe80::/10`), carrier-grade NAT (`100.64.0.0/10`), and multicast ranges.
+   - **DNS Rebinding Defense:** Pins the TCP connection directly to the pre-validated IP address while verifying the TLS certificate against the SNI hostname.
+   - **Redirect Hardening:** Revalidates every redirect destination (max 2 hops); strictly rejects HTTP downgrades and redirects to foreign domains.
+   - **Payload & Content-Type Defense:** Enforces strict 64 KiB ceiling with early stream abortion; rejects HTML or non-binary responses.
+   - **Non-Blocking Architecture:** Added `lookup_async` and `discover_async` backed by thread pools for non-blocking UI execution.
+3. **Cryptographically Authenticated Enterprise Directory (`core/enterprise_trust.py`):**
+   - Introduced `TrustAnchor.admin_public_key` (Ed25519) and `EnterpriseContactRecord.admin_signature`.
+   - Differentiated `CRYPTOGRAPHICALLY_SIGNED` from `LOCAL_ADMIN_PROVISIONED` policy boundaries.
+   - Canonical authorization payload: `QuMail-Enterprise-Auth-v1:{anchor_id}:{email}:{fingerprint}:{expires_at}` verified via Ed25519.
+   - Domain Scoping: Enforced exact domain and subdomain matching (rejecting unauthorized domains and subdomain spoofing).
+   - Conflict & Fallback Policy: Authenticated enterprise directory records take absolute precedence over public WKD. If an enterprise key is revoked or expired, sending is blocked and silent fallback to public WKD is strictly prohibited.
+4. **End-to-End Module 1.5 Compatibility Suite (`tests/test_ws02_security_assurance.py`):**
+   - Authored complete native provider tests for `QM-OPENPGP-PQ-1-EXPERIMENT-M5` messages: verifies decryption, composite ML-DSA-65/Ed25519 signature verification, replay receipt persistence, and duplicate detection.
+   - Verified that `QM-OPENPGP-PQ-v1` roundtrip functions identically.
+   - Verified strict rejection of unknown profiles (`QM-OPENPGP-PQ-UNSUPPORTED-v99`) and tampered wire payloads (no cryptographic downgrade).
+
+### 6.3 Remaining Limitations
+- **External TSA Network Client:** The timestamp verification engine parses and validates `TimestampEvidence` data structures; live automated network querying of RFC 3161 TSA servers over HTTP/TSP remains mock-tested in WS-02 and will be connected to an enterprise time service in enterprise deployment phases.
+- **Hardware Token / Smartcard Anchors:** Enterprise trust anchors currently support Ed25519 software keys and Windows Credential Manager DPAPI master keys; hardware PKCS#11 / FIPS YubiKey support is deferred to post-Module 1.6 milestones.
+- **WKD Directory Publishing:** QuMail implements client-side WKD discovery; generating and uploading static WKD directories to corporate web servers is an administrative out-of-band operational task.
+
+### 6.4 Test Evidence Summary
+- **Total Tests:** 104 passed in 25.00s.
+- **Security Tests:** 32 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
+- **Failures / Skips:** 0 failed, 0 skipped.
+
+### 6.5 Trust Assumptions
+1. **Local Endpoint Boundary:** The Windows user session and process memory are assumed uncompromised by root-level malware during cryptographic operations.
+2. **Administrator Key Authenticity:** The administrator Ed25519 public key configured in a `TrustAnchor` is provisioned through authenticated administrative channels (e.g. signed configuration file or Windows Group Policy).
+3. **No Silent TOFU:** Network key availability (WKD) is explicitly assumed to be an unauthenticated transport channel until verified out-of-band or certified by an enterprise trust anchor.

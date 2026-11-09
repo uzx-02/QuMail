@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import time
 from typing import Any
 
 from core.enterprise_trust import EnterpriseTrustDirectory
@@ -120,23 +121,67 @@ class TrustPolicyEngine:
                 )
 
         # 2. Check enterprise directory
+        domain = clean_email.split("@")[-1] if "@" in clean_email else ""
+        is_enterprise_domain = any(a.authorizes_domain(domain) for a in self.enterprise.anchors.values() if not a.is_revoked)
         ent_rec = self.enterprise.get_contact_record(clean_email)
-        if ent_rec and not ent_rec.is_revoked:
-            ind = SecurityIndicator.secured(clean_email)
-            return TrustDecision(
-                email=clean_email,
-                state=TrustState.VERIFIED,
-                fingerprint=ent_rec.fingerprint,
-                can_encrypt=True,
-                is_identity_verified=True,
-                indicator=ind,
-                reasons=[f"Recipient certified by enterprise trust anchor '{ent_rec.authorized_by_anchor}'"],
-            )
 
-        # 3. Check automated key discovery (WKD / directory)
+        if ent_rec:
+            if ent_rec.is_revoked:
+                ind = SecurityIndicator.key_revoked_or_expired("revoked")
+                return TrustDecision(
+                    email=clean_email,
+                    state=TrustState.VERIFICATION_FAILED,
+                    fingerprint=ent_rec.fingerprint,
+                    can_encrypt=False,
+                    is_identity_verified=False,
+                    indicator=ind,
+                    reasons=["Recipient key is revoked in enterprise directory; public WKD fallback prohibited"],
+                )
+            if ent_rec.expires_at and ent_rec.expires_at < time.time():
+                ind = SecurityIndicator.key_revoked_or_expired("expired")
+                return TrustDecision(
+                    email=clean_email,
+                    state=TrustState.VERIFICATION_FAILED,
+                    fingerprint=ent_rec.fingerprint,
+                    can_encrypt=False,
+                    is_identity_verified=False,
+                    indicator=ind,
+                    reasons=["Recipient enterprise authorization has expired; public WKD fallback prohibited"],
+                )
+
+            if self.enterprise.is_certified_by_enterprise(clean_email, ent_rec.fingerprint):
+                ind = SecurityIndicator.secured(clean_email)
+                return TrustDecision(
+                    email=clean_email,
+                    state=TrustState.VERIFIED,
+                    fingerprint=ent_rec.fingerprint,
+                    can_encrypt=True,
+                    is_identity_verified=True,
+                    indicator=ind,
+                    reasons=[f"Recipient certified by enterprise trust anchor '{ent_rec.authorized_by_anchor}'"],
+                )
+            else:
+                ind = SecurityIndicator.verification_unavailable("Enterprise authorization invalid or anchor revoked")
+                return TrustDecision(
+                    email=clean_email,
+                    state=TrustState.VERIFICATION_FAILED,
+                    fingerprint=ent_rec.fingerprint,
+                    can_encrypt=False,
+                    is_identity_verified=False,
+                    indicator=ind,
+                    reasons=["Enterprise trust anchor revoked or administrator signature invalid"],
+                )
+
+        # 3. Check automated key discovery (WKD / public directory)
         discovery_res = self.discovery.discover(clean_email)
         if discovery_res.ok and discovery_res.key:
             # Successfully discovered key, but identity is NOT independently verified!
+            # If domain is an enterprise domain but user was omitted from directory, document reason
+            reason = (
+                "Recipient key found in WKD but uncertified by corporate directory for enterprise domain"
+                if is_enterprise_domain
+                else "Recipient key discovered via WKD/public directory; identity unverified"
+            )
             ind = SecurityIndicator.external_correspondent(clean_email)
             return TrustDecision(
                 email=clean_email,
@@ -145,7 +190,7 @@ class TrustPolicyEngine:
                 can_encrypt=True,
                 is_identity_verified=False,
                 indicator=ind,
-                reasons=["Recipient key discovered via WKD/public directory; identity unverified"],
+                reasons=[reason],
             )
 
         # 4. Key unavailable

@@ -213,6 +213,44 @@ A foundational principle of this threat model is honest disclosure of what post-
 * **Mitigation Status:** Implemented & Verified in WS-02 (`tests/test_ws02_identity_and_trust.py`).
 * **Mandatory Gate:** Passed for WS-02.
 
+#### Scenario 5.3: Historical Signature Backdating & Key Compromise Forgery
+* **Threat:** Attacker acquires an expired or compromised private key, crafts a fraudulent message today, and backdates the OpenPGP signature creation timestamp to appear signed years earlier when the key was active.
+* **Required Attacker Capability:** Possession of an expired or compromised private key.
+* **Existing Mitigation:**
+  - Backdating Defense: An OpenPGP signature creation-time field is untrusted metadata. QuMail strictly rejects claimed signature time as proof of historical validity.
+  - Granular Historical Verification: When a key is expired or revoked, `core/key_lifecycle.py:verify_historical_signature` requires independent, authenticated time evidence (`TimestampEvidence`: RFC 3161 TSA token or durable vault replay receipt committed at live reception). Without evidence, it returns `INDETERMINATE_NO_TRUSTED_TIME`.
+  - Compromise Handling: Keys revoked due to `KEY_COMPROMISED` invalidate all signatures postdating compromise; only signatures with authenticated receipts strictly predating the compromise point are accepted.
+* **Evidence:** `core/key_lifecycle.py`, `tests/test_ws02_security_assurance.py`.
+* **Residual Risk:** If an attacker compromises a key AND compromises the local vault replay database, they could forge local receipts. Protected by SQLite AES-256-GCM encryption and OS DPAPI master key.
+* **Mitigation Status:** Implemented & Verified in WS-02 Security Assurance.
+* **Mandatory Gate:** Passed for WS-02.
+
+#### Scenario 5.4: WKD Network SSRF, DNS Rebinding & Hostile Redirection
+* **Threat:** Malicious email domain induces QuMail to query a WKD server that resolves to local private IP addresses (e.g. AWS/Azure metadata `169.254.169.254`, localhost `127.0.0.1`, internal routers) or redirects to an external malicious server.
+* **Required Attacker Capability:** Control over the recipient or sender email domain name.
+* **Existing Mitigation:**
+  - Strict HTTPS Enforcement: Insecure HTTP connections and HTTPS-to-HTTP downgrades are rejected.
+  - Domain Sanitization: `validate_domain` strictly rejects malformed syntax, control characters, colons (ports), slashes, and spaces.
+  - Anti-SSRF Defense: `is_ip_prohibited` resolves hostnames and rejects any address in loopback, RFC 1918 private, link-local, carrier-grade NAT, multicast, or reserved ranges.
+  - DNS Rebinding Defense: TCP socket connects directly to the pre-validated IP while validating TLS against the target SNI hostname.
+  - Redirect Hardening: Redirects are capped at 2 hops, revalidated against the target domain, and blocked if pointing to external hosts or prohibited IPs.
+  - Payload Ceiling: Bounded 64 KiB ceiling with stream abort; HTML responses rejected.
+* **Evidence:** `core/key_discovery.py:secure_wkd_fetch`, `tests/test_ws02_security_assurance.py`.
+* **Residual Risk:** Low. Network querying is sandboxed, memory-bounded, and strictly validates destinations.
+* **Mitigation Status:** Implemented & Verified in WS-02 Security Assurance.
+* **Mandatory Gate:** Passed for WS-02.
+
+#### Scenario 5.5: Enterprise Key Revocation Bypass via Public Directory Fallback
+* **Threat:** Terminated employee or compromised account has their key revoked in the corporate enterprise directory; attacker publishes an unverified public key in public WKD hoping the client will fall back to it.
+* **Required Attacker Capability:** Control over public DNS/web hosting for an enterprise domain, or third-party WKD publication.
+* **Existing Mitigation:**
+  - Enterprise Absolute Precedence: Authenticated enterprise directory is the authoritative source of truth for corporate domains (`@company.com`).
+  - Anti-Bypass Fallback Blocking: When an enterprise key is revoked or expired in the corporate directory, sending is blocked. Silent fallback to public WKD is strictly prohibited (`VERIFICATION_FAILED`).
+* **Evidence:** `core/trust_engine.py`, `core/enterprise_trust.py`, `tests/test_ws02_security_assurance.py`.
+* **Residual Risk:** None; corporate domain keys cannot be overridden by public directory records.
+* **Mitigation Status:** Implemented & Verified in WS-02 Security Assurance.
+* **Mandatory Gate:** Passed for WS-02.
+
 ---
 
 ### Domain 6: Replay, Duplicate & State Manipulation Attacks

@@ -70,17 +70,38 @@ If an incoming message or directory lookup presents a **different primary root f
 
 ---
 
-## 4. RFC 4880 / RFC 9580 Time-Aware Historical Verification
+## 4. RFC 4880 / RFC 9580 Time-Aware Historical Verification & Backdating Defense
 
 In standard OpenPGP implementations, when an annual subkey expires, previously received emails signed by that subkey are often erroneously flagged as having "invalid" or "untrusted" signatures.
 
-QuMail implements **time-aware historical signature verification**:
+Conversely, a naive implementation that evaluates validity against an unauthenticated `signature_time` packet field creates a severe security vulnerability: **backdating attacks**. An adversary who compromises or acquires an expired private key could craft a signature today with a falsified creation date from 2 years ago, tricking the client into validating it as authentic historical correspondence.
 
-$$\text{Valid}(\text{Signature}) \iff t_{\text{signed}} \ge t_{\text{created}} \land t_{\text{signed}} \le t_{\text{expires}} \land t_{\text{signed}} < t_{\text{revoked}}$$
+### 4.1 Security Invariant: Signature Creation Time is Not Trusted Evidence
+- The OpenPGP signature creation timestamp packet (`0x02` subpacket) is untrusted metadata controlled by whoever holds the private key.
+- Claimed signature time alone **CANNOT** prove that a signature was created before key expiration, revocation, or compromise.
 
-* If an email was signed on `2026-03-01` by a subkey that was active on that date, and the subkey subsequently expires on `2027-01-01`, opening the message in `2027` evaluates the signature against key status on `2026-03-01`.
-* The signature remains historically authentic.
-* If, however, a message timestamp postdates key expiration or revocation, verification fails immediately.
+### 4.2 Defensible Trusted Time Evidence (`TimestampEvidence`)
+To establish true historical validity, QuMail requires independent, authenticated time evidence:
+1. **RFC 3161 Time-Stamp Protocol (TSA):** Cryptographically signed timestamp tokens issued by an independent Time Stamping Authority binding the signature digest.
+2. **Authenticated Local Vault Replay Receipts:** When QuMail receives and verifies an email live from the mail server, it commits a SHA-256 digest and Unix timestamp (`first_seen`) inside the encrypted SQLite vault (`m5_seen_v1`) before releasing plaintext. This durable receipt serves as local cryptographic proof that the message existed prior to that timestamp.
+3. **Trusted Cryptographic Notaries:** Counter-signatures issued by corporate archival notaries.
+
+### 4.3 Granular Historical Verdicts (`verify_historical_signature`)
+
+| Historical Verdict | Condition | Meaning |
+|---|---|---|
+| `VALID_HISTORICAL` | Trusted time evidence exists, and $t_{\text{evidence}} \le t_{\text{expires}} \land t_{\text{evidence}} < t_{\text{revoked}}$ | Cryptographically and historically authentic. |
+| `INDETERMINATE_NO_TRUSTED_TIME` | Key is currently expired or revoked, and **no trusted timestamp evidence** was provided. | Cannot verify historical validity; unauthenticated claimed signature time rejected (Backdating Defense). |
+| `EXPIRED_AT_CREATION` | Verified timestamp proves signature was created after key expired ($t_{\text{evidence}} > t_{\text{expires}}$). | Invalid; key was expired at signing. |
+| `REVOKED_AT_CREATION` | Verified timestamp proves signature was created after key was revoked ($t_{\text{evidence}} > t_{\text{revoked}}$). | Invalid; key was revoked at signing. |
+| `KEY_COMPROMISED` | Key was revoked due to `KEY_COMPROMISED` and timestamp postdates compromise point, or no prior receipt exists. | Untrusted; key was compromised. |
+| `INVALID_EVIDENCE` | Timestamp evidence is malformed, unverified, or contradictory ($t_{\text{claimed}} > t_{\text{evidence}}$). | Invalid evidence rejected. |
+| `PREDATES_KEY` | Claimed or evidence timestamp predates key creation. | Invalid signature date. |
+
+### 4.4 Revocation Reason Differentiation
+Not all revocations are equivalent:
+* **Key Superseded / Key Retired (`KEY_SUPERSEDED`, `KEY_RETIRED`):** Normal lifecycle retirement. Signatures with trusted timestamp evidence pre-dating the retirement date remain valid.
+* **Key Compromised (`KEY_COMPROMISED`):** Private key was stolen or exposed. All signatures postdating the compromise timestamp are invalidated. Only signatures with authenticated prior receipts recorded strictly *before* the compromise point can be historically trusted.
 
 ---
 

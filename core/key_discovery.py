@@ -15,10 +15,14 @@ A successfully retrieved key is NEVER automatically upgraded to Verified.
 
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
+import ipaddress
 import re
+import socket
+import ssl
 import time
 from typing import Callable, Protocol
 import urllib.error
@@ -34,6 +38,220 @@ ZBASE32_ALPHABET = "ybndrfg8ejkmcpqxot1uwisza345h769"
 MAX_KEY_BYTES = 64 * 1024  # 64 KiB ceiling for public key payloads
 DEFAULT_CACHE_TTL = 86400  # 24 hours
 DEFAULT_HTTP_TIMEOUT = 5.0  # seconds
+
+
+class SecurityError(Exception):
+    """Raised when a network operation violates a security boundary."""
+
+
+DOMAIN_REGEX = re.compile(
+    r"^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$"
+)
+
+
+def validate_domain(domain: str) -> str:
+    """Validate and sanitize an email domain name according to RFC 1123 / RFC 952."""
+    cleaned = domain.strip().lower()
+    if ":" in cleaned or "/" in cleaned or "\\" in cleaned or "@" in cleaned or " " in cleaned:
+        raise ValueError(f"Hostile or malformed domain syntax: {domain!r}")
+    if any(ord(c) < 32 or ord(c) >= 127 for c in cleaned):
+        raise ValueError(f"Domain contains invalid characters: {domain!r}")
+    if not DOMAIN_REGEX.match(cleaned):
+        raise ValueError(f"Domain does not conform to standard hostname syntax: {domain!r}")
+    return cleaned
+
+
+def is_ip_prohibited(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """
+    Anti-SSRF Protection:
+    Verify whether an IP address belongs to loopback, private (RFC 1918 / RFC 4193),
+    link-local (RFC 3927), multicast, carrier-grade NAT, or reserved/unspecified space.
+    """
+    if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+        ip_obj = ip_obj.ipv4_mapped
+
+    if (
+        ip_obj.is_loopback or
+        ip_obj.is_private or
+        ip_obj.is_link_local or
+        ip_obj.is_multicast or
+        ip_obj.is_reserved or
+        ip_obj.is_unspecified
+    ):
+        return True
+
+    # Carrier-grade NAT (100.64.0.0/10)
+    if isinstance(ip_obj, ipaddress.IPv4Address) and ip_obj in ipaddress.ip_network("100.64.0.0/10"):
+        return True
+
+    # Documentation / benchmarking networks (RFC 5737 / RFC 2544)
+    if isinstance(ip_obj, ipaddress.IPv4Address):
+        for net in (
+            ipaddress.ip_network("192.0.2.0/24"),
+            ipaddress.ip_network("198.51.100.0/24"),
+            ipaddress.ip_network("203.0.113.0/24"),
+            ipaddress.ip_network("198.18.0.0/15"),
+        ):
+            if ip_obj in net:
+                return True
+
+    return False
+
+
+def secure_wkd_fetch(
+    url: str,
+    expected_domain: str,
+    timeout: float = DEFAULT_HTTP_TIMEOUT,
+    max_redirects: int = 2,
+    dns_resolver: Callable[[str, int], list[tuple]] | None = None,
+    ssl_context: ssl.SSLContext | None = None,
+    socket_factory: Callable | None = None,
+) -> bytes:
+    """
+    Hardened HTTPS fetcher for OpenPGP Web Key Directory (WKD).
+
+    Security Invariants:
+    1. Strictly enforces HTTPS (HTTP downgrade rejected).
+    2. Enforces destination host pinning: host must strictly equal expected_domain or openpgpkey.<expected_domain>.
+    3. Resolves DNS and validates every resolved IP address against prohibited private/loopback/reserved ranges (SSRF protection).
+    4. Connects directly to the validated IP while verifying the TLS certificate against the SNI hostname (DNS rebinding defense).
+    5. Revalidates every redirect destination with bounded hops (max_redirects).
+    6. Rejects HTML or unexpected non-binary content-types.
+    7. Streams response with strict 64 KiB ceiling, aborting immediately if exceeded.
+    """
+    parts = urllib.parse.urlsplit(url)
+    scheme = parts.scheme.lower()
+    if scheme != "https":
+        raise SecurityError(f"Insecure protocol {scheme!r}: HTTPS required; downgrade prohibited.")
+
+    host = (parts.hostname or "").lower()
+    expected = expected_domain.lower()
+    allowed_hosts = {expected, f"openpgpkey.{expected}"}
+    if host not in allowed_hosts:
+        raise SecurityError(f"Host {host!r} is outside authorized domain {expected!r}; redirect to external host prohibited.")
+
+    port = parts.port or 443
+    if port != 443:
+        raise SecurityError(f"Non-standard HTTPS port {port} prohibited for WKD.")
+
+    resolver = dns_resolver or socket.getaddrinfo
+    try:
+        addr_info = resolver(host, port, proto=socket.IPPROTO_TCP)
+    except Exception as exc:
+        raise OSError(f"DNS resolution failed for {host}: {exc}") from exc
+
+    if not addr_info:
+        raise OSError(f"No address records found for {host}")
+
+    validated_ips: list[str] = []
+    for entry in addr_info:
+        sockaddr = entry[4]
+        ip_str = sockaddr[0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise SecurityError(f"Invalid resolved IP string {ip_str!r}: {exc}") from exc
+        if is_ip_prohibited(ip_obj):
+            raise SecurityError(f"SSRF defense: resolved destination IP {ip_str} is in prohibited (loopback/private/reserved) range.")
+        validated_ips.append(ip_str)
+
+    target_ip = validated_ips[0]
+    ctx = ssl_context or ssl.create_default_context()
+
+    make_sock = socket_factory or socket.create_connection
+    sock = make_sock((target_ip, port), timeout=timeout)
+    tls_sock = ctx.wrap_socket(sock, server_hostname=host)
+
+    try:
+        path_query = parts.path + ("?" + parts.query if parts.query else "")
+        req_lines = [
+            f"GET {path_query} HTTP/1.1",
+            f"Host: {host}",
+            "User-Agent: QuMail-WKD-Resolver/1.0",
+            "Accept: application/octet-stream, application/pgp-keys",
+            "Connection: close",
+            "",
+            "",
+        ]
+        tls_sock.sendall("\r\n".join(req_lines).encode("ascii"))
+
+        # Read response headers
+        header_buf = bytearray()
+        while b"\r\n\r\n" not in header_buf and b"\n\n" not in header_buf:
+            chunk = tls_sock.recv(1024)
+            if not chunk:
+                break
+            header_buf.extend(chunk)
+            if len(header_buf) > 8192:
+                raise ValueError("Response headers exceeded maximum size limit")
+
+        if b"\r\n\r\n" in header_buf:
+            header_bytes, _, rest = header_buf.partition(b"\r\n\r\n")
+        else:
+            header_bytes, _, rest = header_buf.partition(b"\n\n")
+
+        lines = header_bytes.decode("iso-8859-1").splitlines()
+        if not lines:
+            raise ValueError("Empty HTTP response from WKD server")
+
+        status_parts = lines[0].split(None, 2)
+        if len(status_parts) < 2:
+            raise ValueError(f"Malformed HTTP status line: {lines[0]!r}")
+
+        status_code = int(status_parts[1])
+
+        headers: dict[str, str] = {}
+        for line in lines[1:]:
+            if ":" in line:
+                k, _, v = line.partition(":")
+                headers[k.strip().lower()] = v.strip()
+
+        # Handle redirects
+        if status_code in (301, 302, 303, 307, 308):
+            if max_redirects <= 0:
+                raise SecurityError("Maximum redirect hops exceeded.")
+            loc = headers.get("location")
+            if not loc:
+                raise ValueError("Redirect response missing Location header.")
+            redirect_url = urllib.parse.urljoin(url, loc)
+            tls_sock.close()
+            return secure_wkd_fetch(
+                redirect_url,
+                expected_domain,
+                timeout=timeout,
+                max_redirects=max_redirects - 1,
+                dns_resolver=dns_resolver,
+                ssl_context=ssl_context,
+                socket_factory=socket_factory,
+            )
+
+        if status_code == 404:
+            raise urllib.error.HTTPError(url, 404, "Not Found", headers, None)
+
+        if status_code != 200:
+            raise urllib.error.HTTPError(url, status_code, f"HTTP Error {status_code}", headers, None)
+
+        # Validate content-type
+        content_type = headers.get("content-type", "").lower()
+        if "text/html" in content_type:
+            raise ValueError(f"Prohibited content-type {content_type!r}: HTML response rejected for WKD key.")
+
+        # Stream body with strict ceiling
+        body = bytearray(rest)
+        if len(body) > MAX_KEY_BYTES:
+            raise ValueError(f"Key payload exceeded maximum size limit ({MAX_KEY_BYTES} bytes)")
+
+        while True:
+            chunk = tls_sock.recv(4096)
+            if not chunk:
+                break
+            body.extend(chunk)
+            if len(body) > MAX_KEY_BYTES:
+                raise ValueError(f"Key payload exceeded maximum size limit ({MAX_KEY_BYTES} bytes)")
+
+        return bytes(body)
+    finally:
+        tls_sock.close()
 
 
 def zbase32_encode(data: bytes) -> str:
@@ -75,7 +293,7 @@ def build_wkd_urls(email: str) -> tuple[str, str]:
 
     local_part, _, domain = email.partition("@")
     local_part = local_part.strip().lower()
-    domain = domain.strip().lower()
+    domain = validate_domain(domain)
 
     if not local_part or not domain:
         raise ValueError(f"Invalid email address: {email!r}")
@@ -142,29 +360,23 @@ class WKDDiscoveryProvider:
         inspector_fn: Callable[[bytes], dict] | None = None,
         timeout: float = DEFAULT_HTTP_TIMEOUT,
         http_fetcher: Callable[[str], bytes] | None = None,
+        executor: ThreadPoolExecutor | None = None,
     ):
         self.inspector_fn = inspector_fn
         self.timeout = timeout
-        self._http_fetcher = http_fetcher or self._default_fetch
+        self._custom_fetcher = http_fetcher
+        self._executor = executor or ThreadPoolExecutor(max_workers=2, thread_name_prefix="wkd-resolver")
 
-    def _default_fetch(self, url: str) -> bytes:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "QuMail-WKD-Resolver/1.0",
-                "Accept": "application/octet-stream",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-            data = resp.read(MAX_KEY_BYTES + 1)
-            if len(data) > MAX_KEY_BYTES:
-                raise ValueError("Key payload exceeded maximum size limit")
-            return data
+    def _fetch(self, url: str, domain: str) -> bytes:
+        if self._custom_fetcher:
+            return self._custom_fetcher(url)
+        return secure_wkd_fetch(url, expected_domain=domain, timeout=self.timeout)
 
     def lookup(self, email: str) -> DiscoveryResult:
         clean_email = email.strip().lower()
         try:
             advanced_url, direct_url = build_wkd_urls(clean_email)
+            domain = clean_email.split("@")[-1]
         except ValueError as exc:
             return DiscoveryResult(email=clean_email, status=DiscoveryStatus.MALFORMED, error_message=str(exc))
 
@@ -174,7 +386,7 @@ class WKDDiscoveryProvider:
 
         for url in (advanced_url, direct_url):
             try:
-                candidate_data = self._http_fetcher(url)
+                candidate_data = self._fetch(url, domain)
                 if candidate_data:
                     break
             except urllib.error.HTTPError as exc:
@@ -182,6 +394,10 @@ class WKDDiscoveryProvider:
                     last_error = "Key not published in WKD (404)"
                 else:
                     last_error = f"HTTP error {exc.code} from {url}"
+            except SecurityError as exc:
+                last_error = f"WKD network security violation: {exc}"
+                logger.warning("WKD security check rejected %s: %s", url, exc)
+                break  # Security error on advanced method should abort or log
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 last_error = f"Network error contacting {url}: {exc}"
             except Exception as exc:
@@ -231,6 +447,10 @@ class WKDDiscoveryProvider:
             source="wkd",
         )
         return DiscoveryResult(email=clean_email, status=DiscoveryStatus.SUCCESS, key=discovered)
+
+    def lookup_async(self, email: str) -> Future[DiscoveryResult]:
+        """Asynchronously discover key off the main/GUI thread."""
+        return self._executor.submit(self.lookup, email)
 
 
 class EnterpriseDirectoryProvider:
@@ -351,3 +571,7 @@ class CachedKeyDiscoveryService:
             ttl_seconds=self.cache_ttl,
         )
         self._cache[email] = cached_entry
+
+    def discover_async(self, email: str, force_refresh: bool = False) -> Future[DiscoveryResult]:
+        """Asynchronously discover key off the main/GUI thread."""
+        return self.wkd._executor.submit(self.discover, email, force_refresh)

@@ -38,6 +38,52 @@ class RotationType(str, Enum):
     IDENTICAL_KEY = "identical_key"
 
 
+class RevocationReason(str, Enum):
+    """RFC 4880 §5.2.3.23 / RFC 9580 revocation reason codes."""
+    UNSPECIFIED = "unspecified"
+    KEY_SUPERSEDED = "key_superseded"
+    KEY_COMPROMISED = "key_compromised"
+    KEY_RETIRED = "key_retired"
+    USER_ID_NO_LONGER_VALID = "user_id_no_longer_valid"
+
+
+class HistoricalValidity(str, Enum):
+    """Granular verdict for historical signature verification."""
+    VALID_HISTORICAL = "valid_historical"
+    INDETERMINATE_NO_TRUSTED_TIME = "indeterminate_no_trusted_time"
+    EXPIRED_AT_CREATION = "expired_at_creation"
+    REVOKED_AT_CREATION = "revoked_at_creation"
+    KEY_COMPROMISED = "key_compromised"
+    INVALID_EVIDENCE = "invalid_evidence"
+    PREDATES_KEY = "predates_key"
+
+
+class TimestampEvidenceSource(str, Enum):
+    """Defensible independent time sources for cryptographic verification."""
+    RFC3161_TSA = "rfc3161_tsa"
+    AUTHENTICATED_RECEIPT = "authenticated_receipt"  # e.g. local vault replay receipt committed at reception
+    TRUSTED_NOTARY = "trusted_notary"
+
+
+@dataclass(frozen=True)
+class TimestampEvidence:
+    """Independent, trusted proof establishing that a signature existed at a point in time."""
+    source: TimestampEvidenceSource
+    verified_time_utc: int
+    proof: bytes | str = ""
+    is_verified: bool = True
+
+
+@dataclass(frozen=True)
+class HistoricalVerificationResult:
+    """Detailed verdict distinguishing cryptographic validity from historical key-status validity."""
+    status: HistoricalValidity
+    is_valid: bool
+    explanation: str
+    effective_time_utc: int | None = None
+    evidence_source: TimestampEvidenceSource | None = None
+
+
 @dataclass(frozen=True)
 class ExpirationCheckResult:
     status: KeyStatus
@@ -136,25 +182,201 @@ def evaluate_key_transition(
     return RotationType.IDENTICAL_KEY
 
 
+def verify_historical_signature(
+    claimed_signature_time_utc: int,
+    key_valid_from: int,
+    key_expires_at: int | None,
+    revocation_timestamp: int | None = None,
+    revocation_reason: RevocationReason = RevocationReason.UNSPECIFIED,
+    timestamp_evidence: TimestampEvidence | None = None,
+    current_time: float | None = None,
+) -> HistoricalVerificationResult:
+    """
+    Evaluate historical signature validity with explicit trusted time evidence.
+
+    SECURITY INVARIANT:
+    An OpenPGP signature creation-time field alone is untrusted metadata (attacker-controlled).
+    An adversary who obtains an expired or compromised private key could fabricate a backdated
+    signature creation-time to bypass expiration or revocation checks.
+
+    Therefore:
+    1. If a key is expired or revoked and NO independent trusted timestamp evidence is provided,
+       we return INDETERMINATE_NO_TRUSTED_TIME rather than asserting historical validity.
+    2. When trusted timestamp evidence (RFC 3161 TSA token or authenticated vault replay receipt)
+       is provided, historical validity is anchored to that verified time.
+    3. If a key was revoked due to COMPROMISE, any signature whose evidence postdates compromise
+       is rejected as KEY_COMPROMISED. Only signatures with trusted prior receipt evidence
+       strictly predating the compromise/revocation date may be validated.
+    """
+    now = time.time() if current_time is None else current_time
+
+    # Rule 1: Signature claims to predate key creation
+    if claimed_signature_time_utc < key_valid_from:
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.PREDATES_KEY,
+            is_valid=False,
+            explanation="Claimed signature creation time predates key creation.",
+        )
+
+    is_expired = key_expires_at is not None and now > key_expires_at
+    is_revoked = revocation_timestamp is not None and now >= revocation_timestamp
+    is_compromised = is_revoked and revocation_reason == RevocationReason.KEY_COMPROMISED
+
+    # Case A: Trusted timestamp evidence IS provided
+    if timestamp_evidence is not None:
+        if not timestamp_evidence.is_verified or timestamp_evidence.verified_time_utc <= 0:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.INVALID_EVIDENCE,
+                is_valid=False,
+                explanation="Timestamp evidence is malformed, unverified, or contains invalid time.",
+                evidence_source=timestamp_evidence.source,
+            )
+
+        evidence_time = timestamp_evidence.verified_time_utc
+
+        # Paradoxical time: claimed time is AFTER independently verified timestamp token
+        if claimed_signature_time_utc > evidence_time:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.INVALID_EVIDENCE,
+                is_valid=False,
+                explanation="Claimed signature time postdates trusted timestamp token.",
+                evidence_source=timestamp_evidence.source,
+            )
+
+        if evidence_time < key_valid_from:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.PREDATES_KEY,
+                is_valid=False,
+                explanation="Trusted timestamp evidence predates key creation.",
+                evidence_source=timestamp_evidence.source,
+            )
+
+        # Check key expiration against verified evidence time
+        if key_expires_at is not None and evidence_time > key_expires_at:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.EXPIRED_AT_CREATION,
+                is_valid=False,
+                explanation="Trusted timestamp proves signature was created after key expiration.",
+                effective_time_utc=evidence_time,
+                evidence_source=timestamp_evidence.source,
+            )
+
+        # Check key revocation against verified evidence time
+        if revocation_timestamp is not None:
+            if is_compromised:
+                if evidence_time >= revocation_timestamp:
+                    return HistoricalVerificationResult(
+                        status=HistoricalValidity.KEY_COMPROMISED,
+                        is_valid=False,
+                        explanation="Key was compromised; trusted timestamp postdates compromise point.",
+                        effective_time_utc=evidence_time,
+                        evidence_source=timestamp_evidence.source,
+                    )
+                # Timestamp evidence strictly predates compromise
+                return HistoricalVerificationResult(
+                    status=HistoricalValidity.VALID_HISTORICAL,
+                    is_valid=True,
+                    explanation="Signature proven to predate key compromise via trusted timestamp evidence.",
+                    effective_time_utc=evidence_time,
+                    evidence_source=timestamp_evidence.source,
+                )
+            else:
+                # Key superseded or retired
+                if evidence_time > revocation_timestamp:
+                    return HistoricalVerificationResult(
+                        status=HistoricalValidity.REVOKED_AT_CREATION,
+                        is_valid=False,
+                        explanation="Trusted timestamp proves signature was created after key revocation.",
+                        effective_time_utc=evidence_time,
+                        evidence_source=timestamp_evidence.source,
+                    )
+                return HistoricalVerificationResult(
+                    status=HistoricalValidity.VALID_HISTORICAL,
+                    is_valid=True,
+                    explanation="Signature proven to predate key revocation via trusted timestamp evidence.",
+                    effective_time_utc=evidence_time,
+                    evidence_source=timestamp_evidence.source,
+                )
+
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.VALID_HISTORICAL,
+            is_valid=True,
+            explanation="Signature verified within key validity period with trusted timestamp evidence.",
+            effective_time_utc=evidence_time,
+            evidence_source=timestamp_evidence.source,
+        )
+
+    # Case B: NO trusted timestamp evidence provided
+    # If key was revoked due to compromise:
+    if is_compromised:
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.KEY_COMPROMISED,
+            is_valid=False,
+            explanation="Signing key was compromised. Unauthenticated signature creation-time cannot be trusted.",
+        )
+
+    # If key was revoked (superseded/retired):
+    if is_revoked:
+        if claimed_signature_time_utc > revocation_timestamp:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.REVOKED_AT_CREATION,
+                is_valid=False,
+                explanation="Claimed signature time postdates key revocation.",
+            )
+        # Signature claims to predate revocation, but lacks trusted time evidence
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.INDETERMINATE_NO_TRUSTED_TIME,
+            is_valid=False,
+            explanation="Signature claims to predate key revocation, but lacks trusted time evidence (backdating defense).",
+        )
+
+    # If key is currently expired:
+    if is_expired:
+        if claimed_signature_time_utc > key_expires_at:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.EXPIRED_AT_CREATION,
+                is_valid=False,
+                explanation="Claimed signature time postdates key expiration.",
+            )
+        # Signature claims to predate expiry, but key is expired and no trusted evidence provided
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.INDETERMINATE_NO_TRUSTED_TIME,
+            is_valid=False,
+            explanation="Signature claims to predate key expiration, but key is expired and lacks trusted time evidence (backdating defense).",
+        )
+
+    # Key is currently active (not expired, not revoked)
+    if key_expires_at is not None and claimed_signature_time_utc > key_expires_at:
+        return HistoricalVerificationResult(
+            status=HistoricalValidity.EXPIRED_AT_CREATION,
+            is_valid=False,
+            explanation="Claimed signature time exceeds key expiration date.",
+        )
+
+    return HistoricalVerificationResult(
+        status=HistoricalValidity.VALID_HISTORICAL,
+        is_valid=True,
+        explanation="Signing key is currently active; signature within validity window.",
+        effective_time_utc=claimed_signature_time_utc,
+    )
+
+
 def is_signature_historically_valid(
     message_timestamp_utc: int,
     key_valid_from: int,
     key_expires_at: int | None,
     revocation_timestamp: int | None = None,
+    revocation_reason: RevocationReason = RevocationReason.UNSPECIFIED,
+    timestamp_evidence: TimestampEvidence | None = None,
+    current_time: float | None = None,
 ) -> bool:
-    """
-    RFC 4880 / RFC 9580 time-aware historical signature validity check.
-
-    A message signed while a key was active and valid remains historically authentic,
-    provided the message was signed BEFORE any revocation or expiration took place.
-    """
-    if message_timestamp_utc < key_valid_from:
-        return False  # Message predates the key's creation
-
-    if key_expires_at and message_timestamp_utc > key_expires_at:
-        return False  # Message was signed after key expired
-
-    if revocation_timestamp and message_timestamp_utc > revocation_timestamp:
-        return False  # Message was signed after key was revoked
-
-    return True
+    """Convenience boolean helper delegating to verify_historical_signature."""
+    return verify_historical_signature(
+        claimed_signature_time_utc=message_timestamp_utc,
+        key_valid_from=key_valid_from,
+        key_expires_at=key_expires_at,
+        revocation_timestamp=revocation_timestamp,
+        revocation_reason=revocation_reason,
+        timestamp_evidence=timestamp_evidence,
+        current_time=current_time,
+    ).is_valid

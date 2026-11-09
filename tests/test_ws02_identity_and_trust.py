@@ -56,6 +56,9 @@ from core.enterprise_trust import EnterpriseTrustDirectory, TrustAnchor, Enterpr
 from core.key_lifecycle import (
     KeyStatus,
     RotationType,
+    RevocationReason,
+    TimestampEvidence,
+    TimestampEvidenceSource,
     evaluate_key_expiration,
     evaluate_key_transition,
     is_signature_historically_valid,
@@ -465,33 +468,54 @@ def test_evaluate_key_transition_unauthorized_root_replacement():
 
 
 def test_historical_signature_verification():
-    # Message signed at timestamp 1000
-    # Key valid from 500 to 2000
+    # Trusted timestamp evidence at 1000
+    evidence_1000 = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=1000,
+    )
+    # Message signed at timestamp 1000 with evidence, key valid from 500 to 2000
     assert is_signature_historically_valid(
         message_timestamp_utc=1000,
         key_valid_from=500,
         key_expires_at=2000,
+        timestamp_evidence=evidence_1000,
     ) is True
 
-    # Message signed at 2500 (after key expired at 2000)
+    # Message signed at 2500 with evidence 2500 (after key expired at 2000)
+    evidence_2500 = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=2500,
+    )
     assert is_signature_historically_valid(
         message_timestamp_utc=2500,
         key_valid_from=500,
         key_expires_at=2000,
+        timestamp_evidence=evidence_2500,
     ) is False
 
-    # Message signed at 1500 (after key was revoked at 1200)
+    # Message with evidence 1500 (after key was revoked at 1200)
+    evidence_1500 = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=1500,
+    )
     assert is_signature_historically_valid(
         message_timestamp_utc=1500,
         key_valid_from=500,
         key_expires_at=2000,
         revocation_timestamp=1200,
+        timestamp_evidence=evidence_1500,
     ) is False
 
-    # Message signed at 1100 (before key was revoked at 1200)
+    # Message with evidence 1100 (before key was revoked at 1200 with superseded reason)
+    evidence_1100 = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=1100,
+    )
     assert is_signature_historically_valid(
         message_timestamp_utc=1100,
         key_valid_from=500,
         key_expires_at=2000,
         revocation_timestamp=1200,
+        revocation_reason=RevocationReason.KEY_SUPERSEDED,
+        timestamp_evidence=evidence_1100,
     ) is True
