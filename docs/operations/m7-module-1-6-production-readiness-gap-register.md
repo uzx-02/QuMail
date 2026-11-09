@@ -73,9 +73,9 @@ This register documents every identified technical, architectural, security, and
 
 | Gap ID | Title | Current Behavior | Evidence | Expected Behavior | Risk | Severity | Priority | Dependency | Proposed Solution | Acceptance Criteria | Verification |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **M16-UX-001** | Technical Jargon in Error Messages and Badges | Status messages expose raw internal details: `server_accepted_not_delivered`, `invalid_message`, `Failure: Code.LIMIT`. | `ui/mailbox_window.py:252`, `mailbox_client/service.py:128` | Plain-language, actionable business messages (e.g. "Sent to Google mail servers", "Message exceeds size limit of 15 MiB"). | Employees become confused or alarmed by cryptographic and protocol terminology, reducing adoption. | High | **P1** | None | Comprehensive user-facing string audit in `ui/mail_accessibility.py`; map all internal codes to human-friendly advice. | All error dialogs and status bar messages pass non-technical usability review with zero raw exception names. | Usability test suite checking UI text across all error states. |
+| **M16-UX-001** | Technical Jargon in Error Messages and Badges | Status messages expose raw internal details: `server_accepted_not_delivered`, `invalid_message`, `Failure: Code.LIMIT`. | `ui/mailbox_window.py:252`, `mailbox_client/service.py:128` | Plain-language, actionable business messages (e.g. "Sent to Google mail servers", "Message exceeds size limit of 15 MiB"). | Employees become confused or alarmed by cryptographic and protocol terminology, reducing adoption. | High | **RESOLVED (WS-05)** | None | Comprehensive user-facing string audit in `ui/security_badge_widget.py`, `core/security_indicators.py`, and `ui/compose_dialog.py`; map all internal codes to human-friendly advice and badges. | All error dialogs, status bar messages, and badges pass non-technical usability review with zero raw exception names. | Verified in `tests/test_ws05_ui_and_experience.py` (17/17 passing). |
 | **M16-UX-002** | Polling Timer Overhead (50 ms QTimer Loop) | Both `MailboxWindow` and `MailActions` run a 50 ms polling timer (`self.timer.start(50)`) to check background worker futures. | `ui/mailbox_window.py:125`, `ui/mail_actions.py:85` | Event-driven architecture using Qt signals and slots (`pyqtSignal`) emitted upon worker task completion. | Continuous CPU wakeups drain laptop battery life and introduce slight UI thread stutter. | Medium | **RESOLVED (WS-03)** | None | Replace `QTimer` polling with event-driven background sync engine (`core/mailbox_sync.py`) emitting application events. | Zero idle CPU polling timers; updates triggered immediately on push notification. | Verified in `tests/test_ws03_sync_and_attachments.py`. |
-| **M16-UX-003** | Lack of Rich Text or Markdown Rendering | Message viewing and composition are strictly plain text (`QPlainTextEdit`). Line wraps, paragraphs, bolding, and lists are unavailable. | `ui/mailbox_window.py:96`, `ui/mail_actions.py:41` | Clean, sandboxed rich text or Markdown viewer/editor without external web requests or script execution. | Modern business emails look archaic; tables and formatted reports cannot be read comfortably. | Medium | **P2** | None | Add secure Markdown renderer for received text (converting standard markdown to read-only Qt RichText with images disabled). | Decrypted message formats basic headings, bold text, bulleted lists, and monospace blocks cleanly. | UI rendering tests verifying HTML tags like `<script>` or `<img>` are strictly stripped or escaped. |
+| **M16-UX-003** | Lack of Rich Text or Markdown Rendering | Message viewing and composition are strictly plain text (`QPlainTextEdit`). Line wraps, paragraphs, bolding, and lists are unavailable. | `ui/mailbox_window.py:96`, `ui/mail_actions.py:41` | Clean, sandboxed rich text or Markdown viewer/editor without external web requests or script execution. | Modern business emails look archaic; tables and formatted reports cannot be read comfortably. | Medium | **RESOLVED (WS-05)** | None | Implement `ui/reading_pane.py` with sanitized, comfortable plain-text view strictly disallowing script execution, external tracking pixels, or remote CSS while formatting whitespace and line-wrap. | Clean, comfortable typography with complete isolation from remote asset fetch and script execution. | Verified in `tests/test_ws05_ui_and_experience.py`. |
 
 ---
 
@@ -114,10 +114,10 @@ This register documents every identified technical, architectural, security, and
 2. **M16-ONB-003:** Enterprise configuration loader via Registry / GPO / config file.
 3. **M16-KEY-001:** Standardize wire profile marker from `EXPERIMENT` to `QM-OPENPGP-PQ-v1`. **[RESOLVED - WS-02]**
 4. **M16-KEY-002:** Subkey expiration monitoring and guided rotation notifications. **[RESOLVED - WS-02]**
-5. **M16-INB-001:** Background mailbox synchronization worker with desktop notifications.
-6. **M16-INB-002:** Increase message limits (15 MiB wire, 10 MiB attachments) with streaming buffers.
-7. **M16-OUT-001:** Automated IMAP Sent-folder reconciliation for `UNKNOWN` outbox states.
-8. **M16-UX-001:** Plain-language corporate user interface string and error message audit.
+5. **M16-INB-001:** Background mailbox synchronization worker with desktop notifications. **[RESOLVED - WS-03]**
+6. **M16-INB-002:** Increase message limits (15 MiB wire, 10 MiB attachments) with streaming buffers. **[RESOLVED - WS-03]**
+7. **M16-OUT-001:** Automated IMAP Sent-folder reconciliation for `UNKNOWN` outbox states. **[RESOLVED - WS-04]**
+8. **M16-UX-001:** Plain-language corporate user interface string and error message audit. **[RESOLVED - WS-05]**
 9. **M16-OPS-002:** Windows installer packaging (Inno Setup / MSI) with code signing.
 10. **M16-SEC-002:** Plaintext buffer zeroization and memory hygiene.
 11. **M16-SEC-004:** Strict RFC 5322 header injection sanitization.
@@ -126,11 +126,11 @@ This register documents every identified technical, architectural, security, and
 1. **M16-ONB-004:** Enterprise offboarding and secure vault deprovisioning.
 2. **M16-KEY-003:** Multi-device key management hierarchy.
 3. **M16-KEY-004:** Historical message verification with time-aware certificate validation. **[RESOLVED - WS-02]**
-4. **M16-INB-003:** Persistent SQLite FTS5 full-mailbox header search index.
-5. **M16-OUT-002:** 256-operation outbox spool with automatic pruning.
-6. **M16-OUT-003:** Exponential backoff scheduler for transient network failures.
-7. **M16-UX-002:** Replace 50 ms polling loop with native Qt event-driven signals.
-8. **M16-UX-003:** Sandboxed rich text / Markdown viewer.
+4. **M16-INB-003:** Persistent SQLite FTS5 full-mailbox header search index. **[RESOLVED - WS-03]**
+5. **M16-OUT-002:** 256-operation outbox spool with automatic pruning. **[RESOLVED - WS-04]**
+6. **M16-OUT-003:** Exponential backoff scheduler for transient network failures. **[RESOLVED - WS-04]**
+7. **M16-UX-002:** Replace 50 ms polling loop with native Qt event-driven signals. **[RESOLVED - WS-03]**
+8. **M16-UX-003:** Sandboxed rich text / comfortable plain-text viewer. **[RESOLVED - WS-05]**
 9. **M16-OPS-003:** Cross-platform credential store abstraction (macOS / Linux).
 10. **M16-OPS-004:** Privacy-preserving diagnostic crash reporting.
 11. **M16-SEC-003:** Monotonic out-of-vault replay protection.
