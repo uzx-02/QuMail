@@ -20,7 +20,11 @@ STRUCTURAL=('content-type','content-transfer-encoding','mime-version','content-d
 REPEATABLE=('hp-outer','received','x-received','authentication-results','arc-seal','arc-message-signature','arc-authentication-results')
 
 
-def fail(code=Code.INVALID): raise Failure(code)
+def fail(code=Code.INVALID, reason=""):
+    import inspect
+    frame = inspect.currentframe().f_back
+    print(f"[MIME FAIL]: code={code} at line {frame.f_lineno} reason={reason!r}")
+    raise Failure(code)
 
 
 def text(value, limit=512):

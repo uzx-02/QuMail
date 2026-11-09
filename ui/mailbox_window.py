@@ -243,10 +243,14 @@ class MailboxWindow(QWidget):
                     self.update_seen(key, result)
                     self.status.setText('Server read flag confirmed.')
             except Exception as error:
+                import traceback
+                print(f"\n[QUMAIL EXCEPTION in {action}]:")
+                traceback.print_exc()
                 self.content.clear(); self.security.clear()
                 self.display = None; self.attachments.clear()
                 code = getattr(error, 'code', None)
-                self.status.setText(error_message(error))
+                err_detail = f" [{type(error).__name__}: {getattr(code, 'value', code) or error}]"
+                self.status.setText(error_message(error) + err_detail)
                 if isinstance(error, Failure) and error.code in (Code.STALE, Code.MISSING):
                     self.rows = (); self.page = None; self.table.setRowCount(0)
         self.update_controls()

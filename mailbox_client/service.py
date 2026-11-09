@@ -94,6 +94,7 @@ class MailboxService:
         self.check(lease, budget, key)
         raw, seen = self.mailbox.fetch(self.resolver.resolve(lease, budget), key, budget)
         self.check(lease, budget, key)
+        raw = raw.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
         head = raw.replace(b'\r\n', b'\n').partition(b'\n\n')[0]
         if len(head) > MAX_HEADER: raise Failure(Code.LIMIT)
         headers = BytesHeaderParser(policy=default).parsebytes(head+b'\n\n')
@@ -111,9 +112,17 @@ class MailboxService:
                 public = bytes(self.vault.key(data, lease.context, key_handle)['public'])
             else:
                 contact = data['contacts'].get(signer_address)
-                if contact is None: raise Failure(Code.SIGNER)
+                if contact is None:
+                    print(f"[service.open] Contact missing in vault for signer: {signer_address!r}")
+                    raise Failure(Code.SIGNER)
                 public = bytes(contact['public'])
-            opened = self.opener.open(lease, key_handle, raw, public, budget)
+            try:
+                opened = self.opener.open(lease, key_handle, raw, public, budget)
+            except Exception as e:
+                import traceback
+                print(f"[service.open] Opener.open failed with {type(e).__name__}: {e}")
+                traceback.print_exc()
+                raise
             result = Display(key, opened.subject, opened.body,
                 f'Signature valid; identity: {opened.identity_trust}; replay: {opened.replay.value}; '
                 f'outer mismatches: {", ".join(opened.mismatches) or "none"}; archive: {opened.archive}', seen, opened)
