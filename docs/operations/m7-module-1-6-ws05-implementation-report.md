@@ -26,7 +26,7 @@ All implementation work is isolated to branch `codex/m7-module-1-6-ws05` branchi
 | Gap ID | Description | Severity | Prior Status | WS-05 Status | Verification Evidence |
 |---|---|:---:|:---:|:---:|---|
 | **M16-UX-001** | Technical Jargon in Error Messages and Badges | High (P1) | OPEN | **RESOLVED** | Comprehensive user-facing string mapping in `ui/security_badge_widget.py`, `core/security_indicators.py`, and `ui/compose_dialog.py`; plain-language delivery labels from `core/outbox_manager.py:PLAIN_LANGUAGE_STATUSES`; verified in `test_security_indicator_vocabulary_rendering` and `test_outbox_spool_presentation_plain_language_labels`. |
-| **M16-UX-003** | Lack of Rich Text or Markdown Rendering | Medium (P2) | OPEN | **RESOLVED** | `ui/reading_pane.py` provides clean, sandboxed plain-text viewing with comfortable typography and preserved whitespace while strictly prohibiting script execution, tracking pixels, or remote CSS fetch; verified in `test_inline_reading_pane_rendering_without_popups`. |
+| **M16-UX-003** | Lack of Rich Text or Markdown Rendering | Medium (P2) | OPEN | **DEFERRED (Post-M7)** | Safe plain-text rendering is the supported and tested behavior for M7 to prevent HTML/script injection, tracking pixels, and CSS exfiltration attacks. `ui/reading_pane.py` provides clean, sandboxed plain-text viewing with comfortable typography and preserved whitespace; verified in `test_inline_reading_pane_rendering_without_popups`. Rich text / Markdown rendering is deferred to a future enterprise milestone. |
 
 ---
 

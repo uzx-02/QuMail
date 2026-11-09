@@ -171,6 +171,11 @@ def main(argv: list[str] | None = None) -> int:
         help="verify native cryptographic provider installation and security mitigations, then exit",
     )
     parser.add_argument(
+        "--export-diagnostics",
+        metavar="PATH",
+        help="export privacy-safe operational support diagnostics to specified JSON file and exit",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -179,9 +184,23 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    # Load enterprise policy
+    from core.enterprise_policy import EnterprisePolicyManager
+    policy_mgr = EnterprisePolicyManager()
+    active_policy = policy_mgr.policy
+
     # Initialize centralized logging
-    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    log_level = getattr(logging, args.log_level.upper(), getattr(logging, active_policy.log_level.upper(), logging.INFO))
     configure_logging(level=log_level)
+
+    # Export diagnostics probe
+    if args.export_diagnostics:
+        from core.diagnostics import DiagnosticsCollector
+        collector = DiagnosticsCollector(policy_manager=policy_mgr)
+        out_p = Path(args.export_diagnostics).resolve()
+        collector.export_bundle(out_p)
+        print(f"Operational diagnostics exported successfully to: {out_p}")
+        return 0
 
     # Quick diagnostic probe
     if args.check_provider:
@@ -206,6 +225,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # Legacy research simulator path (MUST be explicitly requested)
     if args.legacy_simulator:
+        if active_policy.disable_legacy_simulator and active_policy.is_managed:
+            _show_critical_error(
+                "QuMail — Administrative Policy Block",
+                "Launching the unauthenticated legacy prototype simulator is blocked by corporate Group Policy.",
+            )
+            return 1
         if args.dev_identity or args.dev_mailbox or args.vault:
             parser.error("--legacy-simulator is mutually exclusive with modern secure mailbox / vault modes")
         print("\n" + "=" * 70)

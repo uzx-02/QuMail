@@ -1,0 +1,21 @@
+Windows Registry Editor Version 5.00
+
+; ==============================================================================
+; QuMail Enterprise Machine Policy Configuration (HKLM)
+; Deploy via Group Policy, SCCM, Microsoft Intune, or Administrator Script
+; ==============================================================================
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\QuMail]
+"block_external_accounts"=dword:00000001
+"enforce_strict_encryption"=dword:00000001
+"disable_legacy_simulator"=dword:00000001
+"update_channel"="Production"
+"log_level"="INFO"
+"allow_diagnostics_export"=dword:00000001
+"allow_remote_telemetry"=dword:00000000
+
+; Approved Organization Email Domains (JSON array of strings)
+"allowed_domains"="[\"corp.example.com\", \"subsidiary.example.com\"]"
+
+; Certified Corporate Directory Trust Anchors (Domain -> Cert SHA-256 Fingerprint)
+"managed_trust_anchors"="{\"corp.example.com\": \"5ceb47b86bec9b3b8d6e666e718947391c59f8763be1347b0e3c2a692e022241\"}"

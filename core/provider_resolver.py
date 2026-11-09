@@ -51,6 +51,8 @@ def get_application_root() -> Path:
     """Return the base directory of the QuMail application or repository."""
     if hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS).resolve()
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent.resolve()
     # Relative to core/provider_resolver.py -> parent of core is repo root
     return Path(__file__).resolve().parents[1]
 

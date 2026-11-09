@@ -212,6 +212,17 @@ class SettingsDialog(QDialog):
         sec_card_l.addLayout(dir_row)
 
         sec_layout.addWidget(sec_card)
+
+        # Operational Diagnostics Action (WS-06/07)
+        self.export_diag_btn = QPushButton("📋 Export Support Diagnostics (Privacy-Safe)")
+        self.export_diag_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
+            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 7px 14px; font-weight: 600; font-size: 12px; }} "
+            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
+        )
+        self.export_diag_btn.clicked.connect(self._on_export_diagnostics)
+        sec_layout.addWidget(self.export_diag_btn)
+
         sec_layout.addStretch()
 
         tabs.addTab(sec_tab, "🛡️ Security")
@@ -261,6 +272,24 @@ class SettingsDialog(QDialog):
     def _on_theme_changed(self, index: int) -> None:
         theme = self.theme_combo.itemData(index)
         self.theme_changed.emit(theme)
+
+    def _on_export_diagnostics(self) -> None:
+        from pathlib import Path
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        from core.diagnostics import DiagnosticsCollector
+        path, _ = QFileDialog.getSaveFileName(self, "Export Support Diagnostics", "qumail_diagnostics.json", "JSON (*.json)")
+        if path:
+            try:
+                collector = DiagnosticsCollector()
+                collector.export_bundle(Path(path))
+                QMessageBox.information(
+                    self,
+                    "Diagnostics Exported",
+                    f"Privacy-safe diagnostics report exported successfully to:\n{path}\n\n"
+                    "This report contains zero passwords, tokens, message contents, or private keys."
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "Export Error", f"Failed to export diagnostics: {e}")
 
     def _on_sign_out(self) -> None:
         self.sign_out_requested.emit()

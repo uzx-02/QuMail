@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>QuMail Enterprise Policies</displayName>
+  <description>Administrative templates for managing QuMail secure desktop email client.</description>
+  <resources>
+    <stringTable>
+      <string id="QuMailCategory">QuMail Enterprise</string>
+      <string id="SecurityCategory">Security and Identity Policies</string>
+      <string id="UpdatesCategory">Update and Maintenance Policies</string>
+
+      <string id="BlockExternalAccounts">Prevent Adding External Accounts</string>
+      <string id="BlockExternalAccounts_Explain">When enabled, employees cannot add external or personal email accounts to QuMail.</string>
+
+      <string id="EnforceStrictEncryption">Enforce Strict Post-Quantum Encryption</string>
+      <string id="EnforceStrictEncryption_Explain">When enabled, QuMail blocks sending unencrypted messages to unverified external recipients.</string>
+
+      <string id="DisableLegacySimulator">Disable Legacy Prototype &amp; Simulator</string>
+      <string id="DisableLegacySimulator_Explain">When enabled, prevents users from launching the unauthenticated legacy prototype simulator via command-line flags.</string>
+
+      <string id="UpdateChannel">Select Update Channel</string>
+      <string id="UpdateChannel_Explain">Specifies the administrative release channel from which QuMail fetches software updates.</string>
+      <string id="UpdateChannel_Prod">Production (Standard Business Releases)</string>
+      <string id="UpdateChannel_LTS">Long-Term Support (LTS)</string>
+      <string id="UpdateChannel_Beta">Beta (Early Preview)</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="UpdateChannel">
+        <dropdownList refId="UpdateChannelEnum" noSort="true" defaultItem="0">Update Channel:</dropdownList>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>
