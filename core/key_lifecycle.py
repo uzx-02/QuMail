@@ -14,15 +14,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+import hashlib
 import time
 from typing import Callable
 
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from pyasn1.codec.der import decoder, encoder
-from pyasn1_modules import rfc3161, rfc5652
+from pyasn1.type import univ
+from pyasn1_modules import rfc2459, rfc3161, rfc5652
 
 from core.logging_config import get_logger
 
@@ -82,26 +84,136 @@ class RFC3161VerificationResult:
     error: str = ""
 
 
+def _verify_cert_signature(cert: x509.Certificate, issuer_pub_key) -> None:
+    """Cryptographically verify an X.509 certificate's digital signature using issuer's public key."""
+    hash_algo = cert.signature_hash_algorithm
+    if hash_algo is None:
+        raise ValueError("Certificate uses an unrecognized or unsupported signature hash algorithm")
+    if isinstance(issuer_pub_key, rsa.RSAPublicKey):
+        issuer_pub_key.verify(cert.signature, cert.tbs_certificate_bytes, padding.PKCS1v15(), hash_algo)
+    elif isinstance(issuer_pub_key, ec.EllipticCurvePublicKey):
+        issuer_pub_key.verify(cert.signature, cert.tbs_certificate_bytes, ec.ECDSA(hash_algo))
+    else:
+        raise ValueError(f"Unsupported issuer public key type: {type(issuer_pub_key).__name__}")
+
+
+def _verify_certificate_path(
+    leaf_cert: x509.Certificate,
+    bundle_certs: list[x509.Certificate],
+    trust_anchors: list[x509.Certificate],
+    evaluation_time_utc: int,
+    max_depth: int = 5,
+) -> tuple[bool, str]:
+    """
+    Genuine cryptographic path validation from leaf_cert to a configured trust anchor.
+
+    Verification Invariants:
+    1. Direct trust: If leaf_cert is directly present in trust_anchors:
+       - If self-signed, cryptographically verify self-signature.
+       - Terminate with success.
+    2. Multi-tier chain: Traverse candidate issuers up to trust anchors:
+       - Match candidate certs where candidate.subject == current.issuer.
+       - Verify candidate validity at evaluation_time_utc (genTime).
+       - Verify candidate BasicConstraints (ca=True).
+       - Cryptographically verify leaf signature using candidate public key.
+       - If candidate is in trust_anchors (and self-signed root verified), terminate with success.
+       - Fail closed on missing issuers, invalid signatures, non-CA issuers, expired CAs, or loop/depth limit.
+    """
+    for anchor in trust_anchors:
+        if leaf_cert == anchor:
+            if leaf_cert.issuer == leaf_cert.subject:
+                try:
+                    _verify_cert_signature(leaf_cert, leaf_cert.public_key())
+                except Exception as exc:
+                    return False, f"Directly trusted self-signed certificate signature invalid: {exc}"
+            return True, ""
+
+    if leaf_cert.issuer == leaf_cert.subject:
+        return False, f"TSA certificate is not trusted by configured TSA trust anchors (self-signed root '{leaf_cert.subject.rfc4514_string()}' not in anchors)"
+
+    current_cert = leaf_cert
+    depth = 0
+    pool = list(bundle_certs) + list(trust_anchors)
+
+    while depth < max_depth:
+        depth += 1
+        candidate_issuers = [c for c in pool if c.subject == current_cert.issuer]
+        if not candidate_issuers:
+            return False, f"Issuer '{current_cert.issuer.rfc4514_string()}' not found in bundle or trust anchors"
+
+        verified_issuer: x509.Certificate | None = None
+        last_error = ""
+
+        for candidate in candidate_issuers:
+            cand_nb = int(candidate.not_valid_before_utc.timestamp())
+            cand_na = int(candidate.not_valid_after_utc.timestamp())
+            if not (cand_nb <= evaluation_time_utc <= cand_na):
+                last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' not valid at timestamp generation time"
+                continue
+
+            try:
+                bc = candidate.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
+                if not bc.value.ca:
+                    last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' has BasicConstraints ca=False"
+                    continue
+            except Exception:
+                last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' missing BasicConstraints extension"
+                continue
+
+            try:
+                _verify_cert_signature(current_cert, candidate.public_key())
+                verified_issuer = candidate
+                break
+            except Exception as exc:
+                last_error = f"Cryptographic signature check failed against issuer '{candidate.subject.rfc4514_string()}': {exc}"
+                continue
+
+        if verified_issuer is None:
+            return False, f"Could not cryptographically verify issuer signature: {last_error}"
+
+        if any(verified_issuer == anchor for anchor in trust_anchors):
+            if verified_issuer.issuer == verified_issuer.subject:
+                try:
+                    _verify_cert_signature(verified_issuer, verified_issuer.public_key())
+                except Exception as exc:
+                    return False, f"Trust anchor root self-signature invalid: {exc}"
+            return True, ""
+
+        if verified_issuer.issuer == verified_issuer.subject:
+            return False, f"Self-signed root '{verified_issuer.subject.rfc4514_string()}' reached but is not in configured trust anchors"
+
+        current_cert = verified_issuer
+
+    return False, f"Certificate path depth exceeded maximum allowable hops ({max_depth})"
+
+
 def verify_rfc3161_token_offline(
     token_der: bytes,
     expected_message_digest: bytes | str,
     trusted_tsa_certificates: list[x509.Certificate] | None = None,
     current_time: float | None = None,
+    required_policy_oid: str | None = None,
 ) -> RFC3161VerificationResult:
     """
     Offline cryptographic verification of an RFC 3161 TimeStampToken.
 
     Verification Invariants:
-    1. Parse ASN.1 CMS ContentInfo / SignedData / TSTInfo.
-    2. Message-Imprint Matching: Token's hashedMessage must match expected_message_digest.
-    3. TSA Certificate Validation:
-       - Extracts TSA certificate from SignedData.certificates.
-       - Validates ExtendedKeyUsage includes timeStamping (OID 1.3.6.1.5.5.7.3.8).
-       - Validates certificate validity period against token genTime (and current_time).
-       - Validates TSA certificate against trusted_tsa_certificates if configured.
-    4. TSA Digital Signature Verification:
-       - Cryptographically verifies the TSA digital signature over the encapsulated TSTInfo (or signed attributes).
-    5. Rejects malformed, tampered, expired, or mismatched tokens.
+    1. Parse ASN.1 CMS ContentInfo (id-signedData) / SignedData (id-ct-TSTInfo) / TSTInfo.
+    2. Enforce TSA policy: If required_policy_oid is specified, token policy must match.
+    3. Message-Imprint Matching: Token's hashedMessage must strictly match expected_message_digest.
+    4. SignerInfo Matching: Matches SignerInfo.sid (issuerAndSerialNumber or subjectKeyIdentifier)
+       to exactly one certificate in SignedData.certificates. Rejects absent or ambiguous matches.
+    5. TSA Certificate Validation:
+       - Enforces ExtendedKeyUsage includes timeStamping (OID 1.3.6.1.5.5.7.3.8).
+       - Enforces certificate validity at token genTime.
+       - Validates genuine cryptographic certificate path to configured trust anchors.
+    6. CMS Signed Attributes Validation:
+       - When signedAttrs present, validates mandatory id-contentType (id-ct-TSTInfo) and
+         id-messageDigest (matching hash of eContent). Re-encodes as SET OF (0x31) for signature verification.
+       - When absent, verifies signature directly over encapsulated eContent.
+    7. TSA Digital Signature Verification:
+       - Cryptographically validates RSA/ECDSA digital signature using validated TSA public key.
+    8. Rejects malformed, tampered, expired, mismatched, or unauthorized tokens.
     """
     if not isinstance(token_der, bytes) or len(token_der) == 0:
         return RFC3161VerificationResult(is_valid=False, error="Token is empty or not bytes")
@@ -154,38 +266,86 @@ def verify_rfc3161_token_offline(
     except Exception as exc:
         return RFC3161VerificationResult(is_valid=False, error=f"Invalid TSTInfo genTime syntax: {exc}")
 
+    # Policy Enforcement
+    policy_oid = str(tst_info["policy"])
+    if required_policy_oid is not None:
+        if policy_oid != required_policy_oid:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error=f"TSA policy mismatch: token policy '{policy_oid}' does not match required policy '{required_policy_oid}'",
+            )
+
     # 4. Message Imprint Matching
     token_digest = bytes(tst_info["messageImprint"]["hashedMessage"])
     if token_digest != expected_bytes:
         return RFC3161VerificationResult(
             is_valid=False,
             gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
             error=f"Message imprint mismatch: token contains {token_digest.hex()[:16]}..., expected {expected_bytes.hex()[:16]}...",
         )
 
-    # 5. Extract TSA Certificate
+    # 5. Extract SignerInfo
+    signer_infos_comp = signed_data.getComponentByName("signerInfos")
+    if signer_infos_comp is None or not signer_infos_comp.isValue or len(signer_infos_comp) == 0:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="No SignerInfo found in SignedData")
+
+    signer_info = signer_infos_comp[0]
+    sid = signer_info["sid"]
+    sid_choice = sid.getName()
+
+    # 6. Extract and Match TSA Certificate
     certs_comp = signed_data.getComponentByName("certificates")
     if certs_comp is None or not certs_comp.isValue or len(certs_comp) == 0:
-        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="No TSA certificate found in SignedData")
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="No TSA certificate found in SignedData")
 
-    certs = certs_comp
-    tsa_cert: x509.Certificate | None = None
-    for cert_choice in certs:
+    matching_certs: list[x509.Certificate] = []
+    all_parsed_certs: list[x509.Certificate] = []
+
+    for cert_choice in certs_comp:
         try:
             cert_raw = encoder.encode(cert_choice["certificate"])
             candidate = x509.load_der_x509_certificate(cert_raw)
-            try:
-                eku_ext = candidate.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
-                if ExtendedKeyUsageOID.TIME_STAMPING in eku_ext.value:
-                    tsa_cert = candidate
-                    break
-            except Exception:
-                continue
+            all_parsed_certs.append(candidate)
         except Exception:
             continue
 
-    if tsa_cert is None:
-        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
+        if sid_choice == "issuerAndSerialNumber":
+            ias = sid["issuerAndSerialNumber"]
+            expected_serial = int(ias["serialNumber"])
+            expected_issuer_der = encoder.encode(ias["issuer"])
+            try:
+                cand_asn1, _ = decoder.decode(cert_raw, asn1Spec=rfc2459.Certificate())
+                cand_issuer_der = encoder.encode(cand_asn1["tbsCertificate"]["issuer"])
+                if candidate.serial_number == expected_serial and cand_issuer_der == expected_issuer_der:
+                    matching_certs.append(candidate)
+            except Exception:
+                continue
+        elif sid_choice == "subjectKeyIdentifier":
+            expected_ski = bytes(sid["subjectKeyIdentifier"])
+            try:
+                ski_ext = candidate.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_KEY_IDENTIFIER)
+                if bytes(ski_ext.value.digest) == expected_ski:
+                    matching_certs.append(candidate)
+            except Exception:
+                continue
+
+    if len(matching_certs) == 0:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="No certificate in SignedData matches SignerInfo identifier")
+    if len(matching_certs) > 1:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Ambiguous SignerInfo: multiple certificates match identifier")
+
+    tsa_cert = matching_certs[0]
+
+    # Check timeStamping ExtendedKeyUsage
+    try:
+        eku_ext = tsa_cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
+        if ExtendedKeyUsageOID.TIME_STAMPING not in eku_ext.value:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
+    except Exception:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
 
     # Check Certificate Validity Period against token generation time
     not_before = int(tsa_cert.not_valid_before_utc.timestamp())
@@ -194,45 +354,107 @@ def verify_rfc3161_token_offline(
         return RFC3161VerificationResult(
             is_valid=False,
             gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
             error="TSA certificate was not valid at timestamp generation time",
         )
 
-    # Validate against configured TSA trust anchors
+    # 7. Cryptographic Certificate Path Validation against Trust Anchors
     if trusted_tsa_certificates:
-        is_trusted = False
-        for trusted in trusted_tsa_certificates:
-            if tsa_cert == trusted or tsa_cert.issuer == trusted.subject:
-                is_trusted = True
-                break
-        if not is_trusted:
+        path_valid, path_err = _verify_certificate_path(
+            leaf_cert=tsa_cert,
+            bundle_certs=all_parsed_certs,
+            trust_anchors=trusted_tsa_certificates,
+            evaluation_time_utc=gen_time_utc,
+        )
+        if not path_valid:
             return RFC3161VerificationResult(
                 is_valid=False,
                 gen_time_utc=gen_time_utc,
-                error="TSA certificate is not trusted by configured TSA trust anchors",
+                policy_oid=policy_oid,
+                error=f"Certificate path validation failed: {path_err}",
             )
 
-    # 6. Verify TSA Signature
-    signer_infos_comp = signed_data.getComponentByName("signerInfos")
-    if signer_infos_comp is None or not signer_infos_comp.isValue or len(signer_infos_comp) == 0:
-        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="No SignerInfo found in SignedData")
+    # 8. CMS Signed Attributes & Message-Digest Validation
+    signed_attrs = signer_info.getComponentByName("signedAttrs")
+    if signed_attrs is not None and signed_attrs.isValue and len(signed_attrs) > 0:
+        content_type_seen = None
+        message_digest_seen = None
 
-    signer_info = signer_infos_comp[0]
-    sig_bytes = bytes(signer_info["signature"])
+        for attr in signed_attrs:
+            attr_type = attr["attrType"]
+            if attr_type == rfc5652.id_contentType:
+                if len(attr["attrValues"]) != 1:
+                    return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute id-contentType must have exactly one value")
+                ct_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=univ.ObjectIdentifier())
+                content_type_seen = ct_val
+            elif attr_type == rfc5652.id_messageDigest:
+                if len(attr["attrValues"]) != 1:
+                    return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute id-messageDigest must have exactly one value")
+                md_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=univ.OctetString())
+                message_digest_seen = bytes(md_val)
 
-    pub_key = tsa_cert.public_key()
-    try:
-        signed_attrs = signer_info.getComponentByName("signedAttrs")
-        if signed_attrs is not None and signed_attrs.isValue:
-            signed_attrs_bytes = encoder.encode(signed_attrs)
-            if signed_attrs_bytes.startswith(b"\xa0"):
-                signed_attrs_bytes = b"\x31" + signed_attrs_bytes[1:]
-            pub_key.verify(sig_bytes, signed_attrs_bytes, padding.PKCS1v15(), hashes.SHA256())
+        if content_type_seen is None:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attributes missing mandatory id-contentType")
+        if content_type_seen != rfc3161.id_ct_TSTInfo:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Signed attribute id-contentType mismatch: expected id-ct-TSTInfo, got {content_type_seen}")
+
+        if message_digest_seen is None:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attributes missing mandatory id-messageDigest")
+
+        # Determine digest algorithm from signer_info['digestAlgorithm']
+        digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])
+        if digest_algo_oid == "2.16.840.1.101.3.4.2.1":  # SHA-256
+            expected_content_digest = hashlib.sha256(e_content).digest()
+            hash_impl = hashes.SHA256()
+        elif digest_algo_oid == "2.16.840.1.101.3.4.2.2":  # SHA-384
+            expected_content_digest = hashlib.sha384(e_content).digest()
+            hash_impl = hashes.SHA384()
+        elif digest_algo_oid == "2.16.840.1.101.3.4.2.3":  # SHA-512
+            expected_content_digest = hashlib.sha512(e_content).digest()
+            hash_impl = hashes.SHA512()
         else:
-            pub_key.verify(sig_bytes, e_content, padding.PKCS1v15(), hashes.SHA256())
-    except Exception as exc:
-        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error=f"TSA digital signature verification failed: {exc}")
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Unsupported digest algorithm OID: {digest_algo_oid}")
 
-    policy_oid = str(tst_info["policy"])
+        if message_digest_seen != expected_content_digest:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute message-digest does not match hash of encapsulated TSTInfo")
+
+        # Re-tag signedAttrs as SET OF (0x31) for signature verification
+        signed_attrs_bytes = encoder.encode(signed_attrs)
+        if signed_attrs_bytes.startswith(b"\xa0"):
+            signed_attrs_bytes = b"\x31" + signed_attrs_bytes[1:]
+        target_bytes = signed_attrs_bytes
+    else:
+        # Direct eContent coverage
+        digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])
+        if digest_algo_oid == "2.16.840.1.101.3.4.2.1":
+            hash_impl = hashes.SHA256()
+        elif digest_algo_oid == "2.16.840.1.101.3.4.2.2":
+            hash_impl = hashes.SHA384()
+        elif digest_algo_oid == "2.16.840.1.101.3.4.2.3":
+            hash_impl = hashes.SHA512()
+        else:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Unsupported digest algorithm OID: {digest_algo_oid}")
+        target_bytes = e_content
+
+    # 9. TSA Digital Signature Verification
+    sig_bytes = bytes(signer_info["signature"])
+    sig_algo_oid = str(signer_info["signatureAlgorithm"]["algorithm"])
+    pub_key = tsa_cert.public_key()
+
+    try:
+        if sig_algo_oid in ("1.2.840.113549.1.1.1", "1.2.840.113549.1.1.11"):  # RSA
+            if not isinstance(pub_key, rsa.RSAPublicKey):
+                return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA public key is not RSA for RSA signature algorithm")
+            pub_key.verify(sig_bytes, target_bytes, padding.PKCS1v15(), hash_impl)
+        elif sig_algo_oid in ("1.2.840.10045.4.3.2", "1.2.840.10045.2.1"):  # ECDSA
+            if not isinstance(pub_key, ec.EllipticCurvePublicKey):
+                return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="TSA public key is not EC for ECDSA signature algorithm")
+            pub_key.verify(sig_bytes, target_bytes, ec.ECDSA(hash_impl))
+        else:
+            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Unsupported signature algorithm OID: {sig_algo_oid}")
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"TSA digital signature verification failed: {exc}")
+
     tsa_id = tsa_cert.subject.rfc4514_string()
     return RFC3161VerificationResult(
         is_valid=True,
@@ -369,6 +591,7 @@ def verify_historical_signature(
     current_time: float | None = None,
     expected_message_digest: bytes | str | None = None,
     trusted_tsa_certificates: list[x509.Certificate] | None = None,
+    required_policy_oid: str | None = None,
 ) -> HistoricalVerificationResult:
     """
     Evaluate historical signature validity with explicit trusted time evidence.
@@ -439,6 +662,7 @@ def verify_historical_signature(
                 expected_message_digest=expected_message_digest,
                 trusted_tsa_certificates=trusted_tsa_certificates,
                 current_time=current_time,
+                required_policy_oid=required_policy_oid,
             )
             if not token_res.is_valid:
                 return HistoricalVerificationResult(
@@ -587,6 +811,7 @@ def is_signature_historically_valid(
     current_time: float | None = None,
     expected_message_digest: bytes | str | None = None,
     trusted_tsa_certificates: list[x509.Certificate] | None = None,
+    required_policy_oid: str | None = None,
 ) -> bool:
     """Convenience boolean helper delegating to verify_historical_signature."""
     return verify_historical_signature(
@@ -599,4 +824,5 @@ def is_signature_historically_valid(
         current_time=current_time,
         expected_message_digest=expected_message_digest,
         trusted_tsa_certificates=trusted_tsa_certificates,
+        required_policy_oid=required_policy_oid,
     ).is_valid

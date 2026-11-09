@@ -84,21 +84,40 @@ Conversely, a naive implementation that evaluates validity against an unauthenti
 To establish true historical validity, QuMail requires independent, authenticated time evidence:
 
 1. **RFC 3161 Time-Stamp Protocol (TSA) — Offline Verification:**
-   - Cryptographically verified TimeStampToken DER proofs (`verify_rfc3161_token_offline`).
-   - Parses ASN.1 CMS `ContentInfo` (`id-signedData`) and `SignedData` containing encapsulated `TSTInfo` (`id-ct-TSTInfo`).
-   - **Message-Imprint Verification:** Enforces that the token's `messageImprint.hashedMessage` strictly matches the expected message digest (`expected_message_digest`). Any mismatch causes immediate rejection.
-   - **TSA Certificate Validation:** Extracts the TSA certificate from `SignedData.certificates`, verifies required `ExtendedKeyUsage` (`timeStamping` / OID `1.3.6.1.5.5.7.3.8`), validates validity period against token `genTime`, and checks against configured `trusted_tsa_certificates` trust anchors.
-   - **Digital Signature Verification:** Cryptographically validates the TSA RSA/ECDSA signature over `eContent` (or signed attributes) using the verified TSA public key.
-   - **Operational Distinction:** Distinguishes offline verification of an existing token from obtaining a new token from a live TSA. Offline verification does not perform network operations.
-2. **Authenticated Local Vault Replay Receipts:**
-   - **Receipt Structure:** Recorded in the local encrypted SQLite table `accounts` under the key `m5_seen_v1` as a JSON dictionary mapping sender replay keys to receipt records (`dict(digest=digest, first_seen=int(time.time()))`).
-   - **Digest Recorded:** Hex-encoded SHA-256 digest of the complete decrypted and verified inner MIME payload (`raw`, including all inner headers, body parts, and attachments).
+   - Cryptographically verified TimeStampToken DER proofs (`core/key_lifecycle.py:verify_rfc3161_token_offline`).
+   - Parses ASN.1 CMS `ContentInfo` (`id-signedData`, RFC 5652) and `SignedData` containing encapsulated `TSTInfo` (`id-ct-TSTInfo`, RFC 3161).
+   - **Message-Imprint Matching:** Enforces that `TSTInfo.messageImprint.hashedMessage` strictly matches the expected message digest (`expected_message_digest`). Any mismatch causes immediate rejection.
+   - **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to exactly one certificate in `SignedData.certificates`. Rejects missing, unmatched, or ambiguous certificates.
+   - **CMS Signed Attributes & Message-Digest Validation:** When `signedAttrs` are present:
+     * Verifies mandatory `id-contentType` attribute equals `id-ct-TSTInfo`.
+     * Verifies mandatory `id-messageDigest` attribute matches the cryptographic hash of `eContent` (SHA-256, SHA-384, or SHA-512).
+     * Computes the signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
+     * When `signedAttrs` are absent, verifies signature directly over encapsulated `eContent`.
+   - **Genuine Cryptographic Certificate Path Validation:** When `trusted_tsa_certificates` trust anchors are configured, validates the TSA certificate via genuine cryptographic signature verification up to an anchor:
+     * Traverses intermediate CA certificates in `SignedData.certificates`.
+     * Validates that issuing certificates possess `BasicConstraints` with `ca=True`.
+     * Validates that all certificates in the path were valid at timestamp generation time (`not_before <= genTime <= not_after`).
+     * Verifies the cryptographic signature of each certificate using the issuing authority's public key (`issuer_pub_key.verify()`). Does **not** treat issuer name matching or cert presence alone as successful validation.
+     * Verifies self-signature on root trust anchors.
+   - **TSA Certificate EKU Requirements:** Enforces that the TSA signing certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+   - **TSA Policy Enforcement:** Where a required policy is configured (`required_policy_oid`), verifies that `TSTInfo.policy` matches the requirement; fails closed on mismatch.
+   - **Operational Distinction:** Distinguishes offline verification of an existing token from obtaining a new token from a live TSA. Offline verification operates deterministically in zero-network environments.
+
+2. **Authenticated Local Vault Replay Receipts (Corrected Claims):**
+   - **Receipt Structure:** Recorded in the local encrypted SQLite table `accounts` under key `m5_seen_v1` as a JSON dictionary mapping sender replay keys to receipt records (`dict(digest=digest, first_seen=int(time.time()))`).
+   - **Digest Recorded:** Hex-encoded SHA-256 digest of the complete decrypted and verified inner MIME payload (`raw`, covering all inner headers, body parts, and attachments).
    - **Identity & Key Binding:** Replay key strictly binds the sender's verified root fingerprint and the message-ID (`replay_key = signer['fingerprint'] + '/' + ident`), while verifying that the inner `From` header matches the certified sender address.
-   - **Observation Timestamp:** Monotonic Unix timestamp (`first_seen = int(time.time())`) committed before any plaintext release to the user interface.
-   - **Tamper Protection:** The entire account record is encrypted with AES-256-GCM using a 32-byte DPAPI-protected master key stored in the Windows Credential Manager. Authenticated Associated Data (AAD) binds the vault ID, account ID, and revision counter.
-   - **Rollback / Deletion Boundaries:** Bounded by local SQLite transaction ACID properties and monotonically increasing revision counters. Rollback detection is strictly local (no external transparency log).
-   - **Clock & Endpoint Assumptions:** Assumes local endpoint OS clock integrity and an uncompromised Windows session.
-   - **Crucial Trust Invariant:** A local vault receipt establishes *prior QuMail observation* under its documented trust assumptions. It **DOES NOT** prove the sender's original signature creation time.
+   - **Wall-Clock Observation Timestamp:** `first_seen = int(time.time())` is a **wall-clock observation timestamp**, not a monotonic clock. It reflects the local endpoint OS clock when QuMail received and verified the message, and is subject to local NTP step adjustments, clock drift, or local clock modifications.
+   - **Tamper Protection & Rollback Limitations (Honest Assessment):**
+     * The account record is encrypted with AES-256-GCM using a 32-byte DPAPI-protected master key stored in Windows Credential Manager. Authenticated Associated Data (AAD) binds the vault ID, account ID, and revision counter.
+     * **No Independent Rollback Detection:** A SQLite revision counter protected only within the same database is **not** independent rollback detection.
+     * AES-GCM authentication protects receipt integrity against in-place modification, but does **not** independently prevent deletion of the database or restoration of an older valid database backup file.
+     * Independent rollback detection is **not implemented** in Module 1.6 (planned for WS-07 using out-of-vault monotonic storage).
+   - **Absence & Observation Invariants:**
+     * A local vault receipt can establish prior QuMail observation under its documented Windows endpoint, vault-integrity, and clock assumptions.
+     * **Crucial Invariant 1 (Prior Observation vs Creation Time):** A local receipt establishes *prior QuMail observation*. It **DOES NOT** prove the sender's original signature creation time.
+     * **Crucial Invariant 2 (Absence is Not Proof of Non-Observation):** Receipt absence, database deletion, or suspected database rollback must **never** be interpreted as proof that a message was not previously observed. It merely leaves historical validity indeterminate under Backdating Defense rules.
+
 3. **Trusted Cryptographic Notaries (Unsupported in Module 1.6):**
    - The `TRUSTED_NOTARY` evidence source is explicitly marked **UNSUPPORTED** in Module 1.6.
    - Any historical verification attempt supplying `TimestampEvidenceSource.TRUSTED_NOTARY` is rejected with `HistoricalValidity.INVALID_EVIDENCE` ("Trusted notary evidence source is currently unsupported in Module 1.6.").

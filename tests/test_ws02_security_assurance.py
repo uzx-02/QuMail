@@ -14,6 +14,7 @@ Covers targeted security remediation required for WS-02 closeout:
 """
 
 import datetime
+import hashlib
 import io
 import ipaddress
 from pathlib import Path
@@ -926,6 +927,10 @@ def _make_synthetic_rfc3161_token(
     corrupt_sig: bool = False,
     custom_key: rsa.RSAPrivateKey | None = None,
     custom_cert: x509.Certificate | None = None,
+    include_signed_attrs: bool = False,
+    corrupt_message_digest_attr: bool = False,
+    custom_policy_oid: str = "1.2.3.4.5",
+    extra_certs: list[x509.Certificate] | None = None,
 ) -> tuple[bytes, x509.Certificate, rsa.RSAPrivateKey]:
     """Helper to generate authentic or intentionally flawed RFC 3161 TimeStampToken DER bytes."""
     key = custom_key or rsa.generate_private_key(65537, 2048)
@@ -959,7 +964,7 @@ def _make_synthetic_rfc3161_token(
     # 1. TSTInfo
     tst = rfc3161.TSTInfo()
     tst["version"] = 1
-    tst["policy"] = univ.ObjectIdentifier("1.2.3.4.5")
+    tst["policy"] = univ.ObjectIdentifier(custom_policy_oid)
     tst["messageImprint"] = rfc3161.MessageImprint()
     tst["messageImprint"]["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
     tst["messageImprint"]["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier("2.16.840.1.101.3.4.2.1")
@@ -980,18 +985,17 @@ def _make_synthetic_rfc3161_token(
     sd["encapContentInfo"]["eContentType"] = rfc3161.id_ct_TSTInfo
     sd["encapContentInfo"].setComponentByName("eContent", tst_der)
 
+    sd.setComponentByName("certificates")
+    all_certs = [cert] + (extra_certs or [])
+    for c in all_certs:
+        c_der = c.public_bytes(serialization.Encoding.DER)
+        c_asn1, _ = decoder.decode(c_der, asn1Spec=rfc2459.Certificate())
+        ch = rfc5652.CertificateChoices()
+        ch["certificate"] = c_asn1
+        sd["certificates"].append(ch)
+
     cert_der = cert.public_bytes(serialization.Encoding.DER)
     asn1_cert, _ = decoder.decode(cert_der, asn1Spec=rfc2459.Certificate())
-    sd.setComponentByName("certificates")
-    choice = rfc5652.CertificateChoices()
-    choice["certificate"] = asn1_cert
-    sd["certificates"].append(choice)
-
-    sig = key.sign(tst_der, padding.PKCS1v15(), hashes.SHA256())
-    if corrupt_sig:
-        sig_mut = bytearray(sig)
-        sig_mut[10] ^= 0xFF
-        sig = bytes(sig_mut)
 
     si = rfc5652.SignerInfo()
     si["version"] = 1
@@ -1002,6 +1006,37 @@ def _make_synthetic_rfc3161_token(
     si["digestAlgorithm"] = da
     si["signatureAlgorithm"] = rfc5652.SignatureAlgorithmIdentifier()
     si["signatureAlgorithm"]["algorithm"] = univ.ObjectIdentifier("1.2.840.113549.1.1.1")
+
+    if include_signed_attrs:
+        si.setComponentByName("signedAttrs")
+        attr_ct = rfc5652.Attribute()
+        attr_ct["attrType"] = rfc5652.id_contentType
+        attr_ct.setComponentByName("attrValues")
+        attr_ct["attrValues"].append(rfc5652.AttributeValue(encoder.encode(rfc3161.id_ct_TSTInfo)))
+        si["signedAttrs"].append(attr_ct)
+
+        attr_md = rfc5652.Attribute()
+        attr_md["attrType"] = rfc5652.id_messageDigest
+        attr_md.setComponentByName("attrValues")
+        md_bytes = hashlib.sha256(tst_der).digest()
+        if corrupt_message_digest_attr:
+            md_bytes = b"\x00" * 32
+        attr_md["attrValues"].append(rfc5652.AttributeValue(encoder.encode(univ.OctetString(md_bytes))))
+        si["signedAttrs"].append(attr_md)
+
+        signed_attrs_der = encoder.encode(si["signedAttrs"])
+        if signed_attrs_der.startswith(b"\xa0"):
+            signed_attrs_der = b"\x31" + signed_attrs_der[1:]
+        sign_payload = signed_attrs_der
+    else:
+        sign_payload = tst_der
+
+    sig = key.sign(sign_payload, padding.PKCS1v15(), hashes.SHA256())
+    if corrupt_sig:
+        sig_mut = bytearray(sig)
+        sig_mut[10] ^= 0xFF
+        sig = bytes(sig_mut)
+
     si["signature"] = univ.OctetString(sig)
 
     sd["signerInfos"] = rfc5652.SignerInfos()
@@ -1228,3 +1263,178 @@ def test_authenticated_receipt_evidence_observation_clarification():
     )
     assert res_late.status == HistoricalValidity.KEY_COMPROMISED
     assert res_late.is_valid is False
+
+
+def test_rfc3161_offline_verification_multi_cert_bundle_and_path_validation():
+    """47. SignerInfo matches TSA leaf in multi-cert bundle and validates path to root CA."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    root_k = rsa.generate_private_key(65537, 2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Corp Root CA")])
+    root_c = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    tsa_k = rsa.generate_private_key(65537, 2048)
+    tsa_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Corp TSA Server")])
+    tsa_c = (
+        x509.CertificateBuilder()
+        .subject_name(tsa_name)
+        .issuer_name(root_name)
+        .public_key(tsa_k.public_key())
+        .serial_number(2)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    digest = b"\xde\xad" * 16
+    token_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        custom_key=tsa_k,
+        custom_cert=tsa_c,
+        extra_certs=[root_c],
+    )
+
+    res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_c])
+    assert res.is_valid is True
+    assert res.error == ""
+    assert res.tsa_identity == "CN=Corp TSA Server"
+
+
+def test_rfc3161_offline_verification_fake_root_same_subject_rejected():
+    """48. Fake root CA with identical Subject name fails cryptographic signature verification."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    root_k = rsa.generate_private_key(65537, 2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Legit Root CA")])
+    root_c = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    tsa_k = rsa.generate_private_key(65537, 2048)
+    tsa_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Legit TSA Server")])
+    tsa_c = (
+        x509.CertificateBuilder()
+        .subject_name(tsa_name)
+        .issuer_name(root_name)
+        .public_key(tsa_k.public_key())
+        .serial_number(2)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    digest = b"\xbe\xef" * 16
+    token_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        custom_key=tsa_k,
+        custom_cert=tsa_c,
+    )
+
+    # Attacker crafts a fake root with identical subject name but different private key
+    fake_k = rsa.generate_private_key(65537, 2048)
+    fake_root = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(fake_k.public_key())
+        .serial_number(999)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(fake_k, hashes.SHA256())
+    )
+
+    # Must fail cryptographic signature verification of the leaf against fake root
+    res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[fake_root])
+    assert res.is_valid is False
+    assert "Cryptographic signature check failed against issuer" in res.error
+
+
+def test_rfc3161_offline_verification_signed_attrs_and_digest_mismatch_rejected():
+    """49. CMS signed attributes are validated and message-digest mismatch is rejected."""
+    digest = b"\x55" * 32
+
+    # 1. Authentic signedAttrs
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, include_signed_attrs=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is True
+
+    # 2. Tampered message-digest signed attribute
+    tampered_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        include_signed_attrs=True,
+        corrupt_message_digest_attr=True,
+    )
+    res_tampered = verify_rfc3161_token_offline(tampered_der, digest)
+    assert res_tampered.is_valid is False
+    assert "Signed attribute message-digest does not match hash of encapsulated TSTInfo" in res_tampered.error
+
+
+def test_rfc3161_offline_verification_policy_enforcement():
+    """50. TSA policy OID is checked; fails closed when required policy mismatches."""
+    digest = b"\x77" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, custom_policy_oid="1.2.840.113549.1.9.16.3.1")
+
+    # Matching policy
+    res_ok = verify_rfc3161_token_offline(
+        token_der,
+        digest,
+        required_policy_oid="1.2.840.113549.1.9.16.3.1",
+    )
+    assert res_ok.is_valid is True
+
+    # Mismatched policy fails closed
+    res_bad = verify_rfc3161_token_offline(
+        token_der,
+        digest,
+        required_policy_oid="1.2.840.113549.1.9.16.3.999",
+    )
+    assert res_bad.is_valid is False
+    assert "TSA policy mismatch" in res_bad.error
+
+
+def test_local_receipt_absence_and_wall_clock_limitations():
+    """51. Documented receipt semantics: wall-clock timestamp and absence/rollback limits."""
+    # 1. Observation timestamp is wall-clock time (int(time.time())), not monotonic time
+    wall_clock_now = int(time.time())
+    evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.AUTHENTICATED_RECEIPT,
+        verified_time_utc=wall_clock_now,
+        proof="digest-receipt-001",
+        is_verified=True,
+    )
+    assert evidence.verified_time_utc == wall_clock_now
+
+    # 2. Receipt absence or whole-database deletion must NEVER be treated as proof that
+    #    a message was NOT previously observed. Absence simply leaves historical validity indeterminate.
+    res_no_evidence = verify_historical_signature(
+        claimed_signature_time_utc=wall_clock_now - 1000,
+        key_valid_from=wall_clock_now - 5000,
+        key_expires_at=wall_clock_now - 500,  # Key is now expired
+        timestamp_evidence=None,               # Missing receipt or database restored from backup!
+        current_time=wall_clock_now,
+    )
+    assert res_no_evidence.status == HistoricalValidity.INDETERMINATE_NO_TRUSTED_TIME
+    assert res_no_evidence.is_valid is False
+    # Backdating defense: cannot conclude message is authentic, but absence does not prove it wasn't seen
+    assert "backdating defense" in res_no_evidence.explanation.lower()
