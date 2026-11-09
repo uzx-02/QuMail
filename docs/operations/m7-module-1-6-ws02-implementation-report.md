@@ -95,17 +95,17 @@ Under WS-02, all four targeted pilot readiness gaps (`M16-KEY-001`, `M16-ONB-001
 
 ## 3. Automated Test Verification Results
 
-All **119 automated tests** passed cleanly:
+All **131 automated tests** passed cleanly:
 
 | Test Suite File | Focus Area | Tests Executed | Passed | Failed |
 |---|---|:---:|:---:|:---:|
 | `tests/test_startup.py` | Modern default launch, CLI flags, dry-run network isolation | 11 | 11 | 0 |
 | `tests/test_ws01_bootstrap_hygiene.py` | Provider resolution, PE CFG `0xc160`, PrivacyFilter, code hygiene | 14 | 14 | 0 |
 | `tests/test_ws02_identity_and_trust.py` | WKD discovery, z-base-32, TrustEngine, SecurityIndicators, Profile v1, lifecycle | 25 | 25 | 0 |
-| `tests/test_ws02_security_assurance.py` | Historical time evidence, RFC 3161 CMS & genuine path validation, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 47 | 47 | 0 |
+| `tests/test_ws02_security_assurance.py` | Historical time evidence, mandatory RFC 3161 signedAttrs, certificate path validation, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 59 | 59 | 0 |
 | `tests/test_cryptographic_roundtrip.py` | End-to-end M5 crypto roundtrip, Ed25519, replay detection, MIME parser | 15 | 15 | 0 |
 | `tests/test_cancellation_submission_semantics.py` | Outbox cancellation, uncertain submission recovery, crash semantics | 7 | 7 | 0 |
-| **Total** | **Complete Modern Regression Suite** | **119** | **119** | **0** |
+| **Total** | **Complete Modern Regression Suite** | **131** | **131** | **0** |
 
 ---
 
@@ -172,8 +172,8 @@ Following targeted technical lead review of checkpoint `cd2b43e`, four critical 
 - **WKD Directory Publishing:** QuMail implements client-side WKD discovery; generating and uploading static WKD directories to corporate web servers is an administrative out-of-band operational task.
 
 ### 6.4 Test Evidence Summary
-- **Total Tests:** 119 passed.
-- **Security Tests:** 47 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
+- **Total Tests:** 131 passed.
+- **Security Tests:** 59 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
 - **Failures / Skips:** 0 failed, 0 skipped.
 
 ### 6.5 Trust Assumptions
@@ -190,19 +190,26 @@ The implementation in `core/key_lifecycle.py:verify_rfc3161_token_offline` provi
 1. **ASN.1 CMS Structure Validation:** Parses ASN.1 CMS `ContentInfo` with `contentType = id-signedData` (RFC 5652) and `SignedData` containing `encapContentInfo` with `eContentType = id-ct-TSTInfo` (RFC 3161). Decodes `TSTInfo` and validates GeneralizedTime `genTime`.
 2. **Message-Imprint Matching:** Compares `TSTInfo.messageImprint.hashedMessage` byte-for-byte against the expected message digest (`expected_message_digest`). Rejects any token whose message imprint does not match the exact target message digest.
 3. **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to candidate certificates in `SignedData.certificates`. Rejects tokens with absent signer certificates, no matches, or ambiguous multiple matches.
-4. **CMS Signed Attributes & Message-Digest Validation:**
-   - When `signedAttrs` are present:
-     * Verifies mandatory `id-contentType` attribute equals `id-ct-TSTInfo`.
-     * Verifies mandatory `id-messageDigest` attribute equals the cryptographic digest of `eContent` (SHA-256, SHA-384, or SHA-512).
-     * Signs and verifies over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
-   - When `signedAttrs` are absent, verifies the signature directly over encapsulated `eContent`.
-5. **Genuine Cryptographic Certificate Path Validation (`_verify_certificate_path`):**
+4. **Mandatory CMS Signed Attributes (`signedAttrs`):** Per RFC 3161 Section 2.4.2, CMS `signedAttrs` in `SignerInfo` are mandatory. Direct signature over encapsulated `eContent` without signed attributes is strictly rejected (no direct-signature fallback).
+   - Enforces exactly one `id-contentType` attribute whose value is `id-ct-TSTInfo`. Duplicates, missing attributes, or contradictory content types are rejected.
+   - Enforces exactly one `id-messageDigest` attribute. Duplicates, missing attributes, or malformed values are rejected.
+   - Recomputes the digest over encapsulated `TSTInfo` bytes using the declared digest algorithm (SHA-256, SHA-384, or SHA-512) and verifies exact match against `id-messageDigest`.
+   - Verifies the TSA signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
+5. **TSA Leaf Certificate KeyUsage & Critical Extension Handling:**
+   - Critical extensions: Fails closed on unrecognized critical extensions.
+   - KeyUsage: If present, MUST assert `digitalSignature` or `contentCommitment` (`nonRepudiation`), and MUST NOT assert `keyCertSign` or `crlSign`.
+   - ExtendedKeyUsage: Enforces that the TSA certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+   - Validity period: Enforces certificate validity at timestamp generation time (`not_before <= genTime <= not_after`).
+6. **Genuine Cryptographic Certificate Path Validation (`_verify_certificate_path`):**
    - Validates that the TSA certificate chains through genuine cryptographic signatures to a configured trust anchor in `trusted_tsa_certificates`.
    - Traverses candidate CA certificates; verifies `BasicConstraints` with `ca=True` on all issuing authorities.
+   - Enforces `path_length` constraint (`pathLenConstraint`) on all issuing CAs.
+   - Enforces `KeyUsage.keyCertSign` on all issuing CAs when KeyUsage is present.
+   - Checks critical extensions on all certificates along the path; fails closed on unrecognized critical extensions.
+   - Prohibits weak or insecure certificate signature hash algorithms (MD5, SHA-1).
    - Verifies validity period dates (`not_before <= genTime <= not_after`) on all certificates in the chain.
    - Cryptographically validates each certificate's digital signature using the issuing authority's public key (`issuer_pub_key.verify()`). Does **not** treat issuer name matching or cert presence alone as successful chain validation.
    - Enforces self-signature verification on root trust anchors.
-6. **TSA Certificate EKU Requirements:** Enforces that the TSA signing certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
 7. **TSA Policy Enforcement:** Where a required policy is configured (`required_policy_oid`), verifies that `TSTInfo.policy` matches the requirement; fails closed on mismatch.
 8. **Offline vs. Live TSA Distinction:** WS-02 strictly implements and tests **offline verification** of pre-existing tokens. Live network acquisition of new tokens from a remote TSA service is an operational network task and is not required for local offline evidence verification.
 
@@ -223,3 +230,25 @@ The local vault replay receipt mechanism (`experiments/m5/services.py:120-135`) 
 
 #### C. Trusted Notary Evidence Status
 The `TimestampEvidenceSource.TRUSTED_NOTARY` source is **unsupported in Module 1.6**. Any verification attempt providing this source is rejected with `HistoricalValidity.INVALID_EVIDENCE` ("Trusted notary evidence source is currently unsupported in Module 1.6."). Notary counter-signature schemas and verification procedures remain deferred to future enterprise archival milestones.
+
+---
+
+## 7. WS-02 Final Compliance Corrections Summary
+
+### 7.1 Mandatory Signed Attributes & Path Qualification Corrections
+
+| Requirement | Behavior Before Correction | Behavior After Correction | Evidence |
+|---|---|---|---|
+| **Mandatory CMS `signedAttrs`** | Allowed direct-signature fallback over `eContent` when `signedAttrs` was absent. | Strictly rejected if `signedAttrs` is absent (RFC 3161 Section 2.4.2). | `test_rfc3161_offline_verification_absent_signed_attrs_rejected` |
+| **`id-contentType` Attribute** | Accepted missing or duplicated content-type attributes without rejection. | Strictly requires exactly one `id-contentType` equal to `id-ct-TSTInfo`. | `test_rfc3161_offline_verification_missing_content_type_rejected`, `test_rfc3161_offline_verification_duplicate_content_type_rejected`, `test_rfc3161_offline_verification_incorrect_content_type_rejected` |
+| **`id-messageDigest` Attribute** | Accepted missing or duplicated message-digest attributes. | Strictly requires exactly one `id-messageDigest` matching recomputed digest of `eContent`. | `test_rfc3161_offline_verification_missing_message_digest_rejected`, `test_rfc3161_offline_verification_duplicate_message_digest_rejected`, `test_rfc3161_offline_verification_signed_attrs_and_digest_mismatch_rejected` |
+| **TSA Leaf KeyUsage** | Did not inspect KeyUsage on TSA leaf certificate. | Enforces `digitalSignature` or `contentCommitment`; strictly rejects `keyCertSign` and `crlSign`. | `test_rfc3161_offline_verification_tsa_leaf_invalid_key_usage_rejected` |
+| **CA BasicConstraints & KeyUsage** | Checked `ca=True` only, without `pathLenConstraint` or CA `keyCertSign`. | Enforces `BasicConstraints` `ca=True`, `path_length` constraint, and `KeyUsage.keyCertSign`. | `test_rfc3161_offline_verification_ca_key_usage_and_basic_constraints`, `test_rfc3161_offline_verification_ca_path_len_constraint_exceeded` |
+| **Critical Extensions** | Did not check critical extension OIDs. | Fails closed on any unrecognized critical extension. | `test_rfc3161_offline_verification_unrecognized_critical_extension` |
+| **Prohibited Signature Hashes** | Permitted weak certificate signature hash algorithms. | Strictly rejects weak certificate signature hash algorithms (MD5, SHA-1). | `test_rfc3161_offline_verification_prohibited_weak_hash_algorithm` |
+
+### 7.2 Explicit PKIX Qualification Limitations
+
+The QuMail Module 1.6 certificate path validator evaluates genuine cryptographic signatures, validity periods, basic constraints, path lengths, KeyUsage, EKU, and critical extensions. However, in accordance with zero-compromise engineering integrity:
+* Full RFC 5280 PKIX features—including `NameConstraints` permitted/excluded subtrees, `PolicyConstraints`, `PolicyMappings`, and online CRL/OCSP revocation checking—are **not implemented** in Module 1.6 and are **not claimed**.
+* Timestamp token path validation operates strictly offline against locally supplied trust anchors and bundled intermediate certificates.

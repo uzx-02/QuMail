@@ -88,18 +88,29 @@ To establish true historical validity, QuMail requires independent, authenticate
    - Parses ASN.1 CMS `ContentInfo` (`id-signedData`, RFC 5652) and `SignedData` containing encapsulated `TSTInfo` (`id-ct-TSTInfo`, RFC 3161).
    - **Message-Imprint Matching:** Enforces that `TSTInfo.messageImprint.hashedMessage` strictly matches the expected message digest (`expected_message_digest`). Any mismatch causes immediate rejection.
    - **SignerInfo Identification & Certificate Matching:** Matches `SignerInfo.sid` (`issuerAndSerialNumber` or `subjectKeyIdentifier`) to exactly one certificate in `SignedData.certificates`. Rejects missing, unmatched, or ambiguous certificates.
-   - **CMS Signed Attributes & Message-Digest Validation:** When `signedAttrs` are present:
-     * Verifies mandatory `id-contentType` attribute equals `id-ct-TSTInfo`.
-     * Verifies mandatory `id-messageDigest` attribute matches the cryptographic hash of `eContent` (SHA-256, SHA-384, or SHA-512).
-     * Computes the signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
-     * When `signedAttrs` are absent, verifies signature directly over encapsulated `eContent`.
-   - **Genuine Cryptographic Certificate Path Validation:** When `trusted_tsa_certificates` trust anchors are configured, validates the TSA certificate via genuine cryptographic signature verification up to an anchor:
+   - **Mandatory CMS Signed Attributes (`signedAttrs`):** Per RFC 3161 Section 2.4.2, CMS `signedAttrs` in `SignerInfo` are mandatory. Direct signature over encapsulated `eContent` without signed attributes is strictly rejected (no direct-signature fallback).
+     * Enforces exactly one `id-contentType` attribute whose value is `id-ct-TSTInfo`. Duplicates, missing attributes, or non-matching content types are rejected.
+     * Enforces exactly one `id-messageDigest` attribute. Duplicates, missing attributes, or malformed values are rejected.
+     * Recomputes the digest over encapsulated `TSTInfo` bytes using the declared digest algorithm (SHA-256, SHA-384, or SHA-512) and verifies exact match against `id-messageDigest`.
+     * Verifies the TSA signature over the canonical DER-encoded `signedAttrs` re-tagged as `SET OF` (`0x31`).
+   - **TSA Leaf Certificate Validation:**
+     * Critical extension whitelisting: fails closed on unrecognized critical extensions.
+     * KeyUsage enforcement: If KeyUsage extension is present, MUST assert `digitalSignature` or `contentCommitment` (`nonRepudiation`), and MUST NOT assert `keyCertSign` or `crlSign`.
+     * ExtendedKeyUsage: Enforces that TSA certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+     * Validity period: Enforces certificate validity at timestamp generation time (`not_before <= genTime <= not_after`).
+   - **Genuine Cryptographic Certificate Path Validation:** When `trusted_tsa_certificates` trust anchors are configured, validates the TSA certificate via genuine cryptographic signature verification up to a configured anchor:
      * Traverses intermediate CA certificates in `SignedData.certificates`.
-     * Validates that issuing certificates possess `BasicConstraints` with `ca=True`.
-     * Validates that all certificates in the path were valid at timestamp generation time (`not_before <= genTime <= not_after`).
-     * Verifies the cryptographic signature of each certificate using the issuing authority's public key (`issuer_pub_key.verify()`). Does **not** treat issuer name matching or cert presence alone as successful validation.
-     * Verifies self-signature on root trust anchors.
-   - **TSA Certificate EKU Requirements:** Enforces that the TSA signing certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+     * Enforces `BasicConstraints` with `ca=True` on all issuing CAs (rejects `ca=False` or missing extension).
+     * Enforces `path_length` constraint (`pathLenConstraint`) on all issuing CAs (fails if intermediate count exceeds limit).
+     * Enforces `KeyUsage.keyCertSign` on all issuing CAs when KeyUsage is present.
+     * Checks critical extensions on all certificates along the path; fails closed on unrecognized critical extensions.
+     * Prohibits weak or insecure certificate signature hash algorithms (MD5, SHA-1).
+     * Enforces validity period of all path certificates at timestamp generation time (`not_before <= genTime <= not_after`).
+     * Cryptographically verifies the digital signature of every certificate using the issuing authority's public key (`issuer_pub_key.verify()`). Does **not** treat issuer name matching or cert presence alone as chain validation.
+     * Validates self-signature on root trust anchors.
+   - **Explicit PKIX Qualification Limitations (Honest Assessment):**
+     * While QuMail performs genuine cryptographic chain signature validation, CA basic constraints, path length enforcement, KeyUsage validation, EKU validation, and critical extension whitelisting, it is **not** a full RFC 5280 PKIX implementation.
+     * NameConstraints subtrees, PolicyConstraints, PolicyMappings, and online CRL/OCSP revocation checking are **not implemented** in Module 1.6 and are explicitly not claimed.
    - **TSA Policy Enforcement:** Where a required policy is configured (`required_policy_oid`), verifies that `TSTInfo.policy` matches the requirement; fails closed on mismatch.
    - **Operational Distinction:** Distinguishes offline verification of an existing token from obtaining a new token from a live TSA. Offline verification operates deterministically in zero-network environments.
 

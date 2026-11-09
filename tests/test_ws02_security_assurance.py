@@ -927,10 +927,21 @@ def _make_synthetic_rfc3161_token(
     corrupt_sig: bool = False,
     custom_key: rsa.RSAPrivateKey | None = None,
     custom_cert: x509.Certificate | None = None,
-    include_signed_attrs: bool = False,
+    include_signed_attrs: bool = True,
+    omit_content_type: bool = False,
+    duplicate_content_type: bool = False,
+    bad_content_type_oid: str | None = None,
+    omit_message_digest: bool = False,
+    duplicate_message_digest: bool = False,
     corrupt_message_digest_attr: bool = False,
+    custom_digest_algo_oid: str = "2.16.840.1.101.3.4.2.1",
     custom_policy_oid: str = "1.2.3.4.5",
     extra_certs: list[x509.Certificate] | None = None,
+    include_leaf_key_usage: bool = True,
+    leaf_key_usage_digital_signature: bool = True,
+    leaf_key_usage_content_commitment: bool = True,
+    leaf_key_usage_key_cert_sign: bool = False,
+    leaf_key_usage_crl_sign: bool = False,
 ) -> tuple[bytes, x509.Certificate, rsa.RSAPrivateKey]:
     """Helper to generate authentic or intentionally flawed RFC 3161 TimeStampToken DER bytes."""
     key = custom_key or rsa.generate_private_key(65537, 2048)
@@ -953,6 +964,21 @@ def _make_synthetic_rfc3161_token(
             builder = builder.add_extension(
                 x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]),
                 critical=False,
+            )
+        if include_leaf_key_usage:
+            builder = builder.add_extension(
+                x509.KeyUsage(
+                    digital_signature=leaf_key_usage_digital_signature,
+                    content_commitment=leaf_key_usage_content_commitment,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=leaf_key_usage_key_cert_sign,
+                    crl_sign=leaf_key_usage_crl_sign,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
             )
         cert = builder.sign(key, hashes.SHA256())
     else:
@@ -978,7 +1004,7 @@ def _make_synthetic_rfc3161_token(
     sd["version"] = 3
     sd["digestAlgorithms"] = rfc5652.DigestAlgorithmIdentifiers()
     da = rfc5652.DigestAlgorithmIdentifier()
-    da["algorithm"] = univ.ObjectIdentifier("2.16.840.1.101.3.4.2.1")
+    da["algorithm"] = univ.ObjectIdentifier(custom_digest_algo_oid)
     sd["digestAlgorithms"].append(da)
 
     sd["encapContentInfo"] = rfc5652.EncapsulatedContentInfo()
@@ -1009,20 +1035,38 @@ def _make_synthetic_rfc3161_token(
 
     if include_signed_attrs:
         si.setComponentByName("signedAttrs")
-        attr_ct = rfc5652.Attribute()
-        attr_ct["attrType"] = rfc5652.id_contentType
-        attr_ct.setComponentByName("attrValues")
-        attr_ct["attrValues"].append(rfc5652.AttributeValue(encoder.encode(rfc3161.id_ct_TSTInfo)))
-        si["signedAttrs"].append(attr_ct)
 
-        attr_md = rfc5652.Attribute()
-        attr_md["attrType"] = rfc5652.id_messageDigest
-        attr_md.setComponentByName("attrValues")
-        md_bytes = hashlib.sha256(tst_der).digest()
-        if corrupt_message_digest_attr:
-            md_bytes = b"\x00" * 32
-        attr_md["attrValues"].append(rfc5652.AttributeValue(encoder.encode(univ.OctetString(md_bytes))))
-        si["signedAttrs"].append(attr_md)
+        if not omit_content_type:
+            ct_oid = univ.ObjectIdentifier(bad_content_type_oid if bad_content_type_oid else rfc3161.id_ct_TSTInfo)
+            attr_ct = rfc5652.Attribute()
+            attr_ct["attrType"] = rfc5652.id_contentType
+            attr_ct.setComponentByName("attrValues")
+            attr_ct["attrValues"].append(rfc5652.AttributeValue(encoder.encode(ct_oid)))
+            si["signedAttrs"].append(attr_ct)
+
+            if duplicate_content_type:
+                dup_ct = rfc5652.Attribute()
+                dup_ct["attrType"] = rfc5652.id_contentType
+                dup_ct.setComponentByName("attrValues")
+                dup_ct["attrValues"].append(rfc5652.AttributeValue(encoder.encode(ct_oid)))
+                si["signedAttrs"].append(dup_ct)
+
+        if not omit_message_digest:
+            attr_md = rfc5652.Attribute()
+            attr_md["attrType"] = rfc5652.id_messageDigest
+            attr_md.setComponentByName("attrValues")
+            md_bytes = hashlib.sha256(tst_der).digest()
+            if corrupt_message_digest_attr:
+                md_bytes = b"\x00" * 32
+            attr_md["attrValues"].append(rfc5652.AttributeValue(encoder.encode(univ.OctetString(md_bytes))))
+            si["signedAttrs"].append(attr_md)
+
+            if duplicate_message_digest:
+                dup_md = rfc5652.Attribute()
+                dup_md["attrType"] = rfc5652.id_messageDigest
+                dup_md.setComponentByName("attrValues")
+                dup_md["attrValues"].append(rfc5652.AttributeValue(encoder.encode(univ.OctetString(md_bytes))))
+                si["signedAttrs"].append(dup_md)
 
         signed_attrs_der = encoder.encode(si["signedAttrs"])
         if signed_attrs_der.startswith(b"\xa0"):
@@ -1438,3 +1482,311 @@ def test_local_receipt_absence_and_wall_clock_limitations():
     assert res_no_evidence.is_valid is False
     # Backdating defense: cannot conclude message is authentic, but absence does not prove it wasn't seen
     assert "backdating defense" in res_no_evidence.explanation.lower()
+
+
+def test_rfc3161_offline_verification_absent_signed_attrs_rejected():
+    """52. RFC 3161 token without CMS signedAttrs is strictly rejected (no direct signature fallback)."""
+    digest = b"\x11" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, include_signed_attrs=False)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "RFC 3161 requires mandatory CMS signedAttrs" in res.error
+
+
+def test_rfc3161_offline_verification_missing_content_type_rejected():
+    """53. RFC 3161 signedAttrs missing id-contentType attribute is rejected."""
+    digest = b"\x22" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, omit_content_type=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Signed attributes missing mandatory id-contentType" in res.error
+
+
+def test_rfc3161_offline_verification_duplicate_content_type_rejected():
+    """54. RFC 3161 signedAttrs with duplicated id-contentType attributes is rejected."""
+    digest = b"\x33" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, duplicate_content_type=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Signed attributes contains duplicate id-contentType" in res.error
+
+
+def test_rfc3161_offline_verification_incorrect_content_type_rejected():
+    """55. RFC 3161 signedAttrs where id-contentType is not id-ct-TSTInfo is rejected."""
+    digest = b"\x44" * 32
+    # Use id-data (1.2.840.113549.1.7.1) instead of id-ct-TSTInfo (1.2.840.113549.1.9.16.1.4)
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, bad_content_type_oid="1.2.840.113549.1.7.1")
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "expected id-ct-TSTInfo" in res.error
+
+
+def test_rfc3161_offline_verification_missing_message_digest_rejected():
+    """56. RFC 3161 signedAttrs missing id-messageDigest attribute is rejected."""
+    digest = b"\x55" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, omit_message_digest=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Signed attributes missing mandatory id-messageDigest" in res.error
+
+
+def test_rfc3161_offline_verification_duplicate_message_digest_rejected():
+    """57. RFC 3161 signedAttrs with duplicated id-messageDigest attributes is rejected."""
+    digest = b"\x66" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, duplicate_message_digest=True)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Signed attributes contains duplicate id-messageDigest" in res.error
+
+
+def test_rfc3161_offline_verification_unsupported_digest_algorithm_rejected():
+    """58. SignerInfo declaring unsupported digest algorithm OID is rejected."""
+    digest = b"\x77" * 32
+    # Use MD5 OID 1.2.840.113549.2.5
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, custom_digest_algo_oid="1.2.840.113549.2.5")
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "Unsupported digest algorithm OID" in res.error
+
+
+def test_rfc3161_offline_verification_tsa_leaf_invalid_key_usage_rejected():
+    """59. TSA leaf certificate KeyUsage requirements strictly enforced."""
+    digest = b"\x88" * 32
+
+    # Case A: Asserting key_cert_sign is forbidden for TSA leaf
+    tok_a, _, _ = _make_synthetic_rfc3161_token(digest, leaf_key_usage_key_cert_sign=True)
+    res_a = verify_rfc3161_token_offline(tok_a, digest)
+    assert res_a.is_valid is False
+    assert "must not have keyCertSign or crlSign" in res_a.error
+
+    # Case B: Asserting crl_sign is forbidden for TSA leaf
+    tok_b, _, _ = _make_synthetic_rfc3161_token(digest, leaf_key_usage_crl_sign=True)
+    res_b = verify_rfc3161_token_offline(tok_b, digest)
+    assert res_b.is_valid is False
+    assert "must not have keyCertSign or crlSign" in res_b.error
+
+    # Case C: Missing digitalSignature and contentCommitment
+    tok_c, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        leaf_key_usage_digital_signature=False,
+        leaf_key_usage_content_commitment=False,
+    )
+    res_c = verify_rfc3161_token_offline(tok_c, digest)
+    assert res_c.is_valid is False
+    assert "missing required digitalSignature or contentCommitment" in res_c.error
+
+
+def test_rfc3161_offline_verification_ca_key_usage_and_basic_constraints():
+    """60. Certificate-path validation enforces CA BasicConstraints and keyCertSign."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    root_k = rsa.generate_private_key(65537, 2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test CA Root")])
+
+    # Case A: CA lacking keyCertSign in KeyUsage
+    root_ca_no_certsign = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,  # Forbidden for issuing CA!
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .sign(root_k, hashes.SHA256())
+    )
+
+    tsa_k = rsa.generate_private_key(65537, 2048)
+    tsa_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test TSA Leaf")])
+    tsa_cert = (
+        x509.CertificateBuilder()
+        .subject_name(tsa_name)
+        .issuer_name(root_name)
+        .public_key(tsa_k.public_key())
+        .serial_number(2)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    digest = b"\x99" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, custom_key=tsa_k, custom_cert=tsa_cert, extra_certs=[root_ca_no_certsign])
+    res_a = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_ca_no_certsign])
+    assert res_a.is_valid is False
+    assert "KeyUsage does not permit keyCertSign" in res_a.error
+
+    # Case B: CA with BasicConstraints ca=False
+    root_ca_not_ca = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(3)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)  # ca=False!
+        .sign(root_k, hashes.SHA256())
+    )
+    res_b = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_ca_not_ca])
+    assert res_b.is_valid is False
+    assert "BasicConstraints ca=False" in res_b.error
+
+
+def test_rfc3161_offline_verification_ca_path_len_constraint_exceeded():
+    """61. Certificate-path validation enforces pathLenConstraint."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    root_k = rsa.generate_private_key(65537, 2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Constrained Root CA")])
+    # Root permits at most 0 intermediate CAs (direct issuance only)
+    root_c = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    # Intermediate CA (depth 1 intermediate)
+    inter_k = rsa.generate_private_key(65537, 2048)
+    inter_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Intermediate CA")])
+    inter_c = (
+        x509.CertificateBuilder()
+        .subject_name(inter_name)
+        .issuer_name(root_name)
+        .public_key(inter_k.public_key())
+        .serial_number(2)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    # Sub-intermediate CA (depth 2 intermediate -> intermediate_count = 1 >= pathLen 0)
+    sub_k = rsa.generate_private_key(65537, 2048)
+    sub_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Sub Intermediate CA")])
+    sub_c = (
+        x509.CertificateBuilder()
+        .subject_name(sub_name)
+        .issuer_name(inter_name)
+        .public_key(sub_k.public_key())
+        .serial_number(3)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(inter_k, hashes.SHA256())
+    )
+
+    # TSA leaf issued by sub_c
+    leaf_k = rsa.generate_private_key(65537, 2048)
+    leaf_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Leaf TSA")])
+    leaf_c = (
+        x509.CertificateBuilder()
+        .subject_name(leaf_name)
+        .issuer_name(sub_name)
+        .public_key(leaf_k.public_key())
+        .serial_number(4)
+        .not_valid_before(now_utc - datetime.timedelta(days=2))
+        .not_valid_after(now_utc + datetime.timedelta(days=2))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .sign(sub_k, hashes.SHA256())
+    )
+
+    digest = b"\xab" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        custom_key=leaf_k,
+        custom_cert=leaf_c,
+        extra_certs=[sub_c, inter_c, root_c],
+    )
+    res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_c])
+    assert res.is_valid is False
+    assert "pathLenConstraint exceeded" in res.error
+
+
+def test_rfc3161_offline_verification_unrecognized_critical_extension():
+    """62. Certificate with unrecognized critical extension fails closed."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    key = rsa.generate_private_key(65537, 2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Critical Ext TSA")])
+
+    # Add unknown critical extension OID 2.999.1.2.3
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=1))
+        .not_valid_after(now_utc + datetime.timedelta(days=1))
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .add_extension(x509.UnrecognizedExtension(x509.ObjectIdentifier("2.999.1.2.3"), b"secret-ext"), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+
+    digest = b"\xcd" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, custom_key=key, custom_cert=cert)
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "contains unrecognized critical extension '2.999.1.2.3'" in res.error
+
+
+def test_rfc3161_offline_verification_prohibited_weak_hash_algorithm():
+    """63. Certificate signed with weak or prohibited hash algorithm (SHA-1) is rejected."""
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    root_k = rsa.generate_private_key(65537, 2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Weak Hash Root CA")])
+    root_c = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_k.public_key())
+        .serial_number(1)
+        .not_valid_before(now_utc - datetime.timedelta(days=10))
+        .not_valid_after(now_utc + datetime.timedelta(days=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    tsa_k = rsa.generate_private_key(65537, 2048)
+    tsa_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Leaf TSA")])
+    tsa_c = (
+        x509.CertificateBuilder()
+        .subject_name(tsa_name)
+        .issuer_name(root_name)
+        .public_key(tsa_k.public_key())
+        .serial_number(2)
+        .not_valid_before(now_utc - datetime.timedelta(days=5))
+        .not_valid_after(now_utc + datetime.timedelta(days=5))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=False)
+        .sign(root_k, hashes.SHA256())
+    )
+
+    digest = b"\xef" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, custom_key=tsa_k, custom_cert=tsa_c, extra_certs=[root_c])
+
+    # Simulate a certificate signed with legacy SHA-1 hash algorithm
+    with patch.object(type(tsa_c), "signature_hash_algorithm", new_callable=lambda: property(lambda self: hashes.SHA1())):
+        res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[root_c])
+        assert res.is_valid is False
+        assert "weak or prohibited hash algorithm 'sha1'" in res.error

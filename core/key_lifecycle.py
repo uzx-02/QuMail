@@ -84,11 +84,30 @@ class RFC3161VerificationResult:
     error: str = ""
 
 
+SUPPORTED_CRITICAL_EXTENSION_OIDS = {
+    ExtensionOID.BASIC_CONSTRAINTS,
+    ExtensionOID.KEY_USAGE,
+    ExtensionOID.EXTENDED_KEY_USAGE,
+    ExtensionOID.SUBJECT_KEY_IDENTIFIER,
+    ExtensionOID.AUTHORITY_KEY_IDENTIFIER,
+}
+
+
+def _check_critical_extensions(cert: x509.Certificate) -> tuple[bool, str]:
+    """Ensure all critical extensions on cert are recognized and supported."""
+    for ext in cert.extensions:
+        if ext.critical and ext.oid not in SUPPORTED_CRITICAL_EXTENSION_OIDS:
+            return False, f"Certificate '{cert.subject.rfc4514_string()}' contains unrecognized critical extension '{ext.oid.dotted_string}'"
+    return True, ""
+
+
 def _verify_cert_signature(cert: x509.Certificate, issuer_pub_key) -> None:
     """Cryptographically verify an X.509 certificate's digital signature using issuer's public key."""
     hash_algo = cert.signature_hash_algorithm
     if hash_algo is None:
         raise ValueError("Certificate uses an unrecognized or unsupported signature hash algorithm")
+    if hash_algo.name.lower() in ("md5", "sha1"):
+        raise ValueError(f"Certificate signature uses weak or prohibited hash algorithm '{hash_algo.name}'")
     if isinstance(issuer_pub_key, rsa.RSAPublicKey):
         issuer_pub_key.verify(cert.signature, cert.tbs_certificate_bytes, padding.PKCS1v15(), hash_algo)
     elif isinstance(issuer_pub_key, ec.EllipticCurvePublicKey):
@@ -107,18 +126,27 @@ def _verify_certificate_path(
     """
     Genuine cryptographic path validation from leaf_cert to a configured trust anchor.
 
-    Verification Invariants:
-    1. Direct trust: If leaf_cert is directly present in trust_anchors:
-       - If self-signed, cryptographically verify self-signature.
-       - Terminate with success.
-    2. Multi-tier chain: Traverse candidate issuers up to trust anchors:
-       - Match candidate certs where candidate.subject == current.issuer.
-       - Verify candidate validity at evaluation_time_utc (genTime).
-       - Verify candidate BasicConstraints (ca=True).
-       - Cryptographically verify leaf signature using candidate public key.
-       - If candidate is in trust_anchors (and self-signed root verified), terminate with success.
-       - Fail closed on missing issuers, invalid signatures, non-CA issuers, expired CAs, or loop/depth limit.
+    Verification Invariants & Qualification:
+    - Verifies genuine digital signatures along the entire path (leaf -> intermediate CAs -> trust anchor).
+    - Checks critical extensions: rejects certificates with unrecognized critical extensions.
+    - Enforces BasicConstraints ca=True on all issuing CAs.
+    - Enforces path_length constraints (RFC 5280 Section 4.2.1.9) on issuing CAs.
+    - Enforces KeyUsage.key_cert_sign on issuing CAs (if KeyUsage extension is present).
+    - Enforces validity periods (not_before <= evaluation_time_utc <= not_after) on all certificates in the path.
+    - Verifies self-signature on root trust anchors.
+    - Rejects certificates using weak hash algorithms (MD5, SHA-1).
+
+    PKIX Qualification Limitations:
+    - This path validator implements cryptographic chain and constraint checks, but is NOT a full RFC 5280
+      PKIX implementation. NameConstraints subtrees, PolicyConstraints, PolicyMappings, and online CRL/OCSP
+      revocation checking are NOT implemented in Module 1.6 and are explicitly not claimed.
     """
+    # Check leaf critical extensions
+    ok_leaf, err_leaf = _check_critical_extensions(leaf_cert)
+    if not ok_leaf:
+        return False, err_leaf
+
+    # Direct trust check
     for anchor in trust_anchors:
         if leaf_cert == anchor:
             if leaf_cert.issuer == leaf_cert.subject:
@@ -145,21 +173,43 @@ def _verify_certificate_path(
         last_error = ""
 
         for candidate in candidate_issuers:
+            # Check critical extensions on candidate
+            cand_crit_ok, cand_crit_err = _check_critical_extensions(candidate)
+            if not cand_crit_ok:
+                last_error = cand_crit_err
+                continue
+
+            # Check validity at evaluation_time_utc
             cand_nb = int(candidate.not_valid_before_utc.timestamp())
             cand_na = int(candidate.not_valid_after_utc.timestamp())
             if not (cand_nb <= evaluation_time_utc <= cand_na):
                 last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' not valid at timestamp generation time"
                 continue
 
+            # Check BasicConstraints ca=True and pathLenConstraint
             try:
-                bc = candidate.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS)
-                if not bc.value.ca:
+                bc = candidate.extensions.get_extension_for_oid(ExtensionOID.BASIC_CONSTRAINTS).value
+                if not bc.ca:
                     last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' has BasicConstraints ca=False"
+                    continue
+                intermediate_count = depth - 1
+                if bc.path_length is not None and intermediate_count > bc.path_length:
+                    last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' pathLenConstraint exceeded (max {bc.path_length}, got {intermediate_count})"
                     continue
             except Exception:
                 last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' missing BasicConstraints extension"
                 continue
 
+            # Check KeyUsage keyCertSign
+            try:
+                ku = candidate.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE).value
+                if not ku.key_cert_sign:
+                    last_error = f"Candidate issuer '{candidate.subject.rfc4514_string()}' KeyUsage does not permit keyCertSign"
+                    continue
+            except x509.ExtensionNotFound:
+                pass
+
+            # Cryptographically verify signature
             try:
                 _verify_cert_signature(current_cert, candidate.public_key())
                 verified_issuer = candidate
@@ -204,13 +254,17 @@ def verify_rfc3161_token_offline(
     4. SignerInfo Matching: Matches SignerInfo.sid (issuerAndSerialNumber or subjectKeyIdentifier)
        to exactly one certificate in SignedData.certificates. Rejects absent or ambiguous matches.
     5. TSA Certificate Validation:
+       - Enforces critical-extension handling (fails closed on unrecognized critical extensions).
+       - Enforces KeyUsage (if present) has digitalSignature or contentCommitment, and no keyCertSign or crlSign.
        - Enforces ExtendedKeyUsage includes timeStamping (OID 1.3.6.1.5.5.7.3.8).
        - Enforces certificate validity at token genTime.
-       - Validates genuine cryptographic certificate path to configured trust anchors.
-    6. CMS Signed Attributes Validation:
-       - When signedAttrs present, validates mandatory id-contentType (id-ct-TSTInfo) and
-         id-messageDigest (matching hash of eContent). Re-encodes as SET OF (0x31) for signature verification.
-       - When absent, verifies signature directly over encapsulated eContent.
+       - Validates genuine cryptographic certificate path to configured trust anchors (with BasicConstraints,
+         pathLenConstraint, issuing CA keyCertSign, and no weak hash algorithms).
+    6. Mandatory CMS Signed Attributes Validation:
+       - Mandates CMS signedAttrs in SignerInfo (direct signature fallback is forbidden per RFC 3161).
+       - Requires exactly one id-contentType attribute whose value is id-ct-TSTInfo.
+       - Requires exactly one id-messageDigest attribute matching recomputed hash of encapsulated TSTInfo.
+       - Re-encodes signedAttrs as SET OF (0x31) for signature verification.
     7. TSA Digital Signature Verification:
        - Cryptographically validates RSA/ECDSA digital signature using validated TSA public key.
     8. Rejects malformed, tampered, expired, mismatched, or unauthorized tokens.
@@ -339,6 +393,37 @@ def verify_rfc3161_token_offline(
 
     tsa_cert = matching_certs[0]
 
+    # Check critical extensions on TSA certificate
+    ok_crit, err_crit = _check_critical_extensions(tsa_cert)
+    if not ok_crit:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error=f"TSA certificate critical extension check failed: {err_crit}",
+        )
+
+    # Check KeyUsage: MUST have digitalSignature or contentCommitment; MUST NOT have keyCertSign or crlSign
+    try:
+        ku_ext = tsa_cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE)
+        ku = ku_ext.value
+        if not (ku.digital_signature or ku.content_commitment):
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="TSA certificate KeyUsage missing required digitalSignature or contentCommitment",
+            )
+        if ku.key_cert_sign or ku.crl_sign:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                policy_oid=policy_oid,
+                error="TSA certificate KeyUsage must not have keyCertSign or crlSign set",
+            )
+    except x509.ExtensionNotFound:
+        pass
+
     # Check timeStamping ExtendedKeyUsage
     try:
         eku_ext = tsa_cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
@@ -374,67 +459,131 @@ def verify_rfc3161_token_offline(
                 error=f"Certificate path validation failed: {path_err}",
             )
 
-    # 8. CMS Signed Attributes & Message-Digest Validation
+    # 8. CMS Mandatory Signed Attributes & Message-Digest Validation
     signed_attrs = signer_info.getComponentByName("signedAttrs")
-    if signed_attrs is not None and signed_attrs.isValue and len(signed_attrs) > 0:
-        content_type_seen = None
-        message_digest_seen = None
+    if signed_attrs is None or not signed_attrs.isValue or len(signed_attrs) == 0:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="RFC 3161 requires mandatory CMS signedAttrs in SignerInfo (direct signature fallback is forbidden)",
+        )
 
-        for attr in signed_attrs:
-            attr_type = attr["attrType"]
-            if attr_type == rfc5652.id_contentType:
-                if len(attr["attrValues"]) != 1:
-                    return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute id-contentType must have exactly one value")
+    content_type_count = 0
+    message_digest_count = 0
+    content_type_seen = None
+    message_digest_seen = None
+
+    for attr in signed_attrs:
+        attr_type = attr["attrType"]
+        if attr_type == rfc5652.id_contentType:
+            content_type_count += 1
+            if len(attr["attrValues"]) != 1:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="Signed attribute id-contentType must have exactly one value",
+                )
+            try:
                 ct_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=univ.ObjectIdentifier())
                 content_type_seen = ct_val
-            elif attr_type == rfc5652.id_messageDigest:
-                if len(attr["attrValues"]) != 1:
-                    return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute id-messageDigest must have exactly one value")
+            except Exception as exc:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error=f"Malformed id-contentType attribute: {exc}",
+                )
+        elif attr_type == rfc5652.id_messageDigest:
+            message_digest_count += 1
+            if len(attr["attrValues"]) != 1:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error="Signed attribute id-messageDigest must have exactly one value",
+                )
+            try:
                 md_val, _ = decoder.decode(bytes(attr["attrValues"][0]), asn1Spec=univ.OctetString())
                 message_digest_seen = bytes(md_val)
+            except Exception as exc:
+                return RFC3161VerificationResult(
+                    is_valid=False,
+                    gen_time_utc=gen_time_utc,
+                    policy_oid=policy_oid,
+                    error=f"Malformed id-messageDigest attribute: {exc}",
+                )
 
-        if content_type_seen is None:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attributes missing mandatory id-contentType")
-        if content_type_seen != rfc3161.id_ct_TSTInfo:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Signed attribute id-contentType mismatch: expected id-ct-TSTInfo, got {content_type_seen}")
+    if content_type_count == 0:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes missing mandatory id-contentType",
+        )
+    if content_type_count > 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes contains duplicate id-contentType attributes",
+        )
+    if content_type_seen != rfc3161.id_ct_TSTInfo:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error=f"Signed attribute id-contentType mismatch: expected id-ct-TSTInfo, got {content_type_seen}",
+        )
 
-        if message_digest_seen is None:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attributes missing mandatory id-messageDigest")
+    if message_digest_count == 0:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes missing mandatory id-messageDigest",
+        )
+    if message_digest_count > 1:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attributes contains duplicate id-messageDigest attributes",
+        )
 
-        # Determine digest algorithm from signer_info['digestAlgorithm']
-        digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])
-        if digest_algo_oid == "2.16.840.1.101.3.4.2.1":  # SHA-256
-            expected_content_digest = hashlib.sha256(e_content).digest()
-            hash_impl = hashes.SHA256()
-        elif digest_algo_oid == "2.16.840.1.101.3.4.2.2":  # SHA-384
-            expected_content_digest = hashlib.sha384(e_content).digest()
-            hash_impl = hashes.SHA384()
-        elif digest_algo_oid == "2.16.840.1.101.3.4.2.3":  # SHA-512
-            expected_content_digest = hashlib.sha512(e_content).digest()
-            hash_impl = hashes.SHA512()
-        else:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Unsupported digest algorithm OID: {digest_algo_oid}")
-
-        if message_digest_seen != expected_content_digest:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error="Signed attribute message-digest does not match hash of encapsulated TSTInfo")
-
-        # Re-tag signedAttrs as SET OF (0x31) for signature verification
-        signed_attrs_bytes = encoder.encode(signed_attrs)
-        if signed_attrs_bytes.startswith(b"\xa0"):
-            signed_attrs_bytes = b"\x31" + signed_attrs_bytes[1:]
-        target_bytes = signed_attrs_bytes
+    # Determine digest algorithm from signer_info['digestAlgorithm']
+    digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])
+    if digest_algo_oid == "2.16.840.1.101.3.4.2.1":  # SHA-256
+        expected_content_digest = hashlib.sha256(e_content).digest()
+        hash_impl = hashes.SHA256()
+    elif digest_algo_oid == "2.16.840.1.101.3.4.2.2":  # SHA-384
+        expected_content_digest = hashlib.sha384(e_content).digest()
+        hash_impl = hashes.SHA384()
+    elif digest_algo_oid == "2.16.840.1.101.3.4.2.3":  # SHA-512
+        expected_content_digest = hashlib.sha512(e_content).digest()
+        hash_impl = hashes.SHA512()
     else:
-        # Direct eContent coverage
-        digest_algo_oid = str(signer_info["digestAlgorithm"]["algorithm"])
-        if digest_algo_oid == "2.16.840.1.101.3.4.2.1":
-            hash_impl = hashes.SHA256()
-        elif digest_algo_oid == "2.16.840.1.101.3.4.2.2":
-            hash_impl = hashes.SHA384()
-        elif digest_algo_oid == "2.16.840.1.101.3.4.2.3":
-            hash_impl = hashes.SHA512()
-        else:
-            return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, policy_oid=policy_oid, error=f"Unsupported digest algorithm OID: {digest_algo_oid}")
-        target_bytes = e_content
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error=f"Unsupported digest algorithm OID: {digest_algo_oid}",
+        )
+
+    if message_digest_seen != expected_content_digest:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            policy_oid=policy_oid,
+            error="Signed attribute message-digest does not match hash of encapsulated TSTInfo",
+        )
+
+    # Re-tag signedAttrs as SET OF (0x31) for signature verification
+    signed_attrs_bytes = encoder.encode(signed_attrs)
+    if signed_attrs_bytes.startswith(b"\xa0"):
+        signed_attrs_bytes = b"\x31" + signed_attrs_bytes[1:]
+    target_bytes = signed_attrs_bytes
 
     # 9. TSA Digital Signature Verification
     sig_bytes = bytes(signer_info["signature"])
