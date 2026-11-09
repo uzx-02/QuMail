@@ -95,17 +95,17 @@ Under WS-02, all four targeted pilot readiness gaps (`M16-KEY-001`, `M16-ONB-001
 
 ## 3. Automated Test Verification Results
 
-All **104 automated tests** passed cleanly in **25.00 seconds**:
+All **114 automated tests** passed cleanly:
 
 | Test Suite File | Focus Area | Tests Executed | Passed | Failed |
 |---|---|:---:|:---:|:---:|
 | `tests/test_startup.py` | Modern default launch, CLI flags, dry-run network isolation | 11 | 11 | 0 |
 | `tests/test_ws01_bootstrap_hygiene.py` | Provider resolution, PE CFG `0xc160`, PrivacyFilter, code hygiene | 14 | 14 | 0 |
 | `tests/test_ws02_identity_and_trust.py` | WKD discovery, z-base-32, TrustEngine, SecurityIndicators, Profile v1, lifecycle | 25 | 25 | 0 |
-| `tests/test_ws02_security_assurance.py` | Historical time evidence, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 32 | 32 | 0 |
+| `tests/test_ws02_security_assurance.py` | Historical time evidence, RFC 3161 offline validation, anti-SSRF WKD, Ed25519 admin trust, Module 1.5 compat | 42 | 42 | 0 |
 | `tests/test_cryptographic_roundtrip.py` | End-to-end M5 crypto roundtrip, Ed25519, replay detection, MIME parser | 15 | 15 | 0 |
 | `tests/test_cancellation_submission_semantics.py` | Outbox cancellation, uncertain submission recovery, crash semantics | 7 | 7 | 0 |
-| **Total** | **Complete Modern Regression Suite** | **104** | **104** | **0** |
+| **Total** | **Complete Modern Regression Suite** | **114** | **114** | **0** |
 
 ---
 
@@ -172,11 +172,41 @@ Following targeted technical lead review of checkpoint `cd2b43e`, four critical 
 - **WKD Directory Publishing:** QuMail implements client-side WKD discovery; generating and uploading static WKD directories to corporate web servers is an administrative out-of-band operational task.
 
 ### 6.4 Test Evidence Summary
-- **Total Tests:** 104 passed in 25.00s.
-- **Security Tests:** 32 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
+- **Total Tests:** 114 passed.
+- **Security Tests:** 42 dedicated security assurance tests in `tests/test_ws02_security_assurance.py`.
 - **Failures / Skips:** 0 failed, 0 skipped.
 
 ### 6.5 Trust Assumptions
 1. **Local Endpoint Boundary:** The Windows user session and process memory are assumed uncompromised by root-level malware during cryptographic operations.
 2. **Administrator Key Authenticity:** The administrator Ed25519 public key configured in a `TrustAnchor` is provisioned through authenticated administrative channels (e.g. signed configuration file or Windows Group Policy).
 3. **No Silent TOFU:** Network key availability (WKD) is explicitly assumed to be an unauthenticated transport channel until verified out-of-band or certified by an enterprise trust anchor.
+
+### 6.6 Historical Timestamp Evidence Clarification
+
+Following targeted technical lead guidance for final WS-02 acceptance, historical timestamp evidence sources and verification procedures have been formalized and demonstrated:
+
+#### A. RFC 3161 Time-Stamp Token Offline Verification
+The implementation in `core/key_lifecycle.py:verify_rfc3161_token_offline` provides strict, offline verification of existing RFC 3161 TimeStampToken DER bytes:
+1. **ASN.1 CMS Structure Validation:** Parses ASN.1 CMS `ContentInfo` with `contentType = id-signedData` (RFC 5652) and `SignedData` containing `encapContentInfo` with `eContentType = id-ct-TSTInfo` (RFC 3161). Decodes `TSTInfo` and validates the `genTime` GeneralizedTime format.
+2. **Message-Imprint Matching:** Compares `TSTInfo.messageImprint.hashedMessage` byte-for-byte against the expected message digest (`expected_message_digest`). Rejects any token whose message imprint does not match the exact target message.
+3. **TSA Certificate-Chain Validation:**
+   - Extracts TSA certificates from `SignedData.certificates`.
+   - Validates that the signing certificate possesses `ExtendedKeyUsage` with `timeStamping` (OID `1.3.6.1.5.5.7.3.8`).
+   - Validates certificate validity dates (`not_valid_before` and `not_valid_after`) against token generation time (`genTime`).
+   - Validates against configured `trusted_tsa_certificates` trust anchors when specified.
+4. **TSA Digital Signature Verification:** Cryptographically validates the TSA RSA/ECDSA signature over `eContent` (or signed attributes) using the public key extracted from the validated TSA certificate.
+5. **Rejection of Malformed / Tampered Tokens:** Explicitly rejects oversized tokens (>64 KiB), malformed ASN.1 structures, tampered signature bytes, mismatched digests, missing EKUs, expired TSA certs, and untrusted roots.
+6. **Offline vs. Live TSA Distinction:** WS-02 strictly implements and tests **offline verification** of pre-existing tokens. Live network acquisition of new tokens from a remote TSA service is an operational network task and is not required for local offline evidence verification.
+
+#### B. Authenticated Receipts in Local Vault
+The local vault replay receipt mechanism (`experiments/m5/services.py:120-135`) serves as authenticated local observation evidence:
+1. **Receipt Storage & Key:** Stored in the encrypted SQLite table `accounts` under key `m5_seen_v1` as a JSON map of replay keys: `replay_key = signer['fingerprint'] + '/' + ident` (binding the sender root fingerprint and message-ID, with inner `From` verified against the certificate).
+2. **Recorded Digest:** SHA-256 hexadecimal digest of the decrypted, authentic inner MIME `raw` stream (covering all inner headers, body parts, and attachments).
+3. **Observation Timestamp:** Monotonic Unix epoch integer `first_seen = int(time.time())` committed immediately upon successful cryptographic verification during live inbound IMAP retrieval.
+4. **Tamper Resistance:** Encrypted with AES-256-GCM using a 32-byte DPAPI master key stored in the Windows Credential Manager. Authenticated Associated Data (AAD) binds vault ID, account ID, and revision counter.
+5. **Rollback & Deletion Boundaries:** Bounded by local SQLite revision monotonicity. Deletions or rollbacks of the local database cannot forge earlier timestamps, but local state loss destroys receipt history (no distributed transparency log is claimed).
+6. **Clock & Endpoint Assumptions:** Relies on local endpoint OS clock integrity and an uncompromised local execution environment.
+7. **Observation vs. Creation Time Invariant:** A local vault receipt proves **prior QuMail observation** under its documented trust assumptions. It **DOES NOT** prove the sender's original signature creation time.
+
+#### C. Trusted Notary Evidence Status
+The `TimestampEvidenceSource.TRUSTED_NOTARY` source is **unsupported in Module 1.6**. Any verification attempt providing this source is rejected with `HistoricalValidity.INVALID_EVIDENCE` ("Trusted notary evidence source is currently unsupported in Module 1.6."). Notary counter-signature schemas and verification procedures remain deferred to future enterprise archival milestones.

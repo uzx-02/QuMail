@@ -13,6 +13,7 @@ Covers targeted security remediation required for WS-02 closeout:
    no cryptographic downgrade).
 """
 
+import datetime
 import io
 import ipaddress
 from pathlib import Path
@@ -23,7 +24,13 @@ import time
 from unittest.mock import MagicMock, patch
 import pytest
 
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519, padding, rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from pyasn1.codec.der import decoder, encoder
+from pyasn1.type import univ, useful
+from pyasn1_modules import rfc2459, rfc3161, rfc5652
 
 from core.enterprise_trust import (
     EnterpriseContactRecord,
@@ -49,11 +56,13 @@ from core.key_lifecycle import (
     HistoricalValidity,
     HistoricalVerificationResult,
     KeyStatus,
+    RFC3161VerificationResult,
     RevocationReason,
     TimestampEvidence,
     TimestampEvidenceSource,
     is_signature_historically_valid,
     verify_historical_signature,
+    verify_rfc3161_token_offline,
 )
 from core.security_indicators import BadgeLevel, IndicatorCode
 from core.trust_engine import TrustDecision, TrustPolicyEngine, TrustState
@@ -902,3 +911,320 @@ def test_no_cryptographic_downgrade(crypto_env):
     alice_public = vault.export_public(ctx_alice, key_alice)
     with pytest.raises(M5Failure):
         opener.open(lease_bob, key_bob, tampered_wire, alice_public, budget)
+
+
+# ============================================================================
+# Section 5: Offline RFC 3161 Verification & Historical Evidence Clarification
+# ============================================================================
+
+def _make_synthetic_rfc3161_token(
+    message_digest: bytes,
+    gen_time_dt: datetime.datetime | None = None,
+    include_eku: bool = True,
+    cert_valid_not_before_dt: datetime.datetime | None = None,
+    cert_valid_not_after_dt: datetime.datetime | None = None,
+    corrupt_sig: bool = False,
+    custom_key: rsa.RSAPrivateKey | None = None,
+    custom_cert: x509.Certificate | None = None,
+) -> tuple[bytes, x509.Certificate, rsa.RSAPrivateKey]:
+    """Helper to generate authentic or intentionally flawed RFC 3161 TimeStampToken DER bytes."""
+    key = custom_key or rsa.generate_private_key(65537, 2048)
+
+    if custom_cert is None:
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        nb = cert_valid_not_before_dt or (now_utc - datetime.timedelta(days=1))
+        na = cert_valid_not_after_dt or (now_utc + datetime.timedelta(days=1))
+        subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Test TSA")])
+        builder = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(1001)
+            .not_valid_before(nb)
+            .not_valid_after(na)
+        )
+        if include_eku:
+            builder = builder.add_extension(
+                x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]),
+                critical=False,
+            )
+        cert = builder.sign(key, hashes.SHA256())
+    else:
+        cert = custom_cert
+
+    if gen_time_dt is None:
+        gen_time_dt = datetime.datetime.now(datetime.timezone.utc)
+
+    # 1. TSTInfo
+    tst = rfc3161.TSTInfo()
+    tst["version"] = 1
+    tst["policy"] = univ.ObjectIdentifier("1.2.3.4.5")
+    tst["messageImprint"] = rfc3161.MessageImprint()
+    tst["messageImprint"]["hashAlgorithm"] = rfc2459.AlgorithmIdentifier()
+    tst["messageImprint"]["hashAlgorithm"]["algorithm"] = univ.ObjectIdentifier("2.16.840.1.101.3.4.2.1")
+    tst["messageImprint"]["hashedMessage"] = message_digest
+    tst["serialNumber"] = 1001
+    tst["genTime"] = useful.GeneralizedTime(gen_time_dt.strftime("%Y%m%d%H%M%SZ"))
+    tst_der = encoder.encode(tst)
+
+    # 2. SignedData
+    sd = rfc5652.SignedData()
+    sd["version"] = 3
+    sd["digestAlgorithms"] = rfc5652.DigestAlgorithmIdentifiers()
+    da = rfc5652.DigestAlgorithmIdentifier()
+    da["algorithm"] = univ.ObjectIdentifier("2.16.840.1.101.3.4.2.1")
+    sd["digestAlgorithms"].append(da)
+
+    sd["encapContentInfo"] = rfc5652.EncapsulatedContentInfo()
+    sd["encapContentInfo"]["eContentType"] = rfc3161.id_ct_TSTInfo
+    sd["encapContentInfo"].setComponentByName("eContent", tst_der)
+
+    cert_der = cert.public_bytes(serialization.Encoding.DER)
+    asn1_cert, _ = decoder.decode(cert_der, asn1Spec=rfc2459.Certificate())
+    sd.setComponentByName("certificates")
+    choice = rfc5652.CertificateChoices()
+    choice["certificate"] = asn1_cert
+    sd["certificates"].append(choice)
+
+    sig = key.sign(tst_der, padding.PKCS1v15(), hashes.SHA256())
+    if corrupt_sig:
+        sig_mut = bytearray(sig)
+        sig_mut[10] ^= 0xFF
+        sig = bytes(sig_mut)
+
+    si = rfc5652.SignerInfo()
+    si["version"] = 1
+    si["sid"] = rfc5652.SignerIdentifier()
+    si["sid"]["issuerAndSerialNumber"] = rfc5652.IssuerAndSerialNumber()
+    si["sid"]["issuerAndSerialNumber"]["issuer"] = asn1_cert["tbsCertificate"]["issuer"]
+    si["sid"]["issuerAndSerialNumber"]["serialNumber"] = asn1_cert["tbsCertificate"]["serialNumber"]
+    si["digestAlgorithm"] = da
+    si["signatureAlgorithm"] = rfc5652.SignatureAlgorithmIdentifier()
+    si["signatureAlgorithm"]["algorithm"] = univ.ObjectIdentifier("1.2.840.113549.1.1.1")
+    si["signature"] = univ.OctetString(sig)
+
+    sd["signerInfos"] = rfc5652.SignerInfos()
+    sd["signerInfos"].append(si)
+
+    # 3. ContentInfo
+    ci = rfc5652.ContentInfo()
+    ci["contentType"] = rfc5652.id_signedData
+    ci["content"] = encoder.encode(sd)
+
+    return encoder.encode(ci), cert, key
+
+
+def test_rfc3161_offline_verification_valid_token():
+    """37. Cryptographically valid RFC 3161 token successfully verified offline."""
+    digest = b"\xaa" * 32
+    token_der, tsa_cert, _ = _make_synthetic_rfc3161_token(digest)
+
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is True
+    assert res.error == ""
+    assert res.tsa_identity == "CN=Test TSA"
+    assert res.policy_oid == "1.2.3.4.5"
+    assert res.gen_time_utc is not None
+    assert abs(res.gen_time_utc - int(time.time())) < 120
+
+
+def test_rfc3161_offline_verification_mismatched_message_imprint():
+    """38. RFC 3161 token with mismatched message digest rejected."""
+    digest_a = b"\xaa" * 32
+    digest_b = b"\xbb" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest_a)
+
+    res = verify_rfc3161_token_offline(token_der, digest_b)
+    assert res.is_valid is False
+    assert "Message imprint mismatch" in res.error
+
+
+def test_rfc3161_offline_verification_missing_eku():
+    """39. TSA certificate lacking timeStamping ExtendedKeyUsage rejected."""
+    digest = b"\xaa" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, include_eku=False)
+
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "TSA certificate missing required timeStamping ExtendedKeyUsage" in res.error
+
+
+def test_rfc3161_offline_verification_expired_tsa_cert():
+    """40. TSA certificate not valid at timestamp generation time rejected."""
+    digest = b"\xaa" * 32
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    # Cert validity expired in 2024
+    nb = now_utc - datetime.timedelta(days=700)
+    na = now_utc - datetime.timedelta(days=365)
+    # Token generated now (after cert expired)
+    token_der, _, _ = _make_synthetic_rfc3161_token(
+        digest,
+        gen_time_dt=now_utc,
+        cert_valid_not_before_dt=nb,
+        cert_valid_not_after_dt=na,
+    )
+
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "TSA certificate was not valid at timestamp generation time" in res.error
+
+
+def test_rfc3161_offline_verification_untrusted_tsa_root():
+    """41. TSA certificate rejected when trust anchors are specified and cert is not anchored."""
+    digest = b"\xaa" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest)
+
+    # Generate an independent untrusted anchor
+    anchor_key = rsa.generate_private_key(65537, 2048)
+    anchor_subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Unrelated Anchor Root")])
+    unrelated_anchor = (
+        x509.CertificateBuilder()
+        .subject_name(anchor_subject)
+        .issuer_name(anchor_subject)
+        .public_key(anchor_key.public_key())
+        .serial_number(9999)
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .sign(anchor_key, hashes.SHA256())
+    )
+
+    res = verify_rfc3161_token_offline(token_der, digest, trusted_tsa_certificates=[unrelated_anchor])
+    assert res.is_valid is False
+    assert "not trusted by configured TSA trust anchors" in res.error
+
+
+def test_rfc3161_offline_verification_tampered_signature():
+    """42. RFC 3161 token with modified signature bytes rejected."""
+    digest = b"\xaa" * 32
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, corrupt_sig=True)
+
+    res = verify_rfc3161_token_offline(token_der, digest)
+    assert res.is_valid is False
+    assert "TSA digital signature verification failed" in res.error
+
+
+def test_notary_evidence_marked_unsupported():
+    """43. Evidence with TRUSTED_NOTARY explicitly rejected as unsupported in Module 1.6."""
+    evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.TRUSTED_NOTARY,
+        verified_time_utc=1500,
+        proof=b"notary-envelope-bytes",
+        is_verified=True,
+    )
+    res = verify_historical_signature(
+        claimed_signature_time_utc=1490,
+        key_valid_from=1000,
+        key_expires_at=2000,
+        timestamp_evidence=evidence,
+        current_time=3000,
+    )
+    assert res.status == HistoricalValidity.INVALID_EVIDENCE
+    assert res.is_valid is False
+    assert "unsupported in Module 1.6" in res.explanation
+
+
+def test_historical_signature_with_verified_rfc3161_proof():
+    """44. verify_historical_signature performs end-to-end RFC 3161 verification."""
+    digest = b"\xca\xfe" * 16
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, gen_time_dt=now_utc)
+    gen_time_utc = int(now_utc.timestamp())
+
+    evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=gen_time_utc,
+        proof=token_der,
+        is_verified=True,
+    )
+
+    # Key was valid when token was generated, but is now expired
+    key_valid_from = gen_time_utc - 10000
+    key_expires_at = gen_time_utc + 100
+    current_time = gen_time_utc + 5000  # Key expired now
+
+    res = verify_historical_signature(
+        claimed_signature_time_utc=gen_time_utc - 10,
+        key_valid_from=key_valid_from,
+        key_expires_at=key_expires_at,
+        timestamp_evidence=evidence,
+        current_time=current_time,
+        expected_message_digest=digest,
+    )
+    assert res.status == HistoricalValidity.VALID_HISTORICAL
+    assert res.is_valid is True
+    assert res.effective_time_utc == gen_time_utc
+    assert res.evidence_source == TimestampEvidenceSource.RFC3161_TSA
+
+
+def test_historical_signature_with_tampered_rfc3161_proof_rejected():
+    """45. verify_historical_signature rejects tampered RFC 3161 token proof."""
+    digest = b"\xca\xfe" * 16
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    token_der, _, _ = _make_synthetic_rfc3161_token(digest, gen_time_dt=now_utc, corrupt_sig=True)
+
+    evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.RFC3161_TSA,
+        verified_time_utc=int(now_utc.timestamp()),
+        proof=token_der,
+        is_verified=True,
+    )
+
+    res = verify_historical_signature(
+        claimed_signature_time_utc=int(now_utc.timestamp()) - 10,
+        key_valid_from=int(now_utc.timestamp()) - 1000,
+        key_expires_at=int(now_utc.timestamp()) + 100,
+        timestamp_evidence=evidence,
+        current_time=int(now_utc.timestamp()) + 500,
+        expected_message_digest=digest,
+    )
+    assert res.status == HistoricalValidity.INVALID_EVIDENCE
+    assert res.is_valid is False
+    assert "RFC 3161 TSA token verification failed" in res.explanation
+
+
+def test_authenticated_receipt_evidence_observation_clarification():
+    """46. Authenticated receipt confirms prior QuMail observation, not sender signature time."""
+    # Under Module 1.5/1.6, local vault receipt records sha256(inner_mime) and first_seen timestamp.
+    # It establishes that QuMail verified and observed the message prior to key revocation.
+    vault_receipt_time = 1500
+    evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.AUTHENTICATED_RECEIPT,
+        verified_time_utc=vault_receipt_time,
+        proof="d3b07384d113edec49eaa6238ad5ff00",
+        is_verified=True,
+    )
+
+    # Key was later revoked due to compromise at time 2000
+    res = verify_historical_signature(
+        claimed_signature_time_utc=1400,
+        key_valid_from=1000,
+        key_expires_at=5000,
+        revocation_timestamp=2000,
+        revocation_reason=RevocationReason.KEY_COMPROMISED,
+        timestamp_evidence=evidence,
+        current_time=3000,
+    )
+    # Since vault observed and committed receipt at 1500 < 2000, prior observation is valid
+    assert res.status == HistoricalValidity.VALID_HISTORICAL
+    assert res.is_valid is True
+    assert res.effective_time_utc == vault_receipt_time
+
+    # If vault receipt was recorded AFTER key compromise date, observation does not protect it
+    late_evidence = TimestampEvidence(
+        source=TimestampEvidenceSource.AUTHENTICATED_RECEIPT,
+        verified_time_utc=2500,  # Observed after compromise at 2000!
+        proof="d3b07384d113edec49eaa6238ad5ff00",
+        is_verified=True,
+    )
+    res_late = verify_historical_signature(
+        claimed_signature_time_utc=1400,  # Claims pre-compromise
+        key_valid_from=1000,
+        key_expires_at=5000,
+        revocation_timestamp=2000,
+        revocation_reason=RevocationReason.KEY_COMPROMISED,
+        timestamp_evidence=late_evidence,
+        current_time=3000,
+    )
+    assert res_late.status == HistoricalValidity.KEY_COMPROMISED
+    assert res_late.is_valid is False

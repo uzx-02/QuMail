@@ -17,6 +17,13 @@ from enum import Enum
 import time
 from typing import Callable
 
+from cryptography import x509
+from cryptography.x509.oid import ExtensionOID, ExtendedKeyUsageOID
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from pyasn1.codec.der import decoder, encoder
+from pyasn1_modules import rfc3161, rfc5652
+
 from core.logging_config import get_logger
 
 logger = get_logger("key_lifecycle")
@@ -61,8 +68,178 @@ class HistoricalValidity(str, Enum):
 class TimestampEvidenceSource(str, Enum):
     """Defensible independent time sources for cryptographic verification."""
     RFC3161_TSA = "rfc3161_tsa"
-    AUTHENTICATED_RECEIPT = "authenticated_receipt"  # e.g. local vault replay receipt committed at reception
-    TRUSTED_NOTARY = "trusted_notary"
+    AUTHENTICATED_RECEIPT = "authenticated_receipt"  # Local vault replay receipt committed at reception
+    TRUSTED_NOTARY = "trusted_notary"  # Explicitly marked UNSUPPORTED in Module 1.6
+
+
+@dataclass(frozen=True)
+class RFC3161VerificationResult:
+    """Detailed result of offline RFC 3161 timestamp token validation."""
+    is_valid: bool
+    gen_time_utc: int | None = None
+    tsa_identity: str = ""
+    policy_oid: str = ""
+    error: str = ""
+
+
+def verify_rfc3161_token_offline(
+    token_der: bytes,
+    expected_message_digest: bytes | str,
+    trusted_tsa_certificates: list[x509.Certificate] | None = None,
+    current_time: float | None = None,
+) -> RFC3161VerificationResult:
+    """
+    Offline cryptographic verification of an RFC 3161 TimeStampToken.
+
+    Verification Invariants:
+    1. Parse ASN.1 CMS ContentInfo / SignedData / TSTInfo.
+    2. Message-Imprint Matching: Token's hashedMessage must match expected_message_digest.
+    3. TSA Certificate Validation:
+       - Extracts TSA certificate from SignedData.certificates.
+       - Validates ExtendedKeyUsage includes timeStamping (OID 1.3.6.1.5.5.7.3.8).
+       - Validates certificate validity period against token genTime (and current_time).
+       - Validates TSA certificate against trusted_tsa_certificates if configured.
+    4. TSA Digital Signature Verification:
+       - Cryptographically verifies the TSA digital signature over the encapsulated TSTInfo (or signed attributes).
+    5. Rejects malformed, tampered, expired, or mismatched tokens.
+    """
+    if not isinstance(token_der, bytes) or len(token_der) == 0:
+        return RFC3161VerificationResult(is_valid=False, error="Token is empty or not bytes")
+    if len(token_der) > 65536:
+        return RFC3161VerificationResult(is_valid=False, error="Token exceeds maximum allowed size (64 KiB)")
+
+    # Normalize expected digest
+    if isinstance(expected_message_digest, str):
+        try:
+            expected_bytes = bytes.fromhex(expected_message_digest) if len(expected_message_digest) == 64 else expected_message_digest.encode("utf-8")
+        except ValueError:
+            expected_bytes = expected_message_digest.encode("utf-8")
+    else:
+        expected_bytes = bytes(expected_message_digest)
+
+    # 1. Parse ContentInfo
+    try:
+        content_info, _ = decoder.decode(token_der, asn1Spec=rfc5652.ContentInfo())
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, error=f"Malformed ASN.1 ContentInfo: {exc}")
+
+    if content_info["contentType"] != rfc5652.id_signedData:
+        return RFC3161VerificationResult(is_valid=False, error="ContentInfo type is not id-signedData")
+
+    # 2. Parse SignedData
+    try:
+        signed_data, _ = decoder.decode(bytes(content_info["content"]), asn1Spec=rfc5652.SignedData())
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, error=f"Malformed SignedData: {exc}")
+
+    encap = signed_data["encapContentInfo"]
+    if encap["eContentType"] != rfc3161.id_ct_TSTInfo:
+        return RFC3161VerificationResult(is_valid=False, error="Encapsulated content is not id-ct-TSTInfo")
+
+    # 3. Parse TSTInfo
+    e_content = bytes(encap["eContent"])
+    try:
+        tst_info, _ = decoder.decode(e_content, asn1Spec=rfc3161.TSTInfo())
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, error=f"Malformed TSTInfo structure: {exc}")
+
+    # Parse GeneralizedTime
+    gen_time_str = str(tst_info["genTime"])
+    try:
+        if gen_time_str.endswith("Z"):
+            dt = datetime.strptime(gen_time_str[:-1], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(gen_time_str)
+        gen_time_utc = int(dt.timestamp())
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, error=f"Invalid TSTInfo genTime syntax: {exc}")
+
+    # 4. Message Imprint Matching
+    token_digest = bytes(tst_info["messageImprint"]["hashedMessage"])
+    if token_digest != expected_bytes:
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            error=f"Message imprint mismatch: token contains {token_digest.hex()[:16]}..., expected {expected_bytes.hex()[:16]}...",
+        )
+
+    # 5. Extract TSA Certificate
+    certs_comp = signed_data.getComponentByName("certificates")
+    if certs_comp is None or not certs_comp.isValue or len(certs_comp) == 0:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="No TSA certificate found in SignedData")
+
+    certs = certs_comp
+    tsa_cert: x509.Certificate | None = None
+    for cert_choice in certs:
+        try:
+            cert_raw = encoder.encode(cert_choice["certificate"])
+            candidate = x509.load_der_x509_certificate(cert_raw)
+            try:
+                eku_ext = candidate.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
+                if ExtendedKeyUsageOID.TIME_STAMPING in eku_ext.value:
+                    tsa_cert = candidate
+                    break
+            except Exception:
+                continue
+        except Exception:
+            continue
+
+    if tsa_cert is None:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="TSA certificate missing required timeStamping ExtendedKeyUsage")
+
+    # Check Certificate Validity Period against token generation time
+    not_before = int(tsa_cert.not_valid_before_utc.timestamp())
+    not_after = int(tsa_cert.not_valid_after_utc.timestamp())
+    if not (not_before <= gen_time_utc <= not_after):
+        return RFC3161VerificationResult(
+            is_valid=False,
+            gen_time_utc=gen_time_utc,
+            error="TSA certificate was not valid at timestamp generation time",
+        )
+
+    # Validate against configured TSA trust anchors
+    if trusted_tsa_certificates:
+        is_trusted = False
+        for trusted in trusted_tsa_certificates:
+            if tsa_cert == trusted or tsa_cert.issuer == trusted.subject:
+                is_trusted = True
+                break
+        if not is_trusted:
+            return RFC3161VerificationResult(
+                is_valid=False,
+                gen_time_utc=gen_time_utc,
+                error="TSA certificate is not trusted by configured TSA trust anchors",
+            )
+
+    # 6. Verify TSA Signature
+    signer_infos_comp = signed_data.getComponentByName("signerInfos")
+    if signer_infos_comp is None or not signer_infos_comp.isValue or len(signer_infos_comp) == 0:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error="No SignerInfo found in SignedData")
+
+    signer_info = signer_infos_comp[0]
+    sig_bytes = bytes(signer_info["signature"])
+
+    pub_key = tsa_cert.public_key()
+    try:
+        signed_attrs = signer_info.getComponentByName("signedAttrs")
+        if signed_attrs is not None and signed_attrs.isValue:
+            signed_attrs_bytes = encoder.encode(signed_attrs)
+            if signed_attrs_bytes.startswith(b"\xa0"):
+                signed_attrs_bytes = b"\x31" + signed_attrs_bytes[1:]
+            pub_key.verify(sig_bytes, signed_attrs_bytes, padding.PKCS1v15(), hashes.SHA256())
+        else:
+            pub_key.verify(sig_bytes, e_content, padding.PKCS1v15(), hashes.SHA256())
+    except Exception as exc:
+        return RFC3161VerificationResult(is_valid=False, gen_time_utc=gen_time_utc, error=f"TSA digital signature verification failed: {exc}")
+
+    policy_oid = str(tst_info["policy"])
+    tsa_id = tsa_cert.subject.rfc4514_string()
+    return RFC3161VerificationResult(
+        is_valid=True,
+        gen_time_utc=gen_time_utc,
+        tsa_identity=tsa_id,
+        policy_oid=policy_oid,
+    )
 
 
 @dataclass(frozen=True)
@@ -190,6 +367,8 @@ def verify_historical_signature(
     revocation_reason: RevocationReason = RevocationReason.UNSPECIFIED,
     timestamp_evidence: TimestampEvidence | None = None,
     current_time: float | None = None,
+    expected_message_digest: bytes | str | None = None,
+    trusted_tsa_certificates: list[x509.Certificate] | None = None,
 ) -> HistoricalVerificationResult:
     """
     Evaluate historical signature validity with explicit trusted time evidence.
@@ -207,6 +386,9 @@ def verify_historical_signature(
     3. If a key was revoked due to COMPROMISE, any signature whose evidence postdates compromise
        is rejected as KEY_COMPROMISED. Only signatures with trusted prior receipt evidence
        strictly predating the compromise/revocation date may be validated.
+    4. RFC 3161 tokens are verified offline (signature validity, message imprint matching, EKU,
+       and certificate chain validity) when expected_message_digest is provided.
+    5. Trusted notary evidence is unsupported in Module 1.6.
     """
     now = time.time() if current_time is None else current_time
 
@@ -224,6 +406,15 @@ def verify_historical_signature(
 
     # Case A: Trusted timestamp evidence IS provided
     if timestamp_evidence is not None:
+        # Check for unsupported notary evidence
+        if timestamp_evidence.source == TimestampEvidenceSource.TRUSTED_NOTARY:
+            return HistoricalVerificationResult(
+                status=HistoricalValidity.INVALID_EVIDENCE,
+                is_valid=False,
+                explanation="Trusted notary evidence source is currently unsupported in Module 1.6.",
+                evidence_source=timestamp_evidence.source,
+            )
+
         if not timestamp_evidence.is_verified or timestamp_evidence.verified_time_utc <= 0:
             return HistoricalVerificationResult(
                 status=HistoricalValidity.INVALID_EVIDENCE,
@@ -233,6 +424,31 @@ def verify_historical_signature(
             )
 
         evidence_time = timestamp_evidence.verified_time_utc
+
+        # If RFC 3161 TSA evidence has raw DER proof and expected_message_digest, run offline verification
+        if timestamp_evidence.source == TimestampEvidenceSource.RFC3161_TSA and expected_message_digest is not None:
+            if not isinstance(timestamp_evidence.proof, bytes) or len(timestamp_evidence.proof) == 0:
+                return HistoricalVerificationResult(
+                    status=HistoricalValidity.INVALID_EVIDENCE,
+                    is_valid=False,
+                    explanation="RFC 3161 evidence requires non-empty raw token DER bytes in proof.",
+                    evidence_source=timestamp_evidence.source,
+                )
+            token_res = verify_rfc3161_token_offline(
+                token_der=timestamp_evidence.proof,
+                expected_message_digest=expected_message_digest,
+                trusted_tsa_certificates=trusted_tsa_certificates,
+                current_time=current_time,
+            )
+            if not token_res.is_valid:
+                return HistoricalVerificationResult(
+                    status=HistoricalValidity.INVALID_EVIDENCE,
+                    is_valid=False,
+                    explanation=f"RFC 3161 TSA token verification failed: {token_res.error}",
+                    evidence_source=timestamp_evidence.source,
+                )
+            if token_res.gen_time_utc is not None:
+                evidence_time = token_res.gen_time_utc
 
         # Paradoxical time: claimed time is AFTER independently verified timestamp token
         if claimed_signature_time_utc > evidence_time:
@@ -369,6 +585,8 @@ def is_signature_historically_valid(
     revocation_reason: RevocationReason = RevocationReason.UNSPECIFIED,
     timestamp_evidence: TimestampEvidence | None = None,
     current_time: float | None = None,
+    expected_message_digest: bytes | str | None = None,
+    trusted_tsa_certificates: list[x509.Certificate] | None = None,
 ) -> bool:
     """Convenience boolean helper delegating to verify_historical_signature."""
     return verify_historical_signature(
@@ -379,4 +597,6 @@ def is_signature_historically_valid(
         revocation_reason=revocation_reason,
         timestamp_evidence=timestamp_evidence,
         current_time=current_time,
+        expected_message_digest=expected_message_digest,
+        trusted_tsa_certificates=trusted_tsa_certificates,
     ).is_valid

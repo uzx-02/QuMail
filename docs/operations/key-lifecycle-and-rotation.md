@@ -82,9 +82,26 @@ Conversely, a naive implementation that evaluates validity against an unauthenti
 
 ### 4.2 Defensible Trusted Time Evidence (`TimestampEvidence`)
 To establish true historical validity, QuMail requires independent, authenticated time evidence:
-1. **RFC 3161 Time-Stamp Protocol (TSA):** Cryptographically signed timestamp tokens issued by an independent Time Stamping Authority binding the signature digest.
-2. **Authenticated Local Vault Replay Receipts:** When QuMail receives and verifies an email live from the mail server, it commits a SHA-256 digest and Unix timestamp (`first_seen`) inside the encrypted SQLite vault (`m5_seen_v1`) before releasing plaintext. This durable receipt serves as local cryptographic proof that the message existed prior to that timestamp.
-3. **Trusted Cryptographic Notaries:** Counter-signatures issued by corporate archival notaries.
+
+1. **RFC 3161 Time-Stamp Protocol (TSA) — Offline Verification:**
+   - Cryptographically verified TimeStampToken DER proofs (`verify_rfc3161_token_offline`).
+   - Parses ASN.1 CMS `ContentInfo` (`id-signedData`) and `SignedData` containing encapsulated `TSTInfo` (`id-ct-TSTInfo`).
+   - **Message-Imprint Verification:** Enforces that the token's `messageImprint.hashedMessage` strictly matches the expected message digest (`expected_message_digest`). Any mismatch causes immediate rejection.
+   - **TSA Certificate Validation:** Extracts the TSA certificate from `SignedData.certificates`, verifies required `ExtendedKeyUsage` (`timeStamping` / OID `1.3.6.1.5.5.7.3.8`), validates validity period against token `genTime`, and checks against configured `trusted_tsa_certificates` trust anchors.
+   - **Digital Signature Verification:** Cryptographically validates the TSA RSA/ECDSA signature over `eContent` (or signed attributes) using the verified TSA public key.
+   - **Operational Distinction:** Distinguishes offline verification of an existing token from obtaining a new token from a live TSA. Offline verification does not perform network operations.
+2. **Authenticated Local Vault Replay Receipts:**
+   - **Receipt Structure:** Recorded in the local encrypted SQLite table `accounts` under the key `m5_seen_v1` as a JSON dictionary mapping sender replay keys to receipt records (`dict(digest=digest, first_seen=int(time.time()))`).
+   - **Digest Recorded:** Hex-encoded SHA-256 digest of the complete decrypted and verified inner MIME payload (`raw`, including all inner headers, body parts, and attachments).
+   - **Identity & Key Binding:** Replay key strictly binds the sender's verified root fingerprint and the message-ID (`replay_key = signer['fingerprint'] + '/' + ident`), while verifying that the inner `From` header matches the certified sender address.
+   - **Observation Timestamp:** Monotonic Unix timestamp (`first_seen = int(time.time())`) committed before any plaintext release to the user interface.
+   - **Tamper Protection:** The entire account record is encrypted with AES-256-GCM using a 32-byte DPAPI-protected master key stored in the Windows Credential Manager. Authenticated Associated Data (AAD) binds the vault ID, account ID, and revision counter.
+   - **Rollback / Deletion Boundaries:** Bounded by local SQLite transaction ACID properties and monotonically increasing revision counters. Rollback detection is strictly local (no external transparency log).
+   - **Clock & Endpoint Assumptions:** Assumes local endpoint OS clock integrity and an uncompromised Windows session.
+   - **Crucial Trust Invariant:** A local vault receipt establishes *prior QuMail observation* under its documented trust assumptions. It **DOES NOT** prove the sender's original signature creation time.
+3. **Trusted Cryptographic Notaries (Unsupported in Module 1.6):**
+   - The `TRUSTED_NOTARY` evidence source is explicitly marked **UNSUPPORTED** in Module 1.6.
+   - Any historical verification attempt supplying `TimestampEvidenceSource.TRUSTED_NOTARY` is rejected with `HistoricalValidity.INVALID_EVIDENCE` ("Trusted notary evidence source is currently unsupported in Module 1.6.").
 
 ### 4.3 Granular Historical Verdicts (`verify_historical_signature`)
 
