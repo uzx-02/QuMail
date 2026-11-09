@@ -72,6 +72,11 @@ class Workflows:
         # Factory is a controlled protocol-test seam, never fixture state in UI.
         self.transport_factory = transport_factory or (GmailSMTP if gmail_enabled else None)
         self.offline = SubmitOutbox(self.repository, None)
+        from core.outbox_manager import OutboxManager
+        from core.outbox_reconciliation import SentFolderReconciler, ReconciliationScheduler
+        self.outbox_manager = OutboxManager(self.repository, None)
+        self.reconciler = SentFolderReconciler()
+        self.reconciliation_scheduler = ReconciliationScheduler(self.reconciler)
         from core.key_discovery import CachedKeyDiscoveryService
         from core.trust_engine import TrustPolicyEngine
         self.discovery = discovery or CachedKeyDiscoveryService()
@@ -82,7 +87,9 @@ class Workflows:
 
     def save(self, lease, draft, budget, operation=None):
         self.check(lease, budget)
-        if operation is None: return self.compose.draft(lease, draft, budget)
+        if operation is None:
+            self.outbox_manager.ensure_capacity_for_new_draft(lease)
+            return self.compose.draft(lease, draft, budget)
         with self.repository.transaction(lease, budget.deadline) as account:
             row = account.row(operation)
             if row['state'] != State.DRAFT.value: raise Failure(Error.TRANSITION)
@@ -122,24 +129,42 @@ class Workflows:
 
     def outbox(self, lease, budget):
         self.check(lease, budget)
-        self.offline.recover(lease)  # An interrupted intent becomes Unknown, never a resend.
+        self.outbox_manager.recover(lease)  # An interrupted intent becomes Unknown, never a resend.
         with self.repository.transaction(lease, budget.deadline) as account:
             rows = tuple(result(OperationId(i), row) for i, row in account.records.items())
             self.check(lease, budget)
             return rows
+
+    def outbox_items(self, lease, budget):
+        self.check(lease, budget)
+        self.outbox_manager.recover(lease)
+        return self.outbox_manager.list_items(lease)
 
     def submit(self, lease, operation, budget):
         self.check(lease, budget)
         if self.transport_factory is None: raise Failure(Error.TRANSPORT)
         resolver = ScopedCredential(self.credentials, lease, budget)
         transport = OperationTransport(self.transport_factory(resolver), budget)
-        return SubmitOutbox(self.repository, transport, allow_external=True).submit(
+        from core.outbox_manager import OutboxManager
+        return OutboxManager(self.repository, transport, allow_external=True).submit(
             lease, operation, until=budget.deadline)
 
     def retry(self, lease, operation, budget, acknowledge=False):
         self.check(lease, budget)
-        self.offline.retry(lease, operation, acknowledge_duplicate_risk=acknowledge)
+        self.outbox_manager.authorize_retry(lease, operation, acknowledge_duplicate_risk=acknowledge)
         return 'Prepared for one explicit retry; original frozen bytes retained. Submit separately.'
+
+    def reconcile(self, lease, operation, client, budget, *, attempt=1):
+        self.check(lease, budget)
+        return self.reconciler.reconcile_outbox_operation(
+            lease, self.repository, operation, client, attempt=attempt
+        )
+
+    def prune_outbox(self, lease, budget, *, max_retain=256, max_age_days=30):
+        self.check(lease, budget)
+        return self.outbox_manager.prune_accepted(
+            lease, max_retain=max_retain, max_age_seconds=max_age_days * 86400
+        )
 
     def cancel_saved(self, lease, operation, budget):
         self.check(lease, budget)
