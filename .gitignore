@@ -11,6 +11,7 @@ venv/
 .venv*/
 tmp/
 build/
+dist/
 .uv-cache/
 .env
 
