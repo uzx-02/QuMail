@@ -125,14 +125,14 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(account_tab, "👤 Account")
 
         # -------------------------------------------------------------
-        # Tab 2: Mailbox Synchronization (WS-03)
+        # Tab 2: Mailbox Synchronization
         # -------------------------------------------------------------
         sync_tab = QWidget()
         sync_layout = QVBoxLayout(sync_tab)
         sync_layout.setContentsMargins(16, 16, 16, 16)
         sync_layout.setSpacing(12)
 
-        sync_title = QLabel("Mailbox Synchronization (WS-03)")
+        sync_title = QLabel("Mailbox Synchronization & Push Notifications")
         sync_title.setStyleSheet("font-size: 14px; font-weight: 700;")
         sync_layout.addWidget(sync_title)
 
@@ -155,14 +155,14 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(sync_tab, "🔄 Sync & Network")
 
         # -------------------------------------------------------------
-        # Tab 3: Security & Cryptography (WS-02)
+        # Tab 3: Security & Cryptographic Keys
         # -------------------------------------------------------------
         sec_tab = QWidget()
         sec_layout = QVBoxLayout(sec_tab)
         sec_layout.setContentsMargins(16, 16, 16, 16)
         sec_layout.setSpacing(12)
 
-        sec_title = QLabel("Cryptographic Status & Key Lifecycle")
+        sec_title = QLabel("Security Status & Key Lifecycle")
         sec_title.setStyleSheet("font-size: 14px; font-weight: 700;")
         sec_layout.addWidget(sec_title)
 
@@ -171,9 +171,9 @@ class SettingsDialog(QDialog):
         sec_card_l.setSpacing(8)
 
         p_row = QHBoxLayout()
-        p_lbl = QLabel("Wire Profile:")
+        p_lbl = QLabel("Encryption Profile:")
         p_lbl.setFixedWidth(140)
-        p_val = QLabel("QM-OPENPGP-PQ-v1 (ML-KEM-768 / ML-DSA-65)")
+        p_val = QLabel("Post-Quantum OpenPGP (ML-KEM-768 / ML-DSA-65)")
         p_val.setStyleSheet("font-weight: 700;")
         p_row.addWidget(p_lbl)
         p_row.addWidget(p_val)
@@ -201,7 +201,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(sec_tab, "🛡️ Security & Keys")
 
         # -------------------------------------------------------------
-        # Tab 4: Public Directory & Transparency (M8)
+        # Tab 4: Public Key Directory & Transparency
         # -------------------------------------------------------------
         dir_tab = QWidget()
         dir_layout = QVBoxLayout(dir_tab)
@@ -236,17 +236,17 @@ class SettingsDialog(QDialog):
 
         dir_layout.addWidget(self.dir_card)
         dir_layout.addStretch()
-        self.tabs.addTab(dir_tab, "🌐 Directory & Merkle")
+        self.tabs.addTab(dir_tab, "🌐 Directory & Trust")
 
         # -------------------------------------------------------------
-        # Tab 5: Corporate Policy (GPO)
+        # Tab 5: Corporate Security Policy
         # -------------------------------------------------------------
         gpo_tab = QWidget()
         gpo_layout = QVBoxLayout(gpo_tab)
         gpo_layout.setContentsMargins(16, 16, 16, 16)
         gpo_layout.setSpacing(12)
 
-        gpo_title = QLabel("Enterprise Group Policy Management (WS-07)")
+        gpo_title = QLabel("Enterprise Security & Group Policy")
         gpo_title.setStyleSheet("font-size: 14px; font-weight: 700;")
         gpo_layout.addWidget(gpo_title)
 

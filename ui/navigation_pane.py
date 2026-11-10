@@ -117,7 +117,7 @@ class NavigationPane(QFrame):
 
         # 2. Primary New Message Button
         self.new_btn = QPushButton("✏️  New Message")
-        self.new_btn.setFixedHeight(38)
+        self.new_btn.setFixedHeight(42)
         self.new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_btn.setToolTip("Compose new protected email (Ctrl+N)")
         self.new_btn.clicked.connect(self.new_message_requested.emit)
@@ -217,23 +217,23 @@ class NavigationPane(QFrame):
             f"NavigationPane {{ background-color: {p.bg_sidebar}; border-right: 1px solid {p.border_subtle}; }}"
         )
         self.new_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {p.accent}; color: {p.text_inverse}; font-size: 13px; font-weight: 700; "
-            f"border: none; border-radius: 6px; padding: 0 16px; }} "
+            f"QPushButton {{ background-color: {p.accent}; color: {p.text_inverse}; font-size: 14px; font-weight: 700; "
+            f"border: none; border-radius: 21px; padding: 0 20px; }} "
             f"QPushButton:hover {{ background-color: {p.accent_hover}; }} "
             f"QPushButton:pressed {{ background-color: {p.border_focused}; }}"
         )
         self.folder_list.setStyleSheet(
             f"QListWidget {{ background: transparent; outline: none; border: none; }} "
-            f"QListWidget::item {{ border-radius: 6px; padding: 2px 0; margin-bottom: 2px; }} "
+            f"QListWidget::item {{ border-radius: 16px; padding: 3px 6px; margin: 2px 4px; }} "
             f"QListWidget::item:hover {{ background-color: {p.bg_card_hover}; }} "
-            f"QListWidget::item:selected {{ background-color: {p.accent_subtle}; border-left: 3px solid {p.accent}; }}"
+            f"QListWidget::item:selected {{ background-color: {p.accent_subtle}; }}"
         )
         self.account_card.setStyleSheet(
-            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 8px; }}"
+            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 10px; }}"
         )
         btn_style = (
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 4px 8px; font-size: 11px; font-weight: 500; }} "
+            f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; border-color: {p.border_focused}; }}"
         )
         self.settings_btn.setStyleSheet(btn_style)
@@ -242,7 +242,7 @@ class NavigationPane(QFrame):
         self.theme_btn.setText("☀️" if ThemeManager.get().mode == "dark" else "🌙")
 
         for w in self._folder_widgets.values():
-            w.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 500; background: transparent;")
+            w.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 600; background: transparent;")
 
     def _on_toggle_theme(self) -> None:
         new_mode = ThemeManager.get().toggle()

@@ -186,5 +186,8 @@ def test_settings_dialog_tabs_and_theme_change(qapp):
     dlg.theme_changed.connect(lambda t: theme_signals.append(t))
 
     # Switch theme in combo box
-    dlg.theme_combo.setCurrentIndex(1)  # Light theme
-    assert "light" in theme_signals
+    try:
+        dlg.theme_combo.setCurrentIndex(1)  # Light theme
+        assert "light" in theme_signals
+    finally:
+        ThemeManager.get().set_theme("dark")

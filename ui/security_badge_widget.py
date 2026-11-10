@@ -1,5 +1,5 @@
 """
-Security Badge & Trust Presentation Component (WS-02 / WS-05).
+Security Badge & Trust Presentation Component.
 
 Provides consistent, consumer-friendly security indicator widgets for:
 - Message list items (compact pill / badge)
@@ -102,7 +102,7 @@ class SecurityPill(QFrame):
         self._text_lbl.setText(label_text)
         self._text_lbl.setStyleSheet(f"color: {colors['fg']}; font-size: 11px; font-weight: 600;")
         self.setStyleSheet(
-            f"QFrame {{ background-color: {colors['bg']}; border: 1px solid {colors['border']}; border-radius: 4px; }}"
+            f"QFrame {{ background-color: {colors['bg']}; border: 1px solid {colors['border']}; border-radius: 10px; }}"
         )
         self.setToolTip(f"{indicator.headline}\n{indicator.description}\n\nAdvice: {indicator.action_advice}")
 
@@ -168,7 +168,7 @@ class SecurityBanner(QFrame):
         self.level_badge.setText(indicator.badge_level.value.upper())
         self.level_badge.setStyleSheet(
             f"color: {colors['fg']}; background-color: {colors['bg']}; border: 1px solid {colors['border']}; "
-            f"font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;"
+            f"font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;"
         )
 
         self.desc_label.setText(indicator.description)
@@ -178,5 +178,5 @@ class SecurityBanner(QFrame):
         self.advice_label.setStyleSheet(f"color: {C['text_secondary']}; font-size: 11px; font-style: italic;")
 
         self.setStyleSheet(
-            f"SecurityBanner {{ background-color: {colors['bg']}; border: 1px solid {colors['border']}; border-radius: 6px; }}"
+            f"SecurityBanner {{ background-color: {colors['bg']}; border: 1px solid {colors['border']}; border-radius: 8px; }}"
         )

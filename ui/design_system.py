@@ -211,7 +211,7 @@ class ThemeManager(QObject):
         QWidget {{
             background-color: {p.bg_canvas};
             color: {p.text_primary};
-            font-family: "Segoe UI", "Inter", -apple-system, sans-serif;
+            font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
             font-size: 13px;
         }}
         QFrame, QSplitter {{
@@ -219,14 +219,14 @@ class ThemeManager(QObject):
             background: transparent;
         }}
         QScrollBar:vertical {{
-            background: {p.bg_sidebar};
-            width: 8px;
+            background: transparent;
+            width: 6px;
             margin: 0px;
         }}
         QScrollBar::handle:vertical {{
             background: {p.border_default};
-            border-radius: 4px;
-            min-height: 24px;
+            border-radius: 3px;
+            min-height: 28px;
         }}
         QScrollBar::handle:vertical:hover {{
             background: {p.text_muted};
@@ -235,14 +235,14 @@ class ThemeManager(QObject):
             height: 0px;
         }}
         QScrollBar:horizontal {{
-            background: {p.bg_sidebar};
-            height: 8px;
+            background: transparent;
+            height: 6px;
             margin: 0px;
         }}
         QScrollBar::handle:horizontal {{
             background: {p.border_default};
-            border-radius: 4px;
-            min-width: 24px;
+            border-radius: 3px;
+            min-width: 28px;
         }}
         QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
             width: 0px;
@@ -260,12 +260,12 @@ class ThemeManager(QObject):
             color: {p.text_primary};
             border: 1px solid {p.border_default};
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 7px 12px;
             selection-background-color: {p.accent};
             selection-color: {p.text_inverse};
         }}
         QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
-            border: 1px solid {p.border_focused};
+            border: 1.5px solid {p.border_focused};
         }}
         """
 

@@ -8,8 +8,8 @@ Built according to UI/UX Pro Max desktop productivity standards:
   * "Secure Web Link (External Recipient)" — Client-side AES-256-GCM + URL fragment link.
   * "Standard Email" — Unencrypted transmission with explicit confirmation warning.
 - Safe attachment addition with file size limits and file size budget counter.
-- Primary 'Send Securely' action wrapping M5 preparation, post-quantum sealing, and WS-04 durable outbox submission.
-- Outbox status management presenting plain-language delivery states (WS-04/WS-05 contract).
+- Primary 'Send Securely' action wrapping M5 preparation, post-quantum sealing, and durable outbox submission.
+- Outbox status management presenting plain-language delivery states.
 - Explicit duplicate-risk confirmation dialog before retrying UNKNOWN deliveries.
 - Dual-theme reactive palette support (Dark & Light).
 - 100% backward-compatible signals and method contracts.
@@ -106,15 +106,15 @@ class ComposeDialog(QDialog):
         sec_header.addWidget(self.trust_pill)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("🔒 Post-Quantum Encrypted (QuMail)", "pq")
-        self.mode_combo.addItem("🔗 Secure Web Link (External Recipient)", "weblink")
+        self.mode_combo.addItem("🔒 Maximum Security (End-to-End Encrypted)", "pq")
+        self.mode_combo.addItem("🔗 Secure Link (For Non-QuMail Recipients)", "weblink")
         self.mode_combo.addItem("✉️ Standard Email (Unencrypted)", "standard")
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         sec_header.addWidget(self.mode_combo)
 
         sec_header.addStretch()
 
-        self.policy_note = QLabel("Post-quantum encryption · Zero plaintext release")
+        self.policy_note = QLabel("End-to-end encrypted · Zero plaintext leak")
         sec_header.addWidget(self.policy_note)
         comp_layout.addLayout(sec_header)
 
@@ -189,14 +189,14 @@ class ComposeDialog(QDialog):
         self.tabs.addTab(compose_tab, "✏️ Compose")
 
         # -------------------------------------------------------------
-        # Tab 2: Outbox & Delivery Resilience (WS-04 Integration)
+        # Tab 2: Outbox & Delivery Status
         # -------------------------------------------------------------
         outbox_tab = QWidget()
         out_layout = QVBoxLayout(outbox_tab)
         out_layout.setContentsMargins(14, 14, 14, 14)
         out_layout.setSpacing(10)
 
-        out_header = QLabel("Durable Outbox Queue & Sent-Folder Status")
+        out_header = QLabel("Message Delivery Queue & Status")
         out_header.setStyleSheet("font-size: 13px; font-weight: 700;")
         out_layout.addWidget(out_header)
 
@@ -208,7 +208,7 @@ class ComposeDialog(QDialog):
 
         # Outbox Actions
         out_actions = QHBoxLayout()
-        self.refresh_outbox_btn = QPushButton("🔄 Refresh Outbox")
+        self.refresh_outbox_btn = QPushButton("🔄 Refresh Queue")
         self.refresh_outbox_btn.clicked.connect(self.refresh_outbox)
         out_actions.addWidget(self.refresh_outbox_btn)
 
@@ -223,7 +223,7 @@ class ComposeDialog(QDialog):
         out_actions.addStretch()
         out_layout.addLayout(out_actions)
 
-        self.tabs.addTab(outbox_tab, "📦 Outbox & Status")
+        self.tabs.addTab(outbox_tab, "📦 Delivery Status")
         main_layout.addWidget(self.tabs)
 
         self._apply_theme()

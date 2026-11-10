@@ -279,15 +279,15 @@ class MessageListPane(QFrame):
 
         self.refresh_btn.setStyleSheet(
             f"QPushButton {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; "
-            f"border-radius: 5px; font-size: 13px; color: {p.text_primary}; }} "
+            f"border-radius: 6px; font-size: 13px; color: {p.text_primary}; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; }}"
         )
 
         filter_btn_style = (
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 4px 10px; font-size: 11px; font-weight: 600; }} "
+            f"border: 1px solid {p.border_default}; border-radius: 13px; padding: 4px 12px; font-size: 11px; font-weight: 600; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }} "
-            f"QPushButton:checked {{ background-color: {p.accent_subtle}; color: {p.accent}; border-color: {p.accent}; }}"
+            f"QPushButton:checked {{ background-color: {p.accent_subtle}; color: {p.accent}; border: 1.5px solid {p.accent}; }}"
         )
         self.all_tab.setStyleSheet(filter_btn_style)
         self.unread_tab.setStyleSheet(filter_btn_style)
@@ -303,7 +303,7 @@ class MessageListPane(QFrame):
 
         self.older_btn.setStyleSheet(
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 5px 12px; font-size: 11px; }} "
+            f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 6px 14px; font-size: 11px; font-weight: 500; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }} "
             f"QPushButton:disabled {{ color: {p.text_muted}; border-color: transparent; }}"
         )

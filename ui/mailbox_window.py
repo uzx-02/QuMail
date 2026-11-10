@@ -1,5 +1,5 @@
 """
-QuMail Modern Three-Pane Desktop Mailbox Client (WS-05).
+QuMail Modern Three-Pane Desktop Mailbox Client.
 
 Provides the complete, zero-cryptographic-friction three-pane email experience:
 - Left Navigation Pane: QuMail branding, New Message action, folder navigation (Inbox, Starred,
@@ -11,7 +11,7 @@ Provides the complete, zero-cryptographic-friction three-pane email experience:
   sender/recipients, full date, SecurityBanner with plain-language advice, comfortable plain-text body,
   and attachment cards with explicit Save / Open actions.
 - Integrated Modern Compose Dialog: Zero cryptographic friction compose workflow, live recipient
-  verification, post-quantum sealing, and WS-04 durable outbox submission with duplicate-risk confirmation.
+  verification, post-quantum sealing, and durable outbox submission with duplicate-risk confirmation.
 - 100% Backward Compatibility: Preserves legacy test seams (table, buttons, actions, settings, timer).
 """
 

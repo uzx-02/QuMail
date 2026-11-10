@@ -195,10 +195,6 @@ class ReadingPane(QFrame):
 
         content_layout.addLayout(self.toolbar)
 
-        # Security Banner
-        self.security_banner = SecurityBanner()
-        content_layout.addWidget(self.security_banner)
-
         # Subject Title
         self.subject_lbl = QLabel()
         self.subject_lbl.setWordWrap(True)
@@ -207,14 +203,14 @@ class ReadingPane(QFrame):
         # Header Info Card (Sender Avatar, Addresses, Date)
         self.header_card = QFrame()
         header_layout = QVBoxLayout(self.header_card)
-        header_layout.setContentsMargins(10, 10, 10, 10)
+        header_layout.setContentsMargins(12, 10, 12, 10)
         header_layout.setSpacing(6)
 
         # Sender row
         sender_row = QHBoxLayout()
-        sender_row.setSpacing(8)
+        sender_row.setSpacing(10)
 
-        self.sender_avatar = AvatarWidget("Sender", size=28)
+        self.sender_avatar = AvatarWidget("Sender", size=32)
         sender_row.addWidget(self.sender_avatar)
 
         self.from_lbl = QLabel("From:")
@@ -242,6 +238,10 @@ class ReadingPane(QFrame):
         header_layout.addLayout(to_row)
 
         content_layout.addWidget(self.header_card)
+
+        # Security Trust Banner (Proton Mail style reassurance ribbon)
+        self.security_banner = SecurityBanner()
+        content_layout.addWidget(self.security_banner)
 
         # Message Body (Safe Plain Text Viewer)
         self.body_view = QPlainTextEdit()
@@ -292,19 +292,19 @@ class ReadingPane(QFrame):
             f"QPushButton:hover {{ background-color: {p.alert_bg}; border-color: {p.alert}; }}"
         )
 
-        self.subject_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 18px; font-weight: 800; line-height: 1.3; background: transparent;")
+        self.subject_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 20px; font-weight: 700; line-height: 1.3; background: transparent;")
         self.header_card.setStyleSheet(
-            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 6px; }}"
+            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 8px; }}"
         )
         self.from_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 600; background: transparent;")
         self.to_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 600; background: transparent;")
-        self.sender_val.setStyleSheet(f"color: {p.text_primary}; font-size: 12px; font-weight: 600; background: transparent;")
-        self.date_val.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")
+        self.sender_val.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 700; background: transparent;")
+        self.date_val.setStyleSheet(f"color: {p.text_muted}; font-size: 12px; background: transparent;")
         self.recipients_val.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; background: transparent;")
 
         self.body_view.setStyleSheet(
             f"QPlainTextEdit {{ background-color: {p.bg_canvas}; color: {p.text_primary}; "
-            f"font-size: 13px; line-height: 1.6; border: none; padding: 4px; }} "
+            f"font-size: 14px; line-height: 1.6; border: none; padding: 6px; }} "
             f"QPlainTextEdit:focus {{ outline: none; }}"
         )
         self.attachments_header.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 700; background: transparent;")
