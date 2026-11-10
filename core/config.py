@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 
 def _resolve_secret_path(filename: str) -> str:
-    """Find secret file across runtime directory, source tree, or frozen bundle."""
+    """Find secret file across runtime directory, source tree, parent directories, or frozen bundle."""
     candidates = [
         Path("secrets") / filename,
         Path(__file__).resolve().parent.parent / "secrets" / filename,
@@ -47,6 +47,7 @@ def _resolve_secret_path(filename: str) -> str:
             exe_dir / "secrets" / filename,
             exe_dir / "_internal" / "secrets" / filename,
             exe_dir / "_internal" / filename,
+            exe_dir.parent / filename,
         ])
         if hasattr(sys, "_MEIPASS"):
             meipass = Path(sys._MEIPASS)
@@ -54,6 +55,23 @@ def _resolve_secret_path(filename: str) -> str:
                 meipass / "secrets" / filename,
                 meipass / filename,
             ])
+        # Search parent folder for any client_secret_*.json
+        if "client_secret" in filename:
+            try:
+                for match in exe_dir.parent.glob("client_secret_*.json"):
+                    candidates.append(match)
+            except Exception:
+                pass
+    else:
+        # Also check parent directory of the project
+        parent_dir = Path(__file__).resolve().parent.parent.parent
+        candidates.append(parent_dir / filename)
+        if "client_secret" in filename:
+            try:
+                for match in parent_dir.glob("client_secret_*.json"):
+                    candidates.append(match)
+            except Exception:
+                pass
 
     for p in candidates:
         if p.is_file():
