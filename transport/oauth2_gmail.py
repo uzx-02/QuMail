@@ -44,6 +44,13 @@ def sanitize_ssl_environment() -> None:
     # 1. Unconditionally pop SSLKEYLOGFILE
     os.environ.pop("SSLKEYLOGFILE", None)
 
+    # Patch SSLContext.keylog_filename descriptor so setting it never triggers FileNotFoundError
+    try:
+        import ssl
+        ssl.SSLContext.keylog_filename = property(lambda self: None, lambda self, val: None)
+    except Exception:
+        pass
+
     # 2. CA bundle variables: strip any pointing to non-existent paths
     for var in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR"):
         val = os.environ.get(var)

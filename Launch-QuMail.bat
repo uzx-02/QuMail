@@ -1,4 +1,5 @@
 @echo off
+set "SSLKEYLOGFILE="
 title QuMail Secure Email
 echo Launching QuMail Desktop...
 if exist "%~dp0dist\QuMail-App\QuMail.exe" (

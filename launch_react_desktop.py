@@ -7,6 +7,15 @@ cryptographic backend, HSMManager physical TRNG coordinator, and durable SQLite 
 
 from __future__ import annotations
 
+import os
+# Strip any external SSL keylog file variable before any network or SSL modules load
+os.environ.pop("SSLKEYLOGFILE", None)
+try:
+    import ssl
+    ssl.SSLContext.keylog_filename = property(lambda self: None, lambda self, val: None)
+except Exception:
+    pass
+
 import argparse
 import http.server
 import json
