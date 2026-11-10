@@ -31,10 +31,46 @@ MIME_PAYLOAD_TYPE = "application/octet-stream"
 CERT_OUTPUT_DIR  = "certs"        # relative to project root — created at runtime if missing
 SEND_KEYS_DIR    = "secrets/send_keys"  # encrypted ML-KEM private keys, keyed by cert ID
 
-# --- OAuth2: Gmail ---
-GMAIL_CLIENT_SECRETS_PATH = "secrets/gmail_client_secret.json"
-GMAIL_TOKEN_PATH          = "secrets/gmail_token.json"
-CUSTOM_ACCOUNT_PATH       = "secrets/custom_account.json"
+# --- OAuth2: Dynamic Secret Paths ---
+import sys
+from pathlib import Path
+
+def _resolve_secret_path(filename: str) -> str:
+    """Find secret file across runtime directory, source tree, or frozen bundle."""
+    candidates = [
+        Path("secrets") / filename,
+        Path(__file__).resolve().parent.parent / "secrets" / filename,
+    ]
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).parent
+        candidates.extend([
+            exe_dir / "secrets" / filename,
+            exe_dir / "_internal" / "secrets" / filename,
+            exe_dir / "_internal" / filename,
+        ])
+        if hasattr(sys, "_MEIPASS"):
+            meipass = Path(sys._MEIPASS)
+            candidates.extend([
+                meipass / "secrets" / filename,
+                meipass / filename,
+            ])
+
+    for p in candidates:
+        if p.is_file():
+            return str(p.resolve())
+
+    # Default fallback for new writes
+    if getattr(sys, "frozen", False):
+        target = Path(sys.executable).parent / "secrets" / filename
+    else:
+        target = Path(__file__).resolve().parent.parent / "secrets" / filename
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return str(target.resolve())
+
+GMAIL_CLIENT_SECRETS_PATH = _resolve_secret_path("gmail_client_secret.json")
+GMAIL_TOKEN_PATH          = _resolve_secret_path("gmail_token.json")
+CUSTOM_ACCOUNT_PATH       = _resolve_secret_path("custom_account.json")
+OAUTH_MASTER_KEY_PATH     = _resolve_secret_path("oauth_master.key")
 GMAIL_SCOPES              = [
     "https://mail.google.com/",
     "openid",

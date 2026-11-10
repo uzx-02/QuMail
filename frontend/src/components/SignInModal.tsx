@@ -53,9 +53,6 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Optional custom GCP project configuration
-  const [showCustomGcp, setShowCustomGcp] = useState(false);
-
   // Auto-detect provider metadata based on domain
   const providerInfo = useMemo(() => {
     const trimmed = email.trim().toLowerCase();
@@ -181,17 +178,6 @@ export const SignInModal: React.FC<SignInModalProps> = ({
     }
   };
 
-  const handleSelectSecretFile = async () => {
-    setError('');
-    const res = await api.selectGoogleClientSecret();
-    if (res.success) {
-      setSuccessMsg('Custom Google Client Secret loaded! Launching Google sign-in...');
-      handleGoogleAuth();
-    } else {
-      setError(res.message);
-    }
-  };
-
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
@@ -286,33 +272,6 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                   </>
                 )}
               </button>
-
-              {/* Developer custom GCP project dropdown toggle */}
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowCustomGcp(!showCustomGcp)}
-                  className="text-[11px] text-gray-400 hover:text-blue-500 transition-colors flex items-center space-x-1"
-                >
-                  <FileCode className="w-3 h-3" />
-                  <span>{showCustomGcp ? 'Hide custom Google credentials' : 'Use custom Google Cloud project?'}</span>
-                </button>
-              </div>
-
-              {showCustomGcp && (
-                <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800 text-xs space-y-2">
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    By default, QuMail connects using pre-configured desktop OAuth. If your organization requires your own GCP Client ID:
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSelectSecretFile}
-                    className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition-colors"
-                  >
-                    Select client_secret.json
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* DIVIDER */}

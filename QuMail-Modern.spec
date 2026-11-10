@@ -14,6 +14,10 @@ added_files = [
     (str(REPO_ROOT / 'frontend' / 'dist'), 'frontend/dist'),
 ]
 
+# Add secret credentials if present
+if (REPO_ROOT / 'secrets' / 'gmail_client_secret.json').is_file():
+    added_files.append((str(REPO_ROOT / 'secrets' / 'gmail_client_secret.json'), 'secrets'))
+
 # Add native provider binaries and manifest if present
 if (REPO_ROOT / 'bin' / 'manifest.json').is_file():
     added_files.append((str(REPO_ROOT / 'bin' / 'manifest.json'), 'bin'))
@@ -104,3 +108,13 @@ coll = COLLECT(
     upx_exclude=[],
     name='QuMail-Modern',
 )
+
+# Post-build: Ensure secrets directory is present directly next to QuMail.exe
+import shutil
+secrets_src = REPO_ROOT / 'secrets'
+if secrets_src.is_dir():
+    secrets_dst = REPO_ROOT / 'dist' / 'QuMail-Modern' / 'secrets'
+    secrets_dst.mkdir(parents=True, exist_ok=True)
+    for f in secrets_src.glob('*'):
+        if f.is_file():
+            shutil.copy2(f, secrets_dst / f.name)

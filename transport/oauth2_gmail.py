@@ -21,9 +21,10 @@ from core.config  import (
     GMAIL_CLIENT_SECRETS_PATH,
     GMAIL_SCOPES,
     GMAIL_TOKEN_PATH,
+    OAUTH_MASTER_KEY_PATH,
     BUILTIN_GMAIL_CLIENT_CONFIG,
 )
-_OAUTH_MASTER_KEY_PATH = "secrets/oauth_master.key"
+_OAUTH_MASTER_KEY_PATH = OAUTH_MASTER_KEY_PATH
 logger = logging.getLogger("transport.oauth2_gmail")
 
 # -------------------------------------------------------------------------
@@ -33,20 +34,13 @@ logger = logging.getLogger("transport.oauth2_gmail")
 def sanitize_ssl_environment() -> None:
     """
     Sanitize SSL/TLS environment variables to eliminate FileNotFoundError connection aborts.
-    Fixes the Windows issue where an orphaned or invalid SSLKEYLOGFILE, REQUESTS_CA_BUNDLE,
-    or CURL_CA_BUNDLE points to a non-existent path and causes OpenSSL/urllib3 to crash during handshakes.
+    Unconditionally removes SSLKEYLOGFILE, ensures valid CA certificates, and patches urllib3/ssl
+    so missing file references in developer/debug environments never crash TLS handshakes.
     """
-    # 1. SSLKEYLOGFILE
-    keylogfile = os.environ.get("SSLKEYLOGFILE")
-    if keylogfile:
-        try:
-            parent = os.path.dirname(os.path.abspath(keylogfile))
-            if not os.path.exists(parent):
-                os.environ.pop("SSLKEYLOGFILE", None)
-        except Exception:
-            os.environ.pop("SSLKEYLOGFILE", None)
+    # 1. Unconditionally pop SSLKEYLOGFILE
+    os.environ.pop("SSLKEYLOGFILE", None)
 
-    # 2. CA bundle variables
+    # 2. CA bundle variables: strip any pointing to non-existent paths
     for var in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR"):
         val = os.environ.get(var)
         if val and not os.path.exists(val):
@@ -57,8 +51,33 @@ def sanitize_ssl_environment() -> None:
         import certifi
         ca_path = certifi.where()
         if os.path.exists(ca_path):
-            os.environ.setdefault("REQUESTS_CA_BUNDLE", ca_path)
-            os.environ.setdefault("SSL_CERT_FILE", ca_path)
+            os.environ["REQUESTS_CA_BUNDLE"] = ca_path
+            os.environ["SSL_CERT_FILE"] = ca_path
+    except Exception:
+        pass
+
+    # 4. Patch ssl.create_default_context and urllib3 to guarantee keylogfile is never read
+    try:
+        import ssl
+        if not getattr(ssl.create_default_context, "_qumail_patched", False):
+            orig_ctx = ssl.create_default_context
+            def _safe_create_default_context(*args, **kwargs):
+                os.environ.pop("SSLKEYLOGFILE", None)
+                return orig_ctx(*args, **kwargs)
+            _safe_create_default_context._qumail_patched = True
+            ssl.create_default_context = _safe_create_default_context
+    except Exception:
+        pass
+
+    try:
+        import urllib3.util.ssl_
+        if not getattr(urllib3.util.ssl_.create_urllib3_context, "_qumail_patched", False):
+            orig_u3_ctx = urllib3.util.ssl_.create_urllib3_context
+            def _safe_u3_ctx(*args, **kwargs):
+                os.environ.pop("SSLKEYLOGFILE", None)
+                return orig_u3_ctx(*args, **kwargs)
+            _safe_u3_ctx._qumail_patched = True
+            urllib3.util.ssl_.create_urllib3_context = _safe_u3_ctx
     except Exception:
         pass
 
@@ -202,24 +221,43 @@ SUCCESS_HTML_PAGE = """<!DOCTYPE html>
       <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
       Post-Quantum ML-KEM Vault Bound
     </div>
-    <div class="countdown-box">
+    <div class="countdown-box" id="status-box">
       Closing automatically in <span class="countdown-number" id="timer">5</span> seconds...
     </div>
-    <button class="btn" onclick="closeWindow()">Close Window Now</button>
-    <p class="subtext">If your browser security prevents automatic closure, you can safely close this tab.</p>
+    <button class="btn" id="action-btn" onclick="closeWindow()">Close Window Now</button>
+    <p class="subtext" id="subtext-note">If your browser security prevents automatic closure, you can safely close this tab.</p>
   </div>
 
   <script>
     let secondsLeft = 5;
     const timerEl = document.getElementById('timer');
+    const statusBox = document.getElementById('status-box');
+    const actionBtn = document.getElementById('action-btn');
+    const subtextNote = document.getElementById('subtext-note');
 
     function closeWindow() {
-      try {
-        window.close();
-      } catch (e) {}
-      setTimeout(() => {
-        try { window.open('', '_self', ''); window.close(); } catch (e) {}
-      }, 100);
+      try { window.open('', '_self', ''); } catch (e) {}
+      try { window.close(); } catch (e) {}
+
+      // In modern browsers, scripts can only close tabs opened via window.open().
+      // If the browser blocked programmatic closure, update UI immediately:
+      if (statusBox) {
+        statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
+        statusBox.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        statusBox.style.color = '#34d399';
+        statusBox.innerHTML = '<div style="font-weight:700; font-size:15px; margin-bottom:4px;">✓ Logged In Successfully</div><div style="font-size:12px; color:#cbd5e1; line-height:1.5;">Your browser protects tabs from being closed by external scripts.<br/><b style="color:#ffffff;">You can now close this tab</b> and return to QuMail.</div>';
+      }
+      if (actionBtn) {
+        actionBtn.innerText = 'Switch Back to QuMail';
+        actionBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
+        actionBtn.onclick = function() {
+          try { window.close(); } catch (e) {}
+        };
+      }
+      if (subtextNote) {
+        subtextNote.style.color = '#94a3b8';
+        subtextNote.innerText = 'Your QuMail desktop app is authenticated and ready to use.';
+      }
     }
 
     const interval = setInterval(() => {
