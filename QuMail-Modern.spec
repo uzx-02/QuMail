@@ -36,10 +36,18 @@ hidden_imports = [
     'core.hsm.entropy_pool',
     'core.hsm.etsi_qkd',
     'core.logging_config',
+    'transport',
+    'transport.oauth2_gmail',
+    'transport.imap_receiver',
+    'transport.smtp_sender',
     'cryptography',
     'sqlite3',
     'ctypes',
     'ctypes.wintypes',
+    'requests',
+    'google_auth_oauthlib',
+    'google.oauth2.credentials',
+    'google.auth.transport.requests',
 ]
 
 a = Analysis(

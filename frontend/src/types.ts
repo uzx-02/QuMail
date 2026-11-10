@@ -43,6 +43,7 @@ export interface HSMStatus {
 
 export interface AccountSession {
   email: string;
+  displayName?: string;
   provider: string;
   pqcAlgorithm: string;
   pqcIdentity: string;

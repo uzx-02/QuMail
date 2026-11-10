@@ -36,14 +36,11 @@ def test_http_request_handler_mime_types():
 
 
 def test_qumail_js_api_messages_roundtrip():
-    """Verify QuMailJsApi message queries, creation, starring, and deletion."""
+    """Verify QuMailJsApi message queries, creation, starring, and deletion on live data."""
     api = QuMailJsApi()
-    # Default is not hardcoded to any personal address
+    # Default is clean — zero mock messages
     assert api.account_email == ""
-
-    msgs = api.getMessages()
-    assert len(msgs) >= 3
-    assert any("ML-KEM-768" in m.get("indicator", {}).get("description", "") for m in msgs)
+    assert len(api.getMessages()) == 0
 
     # Sign in
     acc = api.loginAccount("user@company.com", "Jane Doe", "Acme R&D")
@@ -62,8 +59,9 @@ def test_qumail_js_api_messages_roundtrip():
     msg_id = result["id"]
 
     updated_msgs = api.getMessages()
-    new_msg = next((m for m in updated_msgs if m["id"] == msg_id), None)
-    assert new_msg is not None
+    assert len(updated_msgs) == 1
+    new_msg = updated_msgs[0]
+    assert new_msg["id"] == msg_id
     assert new_msg["senderEmail"] == "user@company.com"
     assert new_msg["subject"] == "Post-Quantum Handshake Test"
     assert new_msg["indicator"]["badgeLevel"] == "SECURE"
@@ -82,7 +80,7 @@ def test_qumail_js_api_messages_roundtrip():
 
     # Delete again (purges from trash)
     assert api.deleteMessage(msg_id) is True
-    assert not any(m["id"] == msg_id for m in api.getMessages())
+    assert len(api.getMessages()) == 0
 
     # Logout
     assert api.logoutAccount() is True
@@ -111,14 +109,24 @@ def test_qumail_js_api_hsm_and_entropy():
     assert sample["rate"] == 115200
 
 
-def test_qumail_js_api_account_and_ports():
-    """Verify account session info and COM port detection."""
+def test_qumail_js_api_google_auth_and_ports():
+    """Verify Google OAuth configuration methods and COM port detection."""
     api = QuMailJsApi()
     acc = api.getAccount()
     assert acc["email"] == ""
     assert acc["isEnrolled"] is False
     assert acc["kemAlgorithm"] == "ML-KEM-768 (NIST FIPS 203)"
     assert acc["dsaAlgorithm"] == "ML-DSA-65 (NIST FIPS 204)"
+
+    # Check google configuration
+    cfg = api.checkGoogleConfigured()
+    assert "configured" in cfg
+    assert "tokenExists" in cfg
+
+    # Save credentials manually test
+    res = api.saveGoogleCredentials("test-id.apps.googleusercontent.com", "test-secret")
+    assert res["success"] is True
+    assert Path("secrets/gmail_client_secret.json").exists()
 
     # List ports
     ports = api.listPorts()

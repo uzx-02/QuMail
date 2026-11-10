@@ -161,6 +161,43 @@ def get_access_token() -> str:
         ) from exc
 
 
+def authorize_google_account() -> dict:
+    """
+    Run browser Google OAuth 2.0 PKCE consent flow and return verified user profile and tokens.
+    """
+    if not os.path.exists(GMAIL_CLIENT_SECRETS_PATH):
+        raise GmailAuthError(f"Google Client Secret not found at '{GMAIL_CLIENT_SECRETS_PATH}'.")
+
+    flow = InstalledAppFlow.from_client_secrets_file(
+        GMAIL_CLIENT_SECRETS_PATH,
+        scopes=GMAIL_SCOPES,
+    )
+    creds = flow.run_local_server(port=0, open_browser=True)
+    _save_credentials(creds)
+
+    user_email = ""
+    display_name = ""
+    try:
+        import requests as req
+        resp = req.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {creds.token}"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            user_email = data.get("email", "")
+            display_name = data.get("name", "")
+    except Exception:
+        pass
+
+    return {
+        "email": user_email,
+        "displayName": display_name or (user_email.split("@")[0] if user_email else ""),
+        "token": creds.token,
+    }
+
+
 def revoke_token() -> None:
     """
     Revoke the current Gmail OAuth2 token and delete the local token file.

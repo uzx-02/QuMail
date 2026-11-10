@@ -83,7 +83,7 @@ export const App: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const msgs = await api.getMessages();
+      const msgs = await api.fetchInbox();
       const hsm = await api.getHSMStatus();
       setMessages(msgs);
       setHsmStatus(hsm);
@@ -165,7 +165,7 @@ export const App: React.FC = () => {
   const handleSignIn = useCallback(async (email: string, displayName?: string, org?: string) => {
     const acc = await api.loginAccount(email, displayName, org);
     setAccount(acc);
-    const msgs = await api.getMessages();
+    const msgs = await api.fetchInbox();
     setMessages(msgs);
   }, []);
 

@@ -7,6 +7,7 @@ declare global {
     pywebview?: {
       api: {
         getMessages: () => Promise<EmailMessage[]>;
+        fetchInbox: () => Promise<EmailMessage[]>;
         sendMessage: (msg: Partial<EmailMessage>) => Promise<{ success: boolean; id: string }>;
         deleteMessage: (id: string) => Promise<boolean>;
         markRead: (id: string, seen: boolean) => Promise<boolean>;
@@ -17,6 +18,10 @@ declare global {
         loginAccount: (email: string, displayName?: string, organization?: string) => Promise<any>;
         logoutAccount: () => Promise<boolean>;
         lockVault: () => Promise<boolean>;
+        googleAuth: () => Promise<any>;
+        checkGoogleConfigured: () => Promise<{ configured: boolean; tokenExists: boolean }>;
+        selectGoogleClientSecret: () => Promise<{ success: boolean; message: string }>;
+        saveGoogleCredentials: (clientId: string, clientSecret: string) => Promise<{ success: boolean; message: string }>;
       };
     };
   }
@@ -49,9 +54,24 @@ class ApiService {
   async getMessages(): Promise<EmailMessage[]> {
     if (window.pywebview?.api?.getMessages) {
       try {
-        return await window.pywebview.api.getMessages();
+        const res = await window.pywebview.api.getMessages();
+        this.messages = res || [];
+        return this.messages;
       } catch (e) {
         console.warn('Pywebview API getMessages failed, falling back to local memory:', e);
+      }
+    }
+    return [...this.messages];
+  }
+
+  async fetchInbox(): Promise<EmailMessage[]> {
+    if (window.pywebview?.api?.fetchInbox) {
+      try {
+        const res = await window.pywebview.api.fetchInbox();
+        this.messages = res || [];
+        return this.messages;
+      } catch (e) {
+        console.warn('Pywebview API fetchInbox failed:', e);
       }
     }
     return [...this.messages];
@@ -60,7 +80,9 @@ class ApiService {
   async sendMessage(draft: Partial<EmailMessage>): Promise<{ success: boolean; id: string }> {
     if (window.pywebview?.api?.sendMessage) {
       try {
-        return await window.pywebview.api.sendMessage(draft);
+        const res = await window.pywebview.api.sendMessage(draft);
+        await this.getMessages();
+        return res;
       } catch (e) {
         console.warn('Pywebview API sendMessage failed, fallback:', e);
       }
@@ -163,17 +185,13 @@ class ApiService {
   }
 
   async getAccount(): Promise<AccountSession> {
-    // If we have a local session with an email, use it
-    if (this.account.email) {
-      return { ...this.account };
-    }
     if (window.pywebview?.api?.getAccount) {
       try {
         const acc = await window.pywebview.api.getAccount();
         if (acc && acc.email) {
           this.account = {
             email: acc.email,
-            provider: acc.organization || 'Corporate Network',
+            provider: acc.organization || 'Google Workspace / Gmail',
             pqcAlgorithm: acc.kemAlgorithm || 'ML-KEM-768 (NIST FIPS 203)',
             pqcIdentity: `0x${acc.email.slice(0, 4)}...PQ`,
             isUnlocked: true,
@@ -212,6 +230,7 @@ class ApiService {
 
   async logoutAccount(): Promise<boolean> {
     this.account = { ...INITIAL_ACCOUNT };
+    this.messages = [];
     try {
       localStorage.removeItem('qumail-account');
     } catch {}
@@ -224,6 +243,67 @@ class ApiService {
       }
     }
     return true;
+  }
+
+  async signInWithGoogle(): Promise<{ success: boolean; account?: AccountSession; needsClientSecret?: boolean; message?: string }> {
+    if (window.pywebview?.api?.googleAuth) {
+      try {
+        const res = await window.pywebview.api.googleAuth();
+        if (res.success && res.account) {
+          this.account = {
+            email: res.account.email,
+            provider: 'Google Workspace / Gmail',
+            pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
+            pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,
+            isUnlocked: true,
+          };
+          try {
+            localStorage.setItem('qumail-account', JSON.stringify(this.account));
+          } catch {}
+          if (res.messages) {
+            this.messages = res.messages;
+          }
+          return { success: true, account: this.account };
+        }
+        return res;
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'Google OAuth failed' };
+      }
+    }
+    return { success: false, message: 'Google Auth requires desktop environment.' };
+  }
+
+  async checkGoogleConfigured(): Promise<{ configured: boolean; tokenExists: boolean }> {
+    if (window.pywebview?.api?.checkGoogleConfigured) {
+      try {
+        return await window.pywebview.api.checkGoogleConfigured();
+      } catch (e) {
+        console.warn('checkGoogleConfigured failed:', e);
+      }
+    }
+    return { configured: false, tokenExists: false };
+  }
+
+  async selectGoogleClientSecret(): Promise<{ success: boolean; message: string }> {
+    if (window.pywebview?.api?.selectGoogleClientSecret) {
+      try {
+        return await window.pywebview.api.selectGoogleClientSecret();
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'Failed to select client secret' };
+      }
+    }
+    return { success: false, message: 'File picker not available in browser mode' };
+  }
+
+  async saveGoogleCredentials(clientId: string, clientSecret: string): Promise<{ success: boolean; message: string }> {
+    if (window.pywebview?.api?.saveGoogleCredentials) {
+      try {
+        return await window.pywebview.api.saveGoogleCredentials(clientId, clientSecret);
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'Failed to save credentials' };
+      }
+    }
+    return { success: false, message: 'Not available in browser mode' };
   }
 
   async updateAccountEmail(email: string): Promise<boolean> {
