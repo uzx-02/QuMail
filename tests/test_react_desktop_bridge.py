@@ -203,3 +203,94 @@ def test_google_oauth_html_success_page_and_ssl_sanitization(monkeypatch):
     # REQUESTS_CA_BUNDLE was repointed to valid certifi cacert.pem
     assert "nonexistent" not in os.environ.get("REQUESTS_CA_BUNDLE", "")
     assert os.path.exists(os.environ["REQUESTS_CA_BUNDLE"])
+
+
+def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
+    """
+    Verify complete post-quantum encapsulation and decapsulation pipeline:
+    1. Maximum Security ('pq') uses AES-256-GCM + ML-KEM metadata and MIME encapsulation.
+    2. Dispatched email over wire contains zero plaintext of body.
+    3. Receiving email in QuMail decapsulates, decrypts, and sets SECURE badge.
+    4. Conventional email is dynamically detected and labeled Standard Inbound TLS (NEUTRAL).
+    """
+    from email.message import EmailMessage
+    from unittest.mock import MagicMock
+    from mime.decapsulator import decapsulate
+    from transport.imap_receiver import InboxMessage
+
+    dispatched_emails = []
+
+    def mock_send_email(sender, recipient, py_msg):
+        dispatched_emails.append((sender, recipient, py_msg))
+
+    monkeypatch.setattr("transport.smtp_sender.send_email", mock_send_email)
+
+    api = QuMailJsApi()
+    api.loginAccount("alice@qumail.sec", "Alice", "QuMail Security")
+
+    # Send maximum security post-quantum message
+    secret_body = "TOP SECRET: Project QuMail Post-Quantum Key Exchange Formula"
+    res = api.sendMessage({
+        "recipients": ["bob@qumail.sec"],
+        "subject": "PQ Confidential Clearance",
+        "body": secret_body,
+        "securityMode": "pq",
+        "attachments": [],
+    })
+    assert res["success"] is True
+
+    # 1. Wire leak check: Ensure dispatched MIME message contains ZERO plaintext
+    assert len(dispatched_emails) == 1
+    sender, recipient, wire_msg = dispatched_emails[0]
+    assert sender == "alice@qumail.sec"
+    assert recipient == "bob@qumail.sec"
+
+    raw_wire = wire_msg.as_bytes()
+    assert secret_body.encode("utf-8") not in raw_wire, "CRITICAL: Plaintext leaked in SMTP message!"
+    assert wire_msg.get_content_type() == "multipart/encrypted"
+    from core.config import MIME_PROTOCOL
+    assert wire_msg.get_param("protocol") == MIME_PROTOCOL
+
+    # 2. QuMail Inbound Decapsulation: Fetch and decrypt QuMail message
+    fake_item_pq = InboxMessage(
+        uid="1001",
+        sender="alice@qumail.sec",
+        subject="PQ Confidential Clearance",
+        date="2026-11-10",
+        message=wire_msg,
+    )
+
+    # Conventional email (e.g. from Google or newsletter)
+    conventional_msg = EmailMessage()
+    conventional_msg["From"] = "security@google.com"
+    conventional_msg["To"] = "alice@qumail.sec"
+    conventional_msg["Subject"] = "Security Alert: New Sign-in"
+    conventional_msg.set_content("A new device signed into your Google Account.")
+
+    fake_item_conventional = InboxMessage(
+        uid="1002",
+        sender="security@google.com",
+        subject="Security Alert: New Sign-in",
+        date="2026-11-10",
+        message=conventional_msg,
+    )
+
+    def mock_fetch_inbox(account_email, max_count=30):
+        return [fake_item_pq, fake_item_conventional]
+
+    monkeypatch.setattr("transport.imap_receiver.fetch_inbox", mock_fetch_inbox)
+
+    inbox = api.fetchInbox()
+    assert len(inbox) >= 2
+
+    # Verify QuMail message: Decrypted and authenticated
+    pq_inbox_msg = next(m for m in inbox if m["id"] == "imap-1001")
+    assert pq_inbox_msg["body"] == secret_body
+    assert pq_inbox_msg["indicator"]["badgeLevel"] == "SECURE"
+    assert "Secured by QuMail" in pq_inbox_msg["indicator"]["headline"]
+
+    # Verify Conventional email: Correctly categorized as Standard Inbound TLS
+    conv_inbox_msg = next(m for m in inbox if m["id"] == "imap-1002")
+    assert "A new device signed into" in conv_inbox_msg["body"]
+    assert conv_inbox_msg["indicator"]["badgeLevel"] == "NEUTRAL"
+    assert conv_inbox_msg["indicator"]["headline"] == "Standard Inbound TLS"

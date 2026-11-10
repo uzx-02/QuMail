@@ -30,6 +30,7 @@ export interface EmailMessage {
   category: 'primary' | 'updates' | 'secure';
   hasAttachments: boolean;
   attachments?: Attachment[];
+  securityMode?: 'pq' | 'weblink' | 'standard';
   indicator?: SecurityIndicator;
 }
 

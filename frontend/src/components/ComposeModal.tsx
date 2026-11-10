@@ -44,6 +44,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         subject: subject.trim() || '(No Subject)',
         body: body.trim(),
         attachments,
+        securityMode,
       });
       setTo('');
       setSubject('');
