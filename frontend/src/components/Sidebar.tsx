@@ -94,36 +94,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom: Hardware TRNG Health Card */}
+      {/* Bottom: Hardware TRNG / Entropy Status Card */}
       {!isCollapsed ? (
         <div
           onClick={onOpenSettings}
           className="p-3.5 rounded-2xl bg-white dark:bg-[#161F33] border border-[#E0E3E7] dark:border-[#2A3B5F] shadow-sm hover:border-[#0B57D0]/60 dark:hover:border-[#6366F1]/60 transition-all cursor-pointer group"
         >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center space-x-2">
-              <Cpu className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-bold text-[#202124] dark:text-[#F1F5F9]">
-                Hardware TRNG
-              </span>
-            </div>
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
-          <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] truncate mb-2">
-            {hsmStatus.activePort}
-          </p>
-          <div className="flex items-center space-x-1.5 text-[10px] text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-lg">
-            <CheckCircle2 className="w-3 h-3 shrink-0" />
-            <span>NIST SP 800-90B PASSED</span>
-          </div>
+          {hsmStatus.isHardwareActive ? (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="w-4 h-4 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold text-[#202124] dark:text-[#F1F5F9]">
+                    Hardware TRNG Active
+                  </span>
+                </div>
+                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
+              <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] truncate mb-2">
+                {hsmStatus.activePort || 'COM Device'}
+              </p>
+              <div className="flex items-center space-x-1.5 text-[10px] text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-lg">
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                <span>NIST SP 800-90B PASSED</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center space-x-2">
+                  <Cpu className="w-4 h-4 text-gray-500 dark:text-gray-400 group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-bold text-[#202124] dark:text-[#F1F5F9]">
+                    Software Entropy
+                  </span>
+                </div>
+                <span className="flex h-2 w-2 rounded-full bg-gray-400 dark:bg-gray-600" />
+              </div>
+              <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] truncate mb-2">
+                OS CryptGenRandom Active
+              </p>
+              <div className="flex items-center space-x-1.5 text-[10px] text-gray-600 dark:text-gray-400 font-medium bg-gray-100 dark:bg-gray-800/80 px-2 py-1 rounded-lg">
+                <span>Hardware Disconnected</span>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div
           onClick={onOpenSettings}
           className="w-10 h-10 mx-auto rounded-xl bg-white dark:bg-[#161F33] border border-[#E0E3E7] dark:border-[#2A3B5F] flex items-center justify-center cursor-pointer"
-          title="Hardware TRNG Active"
+          title={hsmStatus.isHardwareActive ? "Hardware TRNG Active" : "Software CSPRNG Active"}
         >
-          <Cpu className="w-5 h-5 text-emerald-500" />
+          <Cpu className={`w-5 h-5 ${hsmStatus.isHardwareActive ? 'text-emerald-500' : 'text-gray-400'}`} />
         </div>
       )}
     </aside>

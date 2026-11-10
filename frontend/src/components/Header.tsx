@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, Cpu, X } from 'lucide-react';
+import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, Cpu, X, LogIn } from 'lucide-react';
 import { ShinyText } from './reactbits/ShinyText';
 import { HSMStatus, AccountSession } from '../types';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
   onOpenSettings: () => void;
+  onOpenSignIn: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   hsmStatus: HSMStatus;
@@ -17,6 +18,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onToggleSidebar,
   onOpenSettings,
+  onOpenSignIn,
   isDarkMode,
   onToggleTheme,
   hsmStatus,
@@ -27,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const getInitials = (email: string) => {
+    if (!email) return 'GU';
     const name = email.split('@')[0];
     return name.slice(0, 2).toUpperCase();
   };
@@ -94,21 +97,32 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Hardware TRNG Status, Theme, Settings, Avatar */}
+      {/* Right: Hardware TRNG Status, Theme, Settings, Avatar / Sign In */}
       <div className="flex items-center space-x-2 shrink-0">
         {/* Hardware Status Pill */}
-        <div
-          title={`Entropy: ${hsmStatus.activePort} (NIST SP 800-90B PASSED)`}
-          className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs font-semibold select-none cursor-pointer"
-          onClick={onOpenSettings}
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <Cpu className="w-3.5 h-3.5" />
-          <span>TRNG Active</span>
-        </div>
+        {hsmStatus.isHardwareActive ? (
+          <div
+            title={`Physical TRNG Active: ${hsmStatus.activePort || 'COM3'} (${hsmStatus.rateBps || 115200} baud). NIST SP 800-90B PASSED.`}
+            className="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs font-semibold select-none cursor-pointer"
+            onClick={onOpenSettings}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <Cpu className="w-3.5 h-3.5" />
+            <span>TRNG: {hsmStatus.activePort || 'Active'}</span>
+          </div>
+        ) : (
+          <div
+            title="Entropy: OS Software CSPRNG (NIST SP 800-90A). No physical TRNG connected. Plug in a USB TRNG (ESP32/STM32) to stream hardware entropy."
+            className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-[#161F33] border border-gray-300/80 dark:border-gray-700/80 text-gray-600 dark:text-gray-400 text-xs font-medium select-none cursor-pointer hover:border-blue-400 transition-colors"
+            onClick={onOpenSettings}
+          >
+            <Cpu className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+            <span>Software CSPRNG</span>
+          </div>
+        )}
 
         {/* Theme Toggle */}
         <button
@@ -128,14 +142,24 @@ export const Header: React.FC<HeaderProps> = ({
           <Settings className="w-5 h-5" />
         </button>
 
-        {/* Profile Avatar */}
-        <div
-          onClick={onOpenSettings}
-          title={`Signed in as: ${account.email}`}
-          className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0B57D0] to-[#1A73E8] text-white flex items-center justify-center font-bold text-xs shadow-md cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-[#0B57D0] dark:hover:ring-offset-[#0A0E17] transition-all select-none"
-        >
-          {getInitials(account.email)}
-        </div>
+        {/* Profile Avatar or Sign In button */}
+        {account.email ? (
+          <div
+            onClick={onOpenSettings}
+            title={`Signed in as: ${account.email}`}
+            className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0B57D0] to-[#1A73E8] text-white flex items-center justify-center font-bold text-xs shadow-md cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-[#0B57D0] dark:hover:ring-offset-[#0A0E17] transition-all select-none"
+          >
+            {getInitials(account.email)}
+          </div>
+        ) : (
+          <button
+            onClick={onOpenSignIn}
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-[#0B57D0] hover:bg-[#0842A0] text-white font-semibold text-xs shadow-sm hover:shadow transition-all"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </button>
+        )}
       </div>
     </header>
   );

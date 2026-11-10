@@ -8,7 +8,14 @@ echo.
 
 cd /d "%~dp0"
 
-:: Check if frontend/dist exists, if not build it
+:: 1. If standalone .exe is compiled, launch it directly
+if exist "dist\QuMail-Modern\QuMail.exe" (
+    echo [INFO] Launching standalone QuMail.exe...
+    start "" "dist\QuMail-Modern\QuMail.exe" %*
+    exit /b 0
+)
+
+:: 2. Otherwise ensure frontend bundle is built and launch via Python
 if not exist "frontend\dist\index.html" (
     echo [INFO] Building modern React frontend bundle...
     cd frontend
@@ -18,7 +25,6 @@ if not exist "frontend\dist\index.html" (
     echo.
 )
 
-:: Prefer .venv-m1-clean Python if present
 if exist ".venv-m1-clean\Scripts\python.exe" (
     echo [INFO] Starting QuMail Modern Desktop via .venv-m1-clean...
     start "" ".venv-m1-clean\Scripts\python.exe" launch_react_desktop.py %*

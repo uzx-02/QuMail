@@ -11,9 +11,11 @@ declare global {
         deleteMessage: (id: string) => Promise<boolean>;
         markRead: (id: string, seen: boolean) => Promise<boolean>;
         toggleStar: (id: string) => Promise<boolean>;
-        getHSMStatus: () => Promise<HSMStatus>;
+        getHSMStatus: () => Promise<any>;
         sampleEntropy: () => Promise<{ success: boolean; hex: string; rate: number }>;
-        getAccount: () => Promise<AccountSession>;
+        getAccount: () => Promise<any>;
+        loginAccount: (email: string, displayName?: string, organization?: string) => Promise<any>;
+        logoutAccount: () => Promise<boolean>;
         lockVault: () => Promise<boolean>;
       };
     };
@@ -24,6 +26,25 @@ class ApiService {
   private messages: EmailMessage[] = [...MOCK_MESSAGES];
   private account: AccountSession = { ...INITIAL_ACCOUNT };
   private hsm: HSMStatus = { ...INITIAL_HSM };
+
+  constructor() {
+    // Check localStorage for saved user account
+    try {
+      const saved = localStorage.getItem('qumail-account');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) {
+          this.account = {
+            ...INITIAL_ACCOUNT,
+            ...parsed,
+            isUnlocked: true,
+          };
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }
 
   async getMessages(): Promise<EmailMessage[]> {
     if (window.pywebview?.api?.getMessages) {
@@ -44,10 +65,11 @@ class ApiService {
         console.warn('Pywebview API sendMessage failed, fallback:', e);
       }
     }
+    const senderEmail = this.account.email || 'guest@qumail.local';
     const newMsg: EmailMessage = {
       id: `msg-${Date.now()}`,
-      sender: this.account.email,
-      senderEmail: this.account.email,
+      sender: this.account.email ? this.account.email.split('@')[0] : 'Guest User',
+      senderEmail,
       recipients: draft.recipients || ['recipient@example.com'],
       subject: draft.subject || '(No Subject)',
       snippet: (draft.body || '').slice(0, 80),
@@ -110,7 +132,14 @@ class ApiService {
   async getHSMStatus(): Promise<HSMStatus> {
     if (window.pywebview?.api?.getHSMStatus) {
       try {
-        return await window.pywebview.api.getHSMStatus();
+        const raw = await window.pywebview.api.getHSMStatus();
+        return {
+          isHardwareActive: Boolean(raw.isHardwareActive),
+          activePort: raw.activePort || '',
+          mode: raw.mode || 'AUTO',
+          rateBps: raw.baudRate || 0,
+          continuousPassed: raw.healthStatus === 'PASSED',
+        };
       } catch (e) {
         console.warn('Pywebview API getHSMStatus failed:', e);
       }
@@ -134,9 +163,23 @@ class ApiService {
   }
 
   async getAccount(): Promise<AccountSession> {
+    // If we have a local session with an email, use it
+    if (this.account.email) {
+      return { ...this.account };
+    }
     if (window.pywebview?.api?.getAccount) {
       try {
-        return await window.pywebview.api.getAccount();
+        const acc = await window.pywebview.api.getAccount();
+        if (acc && acc.email) {
+          this.account = {
+            email: acc.email,
+            provider: acc.organization || 'Corporate Network',
+            pqcAlgorithm: acc.kemAlgorithm || 'ML-KEM-768 (NIST FIPS 203)',
+            pqcIdentity: `0x${acc.email.slice(0, 4)}...PQ`,
+            isUnlocked: true,
+          };
+          return { ...this.account };
+        }
       } catch (e) {
         console.warn('Pywebview API getAccount failed:', e);
       }
@@ -144,9 +187,47 @@ class ApiService {
     return { ...this.account };
   }
 
-  async updateAccountEmail(email: string): Promise<boolean> {
-    this.account.email = email;
+  async loginAccount(email: string, displayName?: string, organization?: string): Promise<AccountSession> {
+    const trimmed = email.trim();
+    this.account = {
+      email: trimmed,
+      provider: organization || 'QuMail Secure Corporate',
+      pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
+      pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
+      isUnlocked: true,
+    };
+    try {
+      localStorage.setItem('qumail-account', JSON.stringify(this.account));
+    } catch {}
+
+    if (window.pywebview?.api?.loginAccount) {
+      try {
+        await window.pywebview.api.loginAccount(trimmed, displayName, organization);
+      } catch (e) {
+        console.warn('Pywebview loginAccount failed:', e);
+      }
+    }
+    return { ...this.account };
+  }
+
+  async logoutAccount(): Promise<boolean> {
+    this.account = { ...INITIAL_ACCOUNT };
+    try {
+      localStorage.removeItem('qumail-account');
+    } catch {}
+
+    if (window.pywebview?.api?.logoutAccount) {
+      try {
+        await window.pywebview.api.logoutAccount();
+      } catch (e) {
+        console.warn('Pywebview logoutAccount failed:', e);
+      }
+    }
     return true;
+  }
+
+  async updateAccountEmail(email: string): Promise<boolean> {
+    return (await this.loginAccount(email)) !== null;
   }
 }
 

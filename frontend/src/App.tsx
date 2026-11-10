@@ -5,6 +5,7 @@ import { MessageList } from './components/MessageList';
 import { ReadingPane } from './components/ReadingPane';
 import { ComposeModal } from './components/ComposeModal';
 import { SettingsModal } from './components/SettingsModal';
+import { SignInModal } from './components/SignInModal';
 import { api } from './lib/api';
 import { EmailMessage, HSMStatus, AccountSession } from './types';
 import { INITIAL_ACCOUNT, INITIAL_HSM } from './mockData';
@@ -26,6 +27,7 @@ export const App: React.FC = () => {
   // Modals state
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [composeDefaults, setComposeDefaults] = useState({ to: '', subject: '', body: '' });
 
   // Data state
@@ -58,6 +60,11 @@ export const App: React.FC = () => {
         setMessages(msgs);
         setAccount(acc);
         setHsmStatus(hsm);
+
+        // If no email exists in session, prompt sign in
+        if (!acc.email) {
+          setIsSignInOpen(true);
+        }
       } catch (e) {
         console.error('Failed to initialize QuMail state:', e);
       }
@@ -123,9 +130,13 @@ export const App: React.FC = () => {
   }, []);
 
   const handleOpenCompose = useCallback(() => {
+    if (!account.email) {
+      setIsSignInOpen(true);
+      return;
+    }
     setComposeDefaults({ to: '', subject: '', body: '' });
     setIsComposeOpen(true);
-  }, []);
+  }, [account.email]);
 
   const handleReply = useCallback((msg: EmailMessage) => {
     setComposeDefaults({
@@ -149,6 +160,19 @@ export const App: React.FC = () => {
     await api.sendMessage(draft);
     const updated = await api.getMessages();
     setMessages(updated);
+  }, []);
+
+  const handleSignIn = useCallback(async (email: string, displayName?: string, org?: string) => {
+    const acc = await api.loginAccount(email, displayName, org);
+    setAccount(acc);
+    const msgs = await api.getMessages();
+    setMessages(msgs);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await api.logoutAccount();
+    setAccount(INITIAL_ACCOUNT);
+    setIsSignInOpen(true);
   }, []);
 
   const handleUpdateAccountEmail = useCallback(async (email: string) => {
@@ -211,6 +235,7 @@ export const App: React.FC = () => {
       <Header
         onToggleSidebar={handleToggleSidebar}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSignIn={() => setIsSignInOpen(true)}
         isDarkMode={isDarkMode}
         onToggleTheme={handleToggleTheme}
         hsmStatus={hsmStatus}
@@ -285,6 +310,16 @@ export const App: React.FC = () => {
         isDarkMode={isDarkMode}
         onToggleTheme={handleToggleTheme}
         onUpdateAccountEmail={handleUpdateAccountEmail}
+        onLogoutAccount={handleLogout}
+        onOpenSignIn={() => setIsSignInOpen(true)}
+      />
+
+      {/* Welcome / Sign In Modal */}
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        onSignIn={handleSignIn}
+        allowClose={Boolean(account.email)}
       />
     </div>
   );

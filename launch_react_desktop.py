@@ -29,7 +29,10 @@ from core.logging_config import configure_logging, get_logger
 
 logger = get_logger("react_desktop")
 
-BASE_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 
 
@@ -85,10 +88,10 @@ DEFAULT_MESSAGES: List[Dict[str, Any]] = [
         "id": "msg-101",
         "sender": "Col. Rajesh Verma",
         "senderEmail": "r.verma@nic.in",
-        "recipients": ["dr.sharma@drdo.res.in"],
+        "recipients": ["me"],
         "subject": "Aavishkar 2026: Post-Quantum Communication Protocols Approved",
-        "snippet": "Dear Dr. Sharma, The joint technical evaluation committee has formally ratified...",
-        "body": "Dear Dr. Sharma,\n\nThe joint technical evaluation committee has formally ratified the migration roadmap to NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) for all inter-agency defense communications.\n\nAll legacy RSA-2048 and ECDSA certificates will be phased out across national command networks prior to Q3 2026.\n\nPlease ensure your local QuMail client remains synchronized with the physical TRNG entropy pool on COM3.\n\nWarm regards,\nCol. Rajesh Verma\nAdvisor (Cyber Security), National Security Council Secretariat",
+        "snippet": "The joint technical evaluation committee has formally ratified...",
+        "body": "Welcome to QuMail 1.0!\n\nThe joint technical evaluation committee has formally ratified the migration roadmap to NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65) for all high-assurance communications.\n\nAll legacy RSA-2048 and ECDSA certificates will be phased out across national command networks prior to Q3 2026.\n\nYour client operates with local-first cryptographic key generation. You may connect a physical USB TRNG (ESP32 / STM32) at any time to stream hardware thermal avalanche entropy directly into the pool.\n\nWarm regards,\nCol. Rajesh Verma\nAdvisor (Cyber Security), National Security Council Secretariat",
         "date": "10:45 AM",
         "timestamp": int(time.time() * 1000) - 3600000,
         "seen": False,
@@ -108,18 +111,18 @@ DEFAULT_MESSAGES: List[Dict[str, Any]] = [
         "indicator": {
             "badgeLevel": "SECURE",
             "headline": "Post-Quantum Cryptographically Sealed",
-            "description": "Encrypted using ML-KEM-768. Digital signature verified with ML-DSA-65 over SHA3-512. Pure physical entropy sourced from COM3 hardware TRNG.",
-            "actionAdvice": "This message is authentic and protected against Harvest Now, Decrypt Later quantum adversaries.",
+            "description": "Encrypted using ML-KEM-768. Digital signature verified with ML-DSA-65 over SHA3-512.",
+            "actionAdvice": "This message is authentic and protected against Harvest Now, Decrypt Later adversaries.",
         },
     },
     {
         "id": "msg-102",
         "sender": "NIST SP 800-90B Health Monitor",
         "senderEmail": "hsm-daemon@qumail.internal",
-        "recipients": ["dr.sharma@drdo.res.in"],
-        "subject": "Hardware TRNG Continuous Health Audit: PASSED (Shannon Entropy 7.9984)",
+        "recipients": ["me"],
+        "subject": "Entropy Engine Status: Software CSPRNG (OS CryptGenRandom)",
         "snippet": "Continuous Repetition Count Test (RCT) and Adaptive Proportion Test (APT)...",
-        "body": "NIST SP 800-90B CONTINUOUS HEALTH MONITOR REPORT\n================================================\nDevice: USB-Serial Physical TRNG (ESP32-S3 TRNG / COM3)\nBaud Rate: 115,200 baud\nStatus: PASSED (Continuous)\nShannon Entropy: 7.9984 bits/byte\nRepetition Count Test (RCT): PASS (0 cutoffs tripped)\nAdaptive Proportion Test (APT): PASS (W=1024, C=320, 0 rejections)\nConditioner: Keccak-p[1600, 24] Sponge\nETSI GS QKD 014: Linked & Active\n\nAll physical entropy streams are cryptographically validated.",
+        "body": "NIST SP 800-90B CONTINUOUS HEALTH MONITOR REPORT\n================================================\nActive Provider: Software CSPRNG (Windows CryptGenRandom / NIST SP 800-90A)\nPhysical TRNG: Disconnected (Plug in USB microcontroller / ESP32 to activate)\nConditioner: Keccak-p[1600, 24] Sponge\nETSI GS QKD 014: Standby\n\nAll local keys are cryptographically secure. Connect a physical TRNG device via USB COM port anytime to bind hardware noise.",
         "date": "Yesterday",
         "timestamp": int(time.time() * 1000) - 86400000,
         "seen": True,
@@ -129,19 +132,19 @@ DEFAULT_MESSAGES: List[Dict[str, Any]] = [
         "hasAttachments": False,
         "indicator": {
             "badgeLevel": "SECURE",
-            "headline": "Hardware TRNG Provenance Certified",
-            "description": "Entropy harvested from physical thermal avalanche noise on COM3. Conditioned with Keccak sponge.",
-            "actionAdvice": "No action needed. Hardware entropy pool is healthy.",
+            "headline": "Entropy Engine Certified",
+            "description": "Operating in Software CSPRNG mode. Safe for local key generation.",
+            "actionAdvice": "Hardware TRNG can be connected at any time.",
         },
     },
     {
         "id": "msg-103",
         "sender": "Dr. Vikram Sarabhai Space Centre",
         "senderEmail": "telemetry@vssc.isro.gov.in",
-        "recipients": ["dr.sharma@drdo.res.in"],
+        "recipients": ["me"],
         "subject": "Viksit Bharat 2047: Quantum Key Distribution Satellite Link Downlink Test",
         "snippet": "Telemetry confirming successful ETSI GS QKD 014 key container synchronization...",
-        "body": "Sir,\n\nTelemetry data from the satellite ground terminal confirms successful synchronization of 4,096-bit QKD key containers via ETSI GS QKD 014 REST interface.\n\nBit error rate on the free-space quantum channel is 1.82%, well below the 4.5% abort threshold.\n\nKeys are now staged in the local QuMail EntropyPool for hybrid encapsulation.\n\nISRO Space Applications Centre Team",
+        "body": "Sir,\n\nTelemetry data from the satellite ground terminal confirms successful synchronization of 4,096-bit QKD key containers via ETSI GS QKD 014 REST interface.\n\nBit error rate on the free-space quantum channel is 1.82%, well below the 4.5% abort threshold.\n\nKeys are staged in the local QuMail EntropyPool for hybrid encapsulation.\n\nISRO Space Applications Centre Team",
         "date": "Nov 8",
         "timestamp": int(time.time() * 1000) - 172800000,
         "seen": True,
@@ -165,28 +168,6 @@ DEFAULT_MESSAGES: List[Dict[str, Any]] = [
             "actionAdvice": "Authenticity confirmed.",
         },
     },
-    {
-        "id": "msg-104",
-        "sender": "Dr. A. Sharma",
-        "senderEmail": "dr.sharma@drdo.res.in",
-        "recipients": ["r.verma@nic.in"],
-        "subject": "Draft: Technical Specification for QuMail Production Deployment",
-        "snippet": "Please find attached the draft specification detailing the zero-knowledge...",
-        "body": "Col. Verma,\n\nAttached is our latest draft for the QuMail 1.0 production release. We have finalized the Edge WebView2 React frontend integration while retaining the full verified Python cryptographic core.\n\nAll 247 regression test suites pass with zero regressions.\n\nDr. A. Sharma",
-        "date": "Nov 7",
-        "timestamp": int(time.time() * 1000) - 259200000,
-        "seen": True,
-        "starred": False,
-        "folder": "sent",
-        "category": "primary",
-        "hasAttachments": False,
-        "indicator": {
-            "badgeLevel": "SECURE",
-            "headline": "Post-Quantum Signed & Dispatched",
-            "description": "Signed locally using ML-DSA-65 private key securely sealed in local SQLite vault.",
-            "actionAdvice": "Dispatched via durable outbox.",
-        },
-    },
 ]
 
 
@@ -196,8 +177,10 @@ class QuMailJsApi:
     Handles data queries, cryptographic operations, and hardware TRNG monitoring.
     """
 
-    def __init__(self, account_email: str = "dr.sharma@drdo.res.in") -> None:
+    def __init__(self, account_email: str = "") -> None:
         self.account_email = account_email
+        self.account_display_name = account_email.split("@")[0] if account_email else ""
+        self.account_org = "Corporate" if account_email else ""
         self.messages: List[Dict[str, Any]] = [dict(m) for m in DEFAULT_MESSAGES]
         self.hsm = HSMManager.get()
 
@@ -212,11 +195,14 @@ class QuMailJsApi:
         body = draft.get("body", "")
         attachments = draft.get("attachments", [])
 
+        sender_email = self.account_email or "user@qumail.sec"
+        sender_name = self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "QuMail User")
+
         # Construct new message record
         new_msg: Dict[str, Any] = {
             "id": f"msg-{int(time.time() * 1000)}",
-            "sender": "Dr. A. Sharma",
-            "senderEmail": self.account_email,
+            "sender": sender_name,
+            "senderEmail": sender_email,
             "recipients": recipients,
             "subject": subject,
             "snippet": body[:80] if body else "",
@@ -232,7 +218,7 @@ class QuMailJsApi:
             "indicator": {
                 "badgeLevel": "SECURE",
                 "headline": "Post-Quantum Sealed",
-                "description": "Encapsulated with NIST FIPS 203 (ML-KEM-768) and signed with ML-DSA-65. Entropy harvested via physical TRNG.",
+                "description": "Encapsulated with NIST FIPS 203 (ML-KEM-768) and signed with ML-DSA-65.",
                 "actionAdvice": "Message committed to durable outbox and queued for secure SMTP transmission.",
             },
         }
@@ -271,22 +257,21 @@ class QuMailJsApi:
     def getHSMStatus(self) -> Dict[str, Any]:
         """Return real-time hardware TRNG & QKD status."""
         snapshot = self.hsm.get_snapshot()
-        com_ports = list_com_ports()
-        detected_port = com_ports[0].device if com_ports else "COM3"
+        is_active = bool(snapshot.is_hardware_active)
 
         return {
             "mode": snapshot.mode,
-            "isHardwareActive": bool(com_ports or snapshot.is_hardware_active),
-            "activeDeviceName": "USB-Serial Physical TRNG (ESP32-S3 TRNG / STM32)",
-            "activePort": snapshot.active_port or detected_port,
-            "baudRate": snapshot.baud_rate or 115200,
+            "isHardwareActive": is_active,
+            "activeDeviceName": snapshot.active_device_name if is_active else "None (Software CSPRNG)",
+            "activePort": snapshot.active_port if is_active else "",
+            "baudRate": snapshot.baud_rate if is_active else 0,
             "healthStatus": snapshot.health_status,
-            "shannonEntropy": round(snapshot.shannon_entropy, 4) if snapshot.shannon_entropy else 7.9984,
-            "bytesIngested": max(snapshot.bytes_ingested, 16384),
-            "bytesInBuffer": max(snapshot.bytes_in_buffer, 4096),
+            "shannonEntropy": round(snapshot.shannon_entropy, 4) if snapshot.shannon_entropy else 8.0,
+            "bytesIngested": snapshot.bytes_ingested,
+            "bytesInBuffer": snapshot.bytes_in_buffer,
             "etsiKmeConnected": snapshot.etsi_kme_connected,
             "strictPolicyEnabled": snapshot.strict_policy_enabled,
-            "provenanceSummary": "NIST SP 800-90B Physical TRNG on " + (snapshot.active_port or detected_port),
+            "provenanceSummary": snapshot.provenance_summary or "OS Software CSPRNG (CryptGenRandom / NIST SP 800-90A)",
         }
 
     def sampleEntropy(self) -> Dict[str, Any]:
@@ -305,15 +290,33 @@ class QuMailJsApi:
 
     def getAccount(self) -> Dict[str, Any]:
         """Return active account session."""
+        snapshot = self.hsm.get_snapshot()
+        is_active = bool(snapshot.is_hardware_active)
         return {
             "email": self.account_email,
-            "displayName": "Dr. A. Sharma (Director of PQ Security)",
-            "organization": "Aavishkar 2026 Defence R&D / Viksit Bharat",
-            "isEnrolled": True,
+            "displayName": self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "Guest"),
+            "organization": self.account_org or ("Corporate" if self.account_email else "Not Signed In"),
+            "isEnrolled": bool(self.account_email),
             "kemAlgorithm": "ML-KEM-768 (NIST FIPS 203)",
             "dsaAlgorithm": "ML-DSA-65 (NIST FIPS 204)",
-            "hsmBound": True,
+            "hsmBound": is_active,
         }
+
+    def loginAccount(self, email: str, display_name: str = "", organization: str = "") -> Dict[str, Any]:
+        """Log into or initialize a user account session."""
+        self.account_email = email.strip()
+        self.account_display_name = display_name.strip() or email.split("@")[0]
+        self.account_org = organization.strip() or "Corporate"
+        logger.info("Account signed in: %s (%s)", self.account_email, self.account_display_name)
+        return self.getAccount()
+
+    def logoutAccount(self) -> bool:
+        """Sign out active user session."""
+        self.account_email = ""
+        self.account_display_name = ""
+        self.account_org = ""
+        logger.info("Account signed out.")
+        return True
 
     def updateAccountEmail(self, email: str) -> bool:
         """Update account email address."""
@@ -339,7 +342,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=0, help="Local HTTP server port (0 = auto-select)")
     parser.add_argument("--dev-mailbox", action="store_true", help="Launch modern mailbox mode (default)")
     parser.add_argument("--dev-vault", type=str, default="", help="Path to explicit SQLite vault")
-    parser.add_argument("--account", type=str, default="dr.sharma@drdo.res.in", help="Default user email")
+    parser.add_argument("--account", type=str, default="", help="Default user email")
     args = parser.parse_args()
 
     configure_logging(logging.INFO)

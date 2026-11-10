@@ -37,10 +37,19 @@ def test_http_request_handler_mime_types():
 
 def test_qumail_js_api_messages_roundtrip():
     """Verify QuMailJsApi message queries, creation, starring, and deletion."""
-    api = QuMailJsApi(account_email="dr.sharma@drdo.res.in")
+    api = QuMailJsApi()
+    # Default is not hardcoded to any personal address
+    assert api.account_email == ""
+
     msgs = api.getMessages()
     assert len(msgs) >= 3
     assert any("ML-KEM-768" in m.get("indicator", {}).get("description", "") for m in msgs)
+
+    # Sign in
+    acc = api.loginAccount("user@company.com", "Jane Doe", "Acme R&D")
+    assert acc["email"] == "user@company.com"
+    assert acc["displayName"] == "Jane Doe"
+    assert acc["isEnrolled"] is True
 
     # Send a new message
     result = api.sendMessage({
@@ -55,6 +64,7 @@ def test_qumail_js_api_messages_roundtrip():
     updated_msgs = api.getMessages()
     new_msg = next((m for m in updated_msgs if m["id"] == msg_id), None)
     assert new_msg is not None
+    assert new_msg["senderEmail"] == "user@company.com"
     assert new_msg["subject"] == "Post-Quantum Handshake Test"
     assert new_msg["indicator"]["badgeLevel"] == "SECURE"
 
@@ -74,14 +84,21 @@ def test_qumail_js_api_messages_roundtrip():
     assert api.deleteMessage(msg_id) is True
     assert not any(m["id"] == msg_id for m in api.getMessages())
 
+    # Logout
+    assert api.logoutAccount() is True
+    assert api.getAccount()["email"] == ""
+    assert api.getAccount()["isEnrolled"] is False
+
 
 def test_qumail_js_api_hsm_and_entropy():
-    """Verify QuMailJsApi queries live hardware TRNG coordinator and extracts entropy."""
-    api = QuMailJsApi(account_email="dr.sharma@drdo.res.in")
+    """Verify QuMailJsApi queries live hardware TRNG coordinator and reports honest status."""
+    api = QuMailJsApi()
     status = api.getHSMStatus()
 
     assert "mode" in status
     assert "isHardwareActive" in status
+    # When no real TRNG hardware is connected, isHardwareActive must be False!
+    assert status["isHardwareActive"] is False
     assert "shannonEntropy" in status
     assert status["shannonEntropy"] > 7.0
     assert "activePort" in status
@@ -96,9 +113,10 @@ def test_qumail_js_api_hsm_and_entropy():
 
 def test_qumail_js_api_account_and_ports():
     """Verify account session info and COM port detection."""
-    api = QuMailJsApi(account_email="dr.sharma@drdo.res.in")
+    api = QuMailJsApi()
     acc = api.getAccount()
-    assert acc["email"] == "dr.sharma@drdo.res.in"
+    assert acc["email"] == ""
+    assert acc["isEnrolled"] is False
     assert acc["kemAlgorithm"] == "ML-KEM-768 (NIST FIPS 203)"
     assert acc["dsaAlgorithm"] == "ML-DSA-65 (NIST FIPS 204)"
 

@@ -12,6 +12,8 @@ interface SettingsModalProps {
   isDarkMode: boolean;
   onToggleTheme: () => void;
   onUpdateAccountEmail: (email: string) => void;
+  onLogoutAccount?: () => void;
+  onOpenSignIn?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -22,6 +24,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   isDarkMode,
   onToggleTheme,
   onUpdateAccountEmail,
+  onLogoutAccount,
+  onOpenSignIn,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'labels' | 'accounts' | 'security' | 'appearance' | 'about'>('general');
   const [newEmail, setNewEmail] = useState('');
@@ -214,28 +218,66 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Active Identity</h4>
                   <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Current signed-in mailbox</p>
                 </div>
-                <div className="md:col-span-2 p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 flex items-center justify-between">
-                  <div>
-                    <p className="text-base font-bold text-[#0B57D0] dark:text-blue-400">
-                      {account.email}
-                    </p>
-                    <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] mt-1">
-                      Vault Keys: {account.pqcAlgorithm}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => alert('Local vault locked.')}
-                    className="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-bold text-xs hover:bg-red-200 transition-colors"
-                  >
-                    Lock Vault
-                  </button>
+                <div className="md:col-span-2">
+                  {account.email ? (
+                    <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 flex items-center justify-between">
+                      <div>
+                        <p className="text-base font-bold text-[#0B57D0] dark:text-blue-400">
+                          {account.email}
+                        </p>
+                        <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] mt-1">
+                          Vault Keys: {account.pqcAlgorithm}
+                        </p>
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                          ✓ Post-Quantum Identity Sealed in Local SQLite Vault
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {onLogoutAccount && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onLogoutAccount();
+                              onClose();
+                            }}
+                            className="px-4 py-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-bold text-xs hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            Sign Out / Switch
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-5 rounded-2xl bg-gray-50 dark:bg-[#111726] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-[#202124] dark:text-white">
+                          No account currently signed in
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          Configure your email address to generate your post-quantum keys.
+                        </p>
+                      </div>
+                      {onOpenSignIn && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onOpenSignIn();
+                          }}
+                          className="px-5 py-2 rounded-xl bg-[#0B57D0] hover:bg-[#0842A0] text-white font-bold text-xs transition-colors shadow-md"
+                        >
+                          Sign In Now
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Connect Mailbox</h4>
-                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Direct IMAP/SMTP enrollment</p>
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Direct IMAP/SMTP</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">External mail service</p>
                 </div>
                 <form onSubmit={handleConnectAccount} className="md:col-span-2 space-y-3">
                   <input
@@ -247,7 +289,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                   <input
                     type="password"
-                    placeholder="App Password (16 characters from Google Security)"
+                    placeholder="App Password (16 characters from Google / Mail provider)"
                     value={newPass}
                     onChange={(e) => setNewPass(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-sm text-[#202124] dark:text-white outline-none focus:ring-2 focus:ring-[#0B57D0]"
@@ -257,14 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="submit"
                       className="px-6 py-2.5 rounded-xl bg-[#0B57D0] hover:bg-[#0842A0] text-white text-xs font-bold transition-all shadow-md"
                     >
-                      Connect & Enroll PQC Keys
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => alert('Google OAuth sign-in launched.')}
-                      className="px-5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-bold text-[#202124] dark:text-white transition-colors"
-                    >
-                      Sign In with Google
+                      Save Account
                     </button>
                   </div>
                 </form>
@@ -277,32 +312,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-6 divide-y divide-gray-100 dark:divide-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Hardware TRNG & QKD</h4>
-                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">USB physical entropy generator</p>
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Hardware TRNG & Entropy</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Entropy generator source</p>
                 </div>
                 <div className="md:col-span-2 space-y-3">
-                  <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Cpu className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                      <div>
-                        <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
-                          {hsmStatus.activePort}
-                        </p>
-                        <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                          Status: Active · Rate: {hsmStatus.rateBps} baud · NIST SP 800-90B PASSED
-                        </p>
+                  {hsmStatus.isHardwareActive ? (
+                    <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Cpu className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                        <div>
+                          <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                            {hsmStatus.activePort || 'COM3'} (Active Hardware TRNG)
+                          </p>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                            Status: Streaming · Rate: {hsmStatus.rateBps || 115200} baud · NIST SP 800-90B PASSED
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#111726] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <Cpu className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                        <div>
+                          <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                            Software CSPRNG (OS CryptGenRandom)
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Hardware TRNG disconnected · Fallback: NIST SP 800-90A CSPRNG + Keccak sponge
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={handleTestEntropy}
                       disabled={isSampling}
-                      className="flex items-center space-x-2 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-md disabled:opacity-50"
+                      className="flex items-center space-x-2 px-5 py-2 rounded-xl bg-[#0B57D0] hover:bg-[#0842A0] text-white font-bold text-xs transition-colors shadow-md disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSampling ? 'animate-spin' : ''}`} />
-                      <span>{isSampling ? 'Sampling...' : 'Sample Physical Entropy'}</span>
+                      <span>{isSampling ? 'Sampling...' : 'Sample Entropy Stream'}</span>
                     </button>
                   </div>
 

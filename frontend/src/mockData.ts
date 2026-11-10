@@ -1,18 +1,18 @@
 import { EmailMessage, HSMStatus, AccountSession } from './types';
 
 export const INITIAL_ACCOUNT: AccountSession = {
-  email: 'uzair@aavishkar.res.in',
+  email: '',
   provider: 'QuMail Sovereign Post-Quantum Network',
   pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
-  pqcIdentity: '0x4F92B3C...E782',
-  isUnlocked: true,
+  pqcIdentity: '',
+  isUnlocked: false,
 };
 
 export const INITIAL_HSM: HSMStatus = {
-  isHardwareActive: true,
-  activePort: 'COM3 (Microchip SAMD21 TRNG)',
+  isHardwareActive: false,
+  activePort: '',
   mode: 'AUTO',
-  rateBps: 115200,
+  rateBps: 0,
   continuousPassed: true,
 };
 
