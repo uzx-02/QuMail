@@ -125,42 +125,42 @@ DARK_PALETTE = Palette(
 )
 
 LIGHT_PALETTE = Palette(
-    bg_canvas="#F8FAFC",
-    bg_sidebar="#F1F5F9",
+    bg_canvas="#F6F8FC",
+    bg_sidebar="#F6F8FC",
     bg_surface="#FFFFFF",
     bg_card="#FFFFFF",
-    bg_card_hover="#F8FAFC",
-    bg_card_selected="#EEF2FF",
-    bg_input="#FFFFFF",
+    bg_card_hover="#F2F6FC",
+    bg_card_selected="#D3E3FD",
+    bg_input="#EAF1FB",
 
-    border_subtle="#E2E8F0",
-    border_default="#CBD5E1",
-    border_focused="#4F46E5",
+    border_subtle="#F2F2F2",
+    border_default="#E0E3E7",
+    border_focused="#1A73E8",
 
-    text_primary="#0F172A",
-    text_secondary="#475569",
-    text_muted="#94A3B8",
-    text_inverse="#FFFFFF",
+    text_primary="#202124",
+    text_secondary="#5F6368",
+    text_muted="#80868B",
+    text_inverse="#001D35",
 
-    accent="#4F46E5",
-    accent_hover="#4338CA",
-    accent_subtle="#E0E7FF",
+    accent="#0B57D0",
+    accent_hover="#0842A0",
+    accent_subtle="#C2E7FF",
 
-    secure="#059669",
-    secure_bg="#D1FAE5",
-    secure_text="#065F46",
+    secure="#137333",
+    secure_bg="#E6F4EA",
+    secure_text="#137333",
 
-    caution="#D97706",
-    caution_bg="#FEF3C7",
-    caution_text="#92400E",
+    caution="#B06000",
+    caution_bg="#FEF7E0",
+    caution_text="#B06000",
 
-    alert="#DC2626",
-    alert_bg="#FEE2E2",
-    alert_text="#991B1B",
+    alert="#C5221F",
+    alert_bg="#FCE8E6",
+    alert_text="#C5221F",
 
-    info="#0284C7",
-    info_bg="#E0F2FE",
-    info_text="#075985",
+    info="#0B57D0",
+    info_bg="#E8F0FE",
+    info_text="#0B57D0",
 )
 
 
@@ -176,7 +176,7 @@ class ThemeManager(QObject):
 
     def __init__(self) -> None:
         super().__init__()
-        self._mode: ThemeMode = "dark"
+        self._mode: ThemeMode = "light"
 
     @classmethod
     def get(cls) -> ThemeManager:
@@ -195,6 +195,7 @@ class ThemeManager(QObject):
     def set_theme(self, mode: ThemeMode) -> None:
         if self._mode != mode:
             self._mode = mode
+            C.update(_current_c())
             self.theme_changed.emit(mode)
             app = QApplication.instance()
             if app:
@@ -271,25 +272,29 @@ class ThemeManager(QObject):
 
 
 # Global convenience dictionary for backward compatibility with existing tests and modules
-C: dict[str, str] = {
-    "bg_base": DARK_PALETTE.bg_canvas,
-    "bg_sidebar": DARK_PALETTE.bg_sidebar,
-    "bg_card": DARK_PALETTE.bg_card,
-    "bg_hover": DARK_PALETTE.bg_card_hover,
-    "accent": DARK_PALETTE.accent,
-    "accent_light": "#818CF8",
-    "accent_glow": "#4F46E5",
-    "accent_muted": DARK_PALETTE.accent_subtle,
-    "text_primary": DARK_PALETTE.text_primary,
-    "text_secondary": DARK_PALETTE.text_secondary,
-    "text_tertiary": DARK_PALETTE.text_muted,
-    "border": DARK_PALETTE.border_subtle,
-    "online": DARK_PALETTE.secure,
-    "offline": DARK_PALETTE.alert,
-    "warning": DARK_PALETTE.caution,
-    "warning_bg": DARK_PALETTE.caution_bg,
-    "success_bg": DARK_PALETTE.secure_bg,
-}
+def _current_c() -> dict[str, str]:
+    p = ThemeManager.get().palette
+    return {
+        "bg_base": p.bg_canvas,
+        "bg_sidebar": p.bg_sidebar,
+        "bg_card": p.bg_card,
+        "bg_hover": p.bg_card_hover,
+        "accent": p.accent,
+        "accent_light": "#C2E7FF" if p == LIGHT_PALETTE else "#818CF8",
+        "accent_glow": p.accent_hover,
+        "accent_muted": p.accent_subtle,
+        "text_primary": p.text_primary,
+        "text_secondary": p.text_secondary,
+        "text_tertiary": p.text_muted,
+        "border": p.border_default,
+        "online": p.secure,
+        "offline": p.alert,
+        "warning": p.caution,
+        "warning_bg": p.caution_bg,
+        "success_bg": p.secure_bg,
+    }
+
+C: dict[str, str] = _current_c()
 
 GLOBAL_STYLESHEET = ThemeManager.get().generate_global_stylesheet()
 

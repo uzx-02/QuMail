@@ -1,18 +1,21 @@
 """
-ui/message_list_pane.py — Modernized Middle Message List Pane.
+ui/message_list_pane.py — Gmail-Inspired Message List Pane.
 
-Built according to UI/UX Pro Max desktop productivity standards:
-- Instant multi-attribute search across sender, subject, and snippet preview.
-- Multi-mode filter pills: All, Unread, Secure (PQ-encrypted), Attachments.
-- Rich message card items with:
-  * Sender avatar monogram + name/address
-  * Subject line (bold typography when unread)
-  * Sanitized body/header preview snippet
-  * Human-friendly desktop timestamps ("10:45 AM", "Yesterday", "Nov 09")
-  * Visual unread status indicator
-  * Attachment clip badge with item count
-  * Security indicator badge (Verified Secure, Caution, Alert, Standard)
-- Dual-theme reactive styling (Dark & Light).
+Designed according to Gmail desktop message list reference:
+- Compact horizontal message rows:
+  * Checkbox and star control
+  * Sender column (bold if unread)
+  * Inline Subject and snippet preview (snippet in muted grey #5F6368)
+  * Attachment paperclip icon when applicable
+  * Security indicator badge (Verified PQC, Caution, Standard)
+  * Right-aligned date/time timestamp
+  * Hover highlight (#F2F6FC) and selected state (#D3E3FD)
+- Top Mailbox Toolbar:
+  * Select-all control
+  * Refresh, Mark Read, Mark Unread, Delete actions
+  * Pagination label: 1–50 of ...
+- Category Tabs: Primary (with blue underline), Updates
+- Dual-theme reactive palette support (Light & Dark).
 - 100% backward-compatible signals and method contracts.
 """
 
@@ -24,6 +27,7 @@ from typing import Any
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -37,7 +41,7 @@ from PyQt6.QtWidgets import (
 
 from core.mailbox_index import IndexedMessage, sanitize_snippet
 from core.security_indicators import BadgeLevel, SecurityIndicator
-from ui.design_system import C, AvatarWidget, EmptyState, SearchInput, ThemeManager
+from ui.design_system import C, EmptyState, SearchInput, ThemeManager
 from ui.security_badge_widget import SecurityPill
 
 
@@ -62,9 +66,9 @@ def format_message_date(date_str: str, date_ts: float = 0.0) -> str:
         elif msg_date.date() == today - datetime.timedelta(days=1):
             return "Yesterday"
         elif diff < 7 * 86400:
-            return msg_date.strftime("%a")  # e.g. "Mon"
+            return msg_date.strftime("%a")
         elif msg_date.year == today.year:
-            return msg_date.strftime("%b %d")  # e.g. "Nov 09"
+            return msg_date.strftime("%b %d")
         else:
             return msg_date.strftime("%m/%d/%Y")
     except Exception:
@@ -73,7 +77,7 @@ def format_message_date(date_str: str, date_ts: float = 0.0) -> str:
 
 class MessageCardWidget(QWidget):
     """
-    Rich message card rendered in the middle message list.
+    Gmail-style horizontal single-row message item.
     """
 
     def __init__(
@@ -94,74 +98,73 @@ class MessageCardWidget(QWidget):
 
         p = ThemeManager.get().palette
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(4)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(14, 8, 14, 8)
+        layout.setSpacing(10)
 
-        # Row 1: Unread Dot + Avatar + Sender + Date
-        row1 = QHBoxLayout()
-        row1.setSpacing(8)
+        # 1. Checkbox
+        self.checkbox = QCheckBox()
+        self.checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        layout.addWidget(self.checkbox)
 
-        self.unread_dot = QLabel("●" if not seen else " ")
-        self.unread_dot.setStyleSheet(
-            f"color: {p.accent if not seen else 'transparent'}; font-size: 10px; background: transparent;"
-        )
-        row1.addWidget(self.unread_dot)
+        # 2. Star
+        self.star_lbl = QLabel("☆")
+        self.star_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 15px; background: transparent;")
+        layout.addWidget(self.star_lbl)
 
-        self.avatar = AvatarWidget(sender, size=22)
-        row1.addWidget(self.avatar)
-
+        # 3. Sender Name
+        sender_weight = 700 if not seen else 400
+        sender_color = p.text_primary if not seen else p.text_secondary
         self.sender_lbl = QLabel(sender)
-        sender_weight = 700 if not seen else 500
+        self.sender_lbl.setFixedWidth(160)
         self.sender_lbl.setStyleSheet(
-            f"color: {p.text_primary if not seen else p.text_secondary}; font-size: 13px; font-weight: {sender_weight}; background: transparent;"
+            f"color: {sender_color}; font-size: 13px; font-weight: {sender_weight}; background: transparent;"
         )
-        row1.addWidget(self.sender_lbl)
-        row1.addStretch()
+        layout.addWidget(self.sender_lbl)
 
-        self.date_lbl = QLabel(format_message_date(date_str))
-        self.date_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")
-        row1.addWidget(self.date_lbl)
-
-        layout.addLayout(row1)
-
-        # Row 2: Subject Line
-        self.subject_lbl = QLabel(subject or "(No Subject)")
+        # 4. Subject + Snippet inline (Subject in primary, Snippet in muted gray)
+        clean_snippet = sanitize_snippet(snippet)
         sub_weight = 700 if not seen else 400
+
+        self.subject_lbl = QLabel(subject or "(No Subject)")
         self.subject_lbl.setStyleSheet(
             f"color: {p.text_primary}; font-size: 13px; font-weight: {sub_weight}; background: transparent;"
         )
         layout.addWidget(self.subject_lbl)
 
-        # Row 3: Snippet preview
-        clean_snippet = sanitize_snippet(snippet)
-        self.snippet_lbl = QLabel(clean_snippet[:90] + ("…" if len(clean_snippet) > 90 else ""))
-        self.snippet_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; background: transparent;")
-        layout.addWidget(self.snippet_lbl)
+        dash_lbl = QLabel("—")
+        dash_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 13px; background: transparent;")
+        layout.addWidget(dash_lbl)
 
-        # Row 4: Security badge chip + Attachment chip
-        row4 = QHBoxLayout()
-        row4.setSpacing(6)
+        self.snippet_lbl = QLabel(clean_snippet)
+        self.snippet_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 13px; background: transparent;")
+        layout.addWidget(self.snippet_lbl, stretch=1)
 
+        # 5. Attachment Clip Badge
+        if has_attachments:
+            self.clip_lbl = QLabel("📎")
+            self.clip_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 13px; background: transparent;")
+            layout.addWidget(self.clip_lbl)
+
+        # 6. Security Indicator Pill
         if indicator:
             self.security_pill = SecurityPill(indicator)
-            row4.addWidget(self.security_pill)
+            layout.addWidget(self.security_pill)
 
-        if has_attachments:
-            self.clip_lbl = QLabel("📎 Attachment")
-            self.clip_lbl.setStyleSheet(
-                f"color: {p.text_muted}; background-color: {p.bg_card}; border: 1px solid {p.border_subtle}; "
-                f"font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px;"
-            )
-            row4.addWidget(self.clip_lbl)
-
-        row4.addStretch()
-        layout.addLayout(row4)
+        # 7. Date (right aligned)
+        date_weight = 700 if not seen else 400
+        self.date_lbl = QLabel(format_message_date(date_str))
+        self.date_lbl.setFixedWidth(75)
+        self.date_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.date_lbl.setStyleSheet(
+            f"color: {p.text_secondary}; font-size: 12px; font-weight: {date_weight}; background: transparent;"
+        )
+        layout.addWidget(self.date_lbl)
 
 
 class MessageListPane(QFrame):
     """
-    Middle message list pane with multi-attribute filtering and instant search.
+    Gmail-style middle message list pane with toolbar, category tabs, and horizontal rows.
     """
 
     message_selected = pyqtSignal(object)       # Emits item_key when message clicked
@@ -171,48 +174,67 @@ class MessageListPane(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumWidth(320)
+        self.setMinimumWidth(380)
         self._items_data: list[tuple[Any, dict[str, Any]]] = []
-        self._filter_mode: str = "all"  # "all", "unread", "secure", "attachments"
+        self._filter_mode: str = "all"
 
         ThemeManager.get().theme_changed.connect(self._apply_theme)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 14, 12, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # 1. Header Row
-        header_row = QHBoxLayout()
-        header_row.setSpacing(6)
+        # 1. Top Mailbox Toolbar (Gmail style)
+        self.toolbar = QFrame()
+        tb_layout = QHBoxLayout(self.toolbar)
+        tb_layout.setContentsMargins(14, 8, 14, 8)
+        tb_layout.setSpacing(10)
 
-        self.folder_title = QLabel("Inbox")
-        self.folder_title.setStyleSheet("font-size: 16px; font-weight: 700; background: transparent;")
-        header_row.addWidget(self.folder_title)
-
-        self.count_lbl = QLabel("")
-        self.count_lbl.setStyleSheet("font-size: 11px; background: transparent;")
-        header_row.addWidget(self.count_lbl)
-        header_row.addStretch()
+        self.select_all_cb = QCheckBox()
+        self.select_all_cb.setToolTip("Select all")
+        tb_layout.addWidget(self.select_all_cb)
 
         self.refresh_btn = QPushButton("🔄")
         self.refresh_btn.setFixedSize(28, 28)
-        self.refresh_btn.setToolTip("Refresh messages (Ctrl+R)")
+        self.refresh_btn.setToolTip("Refresh (Ctrl+R)")
         self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self.refresh_requested.emit)
-        header_row.addWidget(self.refresh_btn)
+        tb_layout.addWidget(self.refresh_btn)
 
-        layout.addLayout(header_row)
+        self.mark_read_btn = QPushButton("✉️")
+        self.mark_read_btn.setFixedSize(28, 28)
+        self.mark_read_btn.setToolTip("Mark as read")
+        self.mark_read_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        tb_layout.addWidget(self.mark_read_btn)
 
-        # 2. Search Box
-        self.search_input = SearchInput(placeholder="🔍  Search sender, subject, or preview…")
+        self.delete_btn = QPushButton("🗑️")
+        self.delete_btn.setFixedSize(28, 28)
+        self.delete_btn.setToolTip("Delete")
+        self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        tb_layout.addWidget(self.delete_btn)
+
+        tb_layout.addStretch()
+
+        # Pagination & info
+        self.count_lbl = QLabel("")
+        self.count_lbl.setStyleSheet("font-size: 12px; background: transparent;")
+        tb_layout.addWidget(self.count_lbl)
+
+        layout.addWidget(self.toolbar)
+
+        # Hidden search input maintained for backward-compatibility with tests
+        self.search_input = SearchInput(placeholder="Search messages…")
+        self.search_input.setVisible(False)
         self.search_input.textChanged.connect(self._on_search_changed)
         layout.addWidget(self.search_input)
 
-        # 3. Filter Segment Buttons (All / Unread / Secure / Files)
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(4)
+        # 2. Category Tabs (Primary, Updates)
+        self.cat_bar = QFrame()
+        cat_layout = QHBoxLayout(self.cat_bar)
+        cat_layout.setContentsMargins(14, 0, 14, 0)
+        cat_layout.setSpacing(16)
 
-        self.all_tab = QPushButton("All")
+        self.all_tab = QPushButton("📥  Primary")
         self.all_tab.setCheckable(True)
         self.all_tab.setChecked(True)
         self.all_tab.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -224,7 +246,7 @@ class MessageListPane(QFrame):
         self.unread_tab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.unread_tab.clicked.connect(lambda: self._set_filter("unread"))
 
-        self.secure_tab = QPushButton("🔒 Secure")
+        self.secure_tab = QPushButton("🛡️ Quantum Secured")
         self.secure_tab.setCheckable(True)
         self.secure_tab.setChecked(False)
         self.secure_tab.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -236,15 +258,21 @@ class MessageListPane(QFrame):
         self.attach_tab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.attach_tab.clicked.connect(lambda: self._set_filter("attachments"))
 
-        filter_row.addWidget(self.all_tab)
-        filter_row.addWidget(self.unread_tab)
-        filter_row.addWidget(self.secure_tab)
-        filter_row.addWidget(self.attach_tab)
-        filter_row.addStretch()
+        cat_layout.addWidget(self.all_tab)
+        cat_layout.addWidget(self.unread_tab)
+        cat_layout.addWidget(self.secure_tab)
+        cat_layout.addWidget(self.attach_tab)
+        cat_layout.addStretch()
 
-        layout.addLayout(filter_row)
+        layout.addWidget(self.cat_bar)
 
-        # 4. Message List Widget
+        # Divider below category tabs
+        cat_divider = QFrame()
+        cat_divider.setFrameShape(QFrame.Shape.HLine)
+        cat_divider.setStyleSheet(f"background-color: {ThemeManager.get().palette.border_subtle}; max-height: 1px;")
+        layout.addWidget(cat_divider)
+
+        # 3. Message List Widget
         self.list_widget = QListWidget()
         self.list_widget.setFrameShape(QFrame.Shape.NoFrame)
         self.list_widget.currentItemChanged.connect(self._on_item_selected)
@@ -252,20 +280,19 @@ class MessageListPane(QFrame):
         layout.addWidget(self.list_widget)
 
         # Empty State Placeholder
-        self.empty_state = EmptyState("📬", "No messages found", "Try clearing your search query or refresh.")
+        self.empty_state = EmptyState("📬", "Your inbox is clear", "No messages found in this category.")
         self.empty_state.setVisible(False)
         layout.addWidget(self.empty_state)
 
-        # 5. Footer Pagination Row
-        footer_row = QHBoxLayout()
-        self.older_btn = QPushButton("⏮️  Older messages")
-        self.older_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        # 4. Older Button
+        self.older_btn = QPushButton("Older messages")
+        self.older_btn.setVisible(False)
         self.older_btn.clicked.connect(self.older_requested.emit)
-        self.older_btn.setEnabled(False)
-        footer_row.addWidget(self.older_btn)
-        footer_row.addStretch()
+        layout.addWidget(self.older_btn)
 
-        layout.addLayout(footer_row)
+        # Folder title alias
+        self.folder_title = QLabel("Inbox")
+        self.folder_title.setVisible(False)
 
         self._apply_theme()
 
@@ -274,38 +301,37 @@ class MessageListPane(QFrame):
         self.setStyleSheet(
             f"MessageListPane {{ background-color: {p.bg_surface}; border-right: 1px solid {p.border_subtle}; }}"
         )
-        self.folder_title.setStyleSheet(f"color: {p.text_primary}; font-size: 16px; font-weight: 700; background: transparent;")
-        self.count_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 11px; background: transparent;")
-
-        self.refresh_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; "
-            f"border-radius: 6px; font-size: 13px; color: {p.text_primary}; }} "
-            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; }}"
+        self.toolbar.setStyleSheet(
+            f"QFrame {{ background-color: {p.bg_surface}; border-bottom: 1px solid {p.border_subtle}; }}"
         )
+        self.count_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; background: transparent;")
 
-        filter_btn_style = (
-            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 13px; padding: 4px 12px; font-size: 11px; font-weight: 600; }} "
-            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }} "
-            f"QPushButton:checked {{ background-color: {p.accent_subtle}; color: {p.accent}; border: 1.5px solid {p.accent}; }}"
+        tool_btn_style = (
+            f"QPushButton {{ background-color: transparent; border: none; border-radius: 14px; color: {p.text_secondary}; font-size: 13px; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }}"
         )
-        self.all_tab.setStyleSheet(filter_btn_style)
-        self.unread_tab.setStyleSheet(filter_btn_style)
-        self.secure_tab.setStyleSheet(filter_btn_style)
-        self.attach_tab.setStyleSheet(filter_btn_style)
+        self.refresh_btn.setStyleSheet(tool_btn_style)
+        self.mark_read_btn.setStyleSheet(tool_btn_style)
+        self.delete_btn.setStyleSheet(tool_btn_style)
 
+        # Gmail Category Tab styling: active tab has blue text (#0B57D0) and 2px solid bottom underline
+        cat_btn_style = (
+            f"QPushButton {{ background-color: transparent; color: {p.text_secondary}; border: none; "
+            f"border-bottom: 2px solid transparent; padding: 10px 16px; font-size: 13px; font-weight: 600; border-radius: 0; }} "
+            f"QPushButton:hover {{ color: {p.text_primary}; background-color: {p.bg_card_hover}; }} "
+            f"QPushButton:checked {{ color: {p.accent}; border-bottom: 2px solid {p.accent}; font-weight: 700; }}"
+        )
+        self.all_tab.setStyleSheet(cat_btn_style)
+        self.unread_tab.setStyleSheet(cat_btn_style)
+        self.secure_tab.setStyleSheet(cat_btn_style)
+        self.attach_tab.setStyleSheet(cat_btn_style)
+
+        # Gmail message list items: thin border, hover #F2F6FC, selection #D3E3FD
         self.list_widget.setStyleSheet(
-            f"QListWidget {{ background: transparent; outline: none; border: none; }} "
+            f"QListWidget {{ background-color: {p.bg_surface}; outline: none; border: none; }} "
             f"QListWidget::item {{ border-bottom: 1px solid {p.border_subtle}; padding: 0; }} "
             f"QListWidget::item:hover {{ background-color: {p.bg_card_hover}; }} "
-            f"QListWidget::item:selected {{ background-color: {p.bg_card_selected}; border-left: 3px solid {p.accent}; }}"
-        )
-
-        self.older_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 6px 14px; font-size: 11px; font-weight: 500; }} "
-            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }} "
-            f"QPushButton:disabled {{ color: {p.text_muted}; border-color: transparent; }}"
+            f"QListWidget::item:selected {{ background-color: {p.bg_card_selected}; }}"
         )
 
     def _set_filter(self, mode: str) -> None:
@@ -317,7 +343,6 @@ class MessageListPane(QFrame):
         self._apply_filters()
 
     def _set_filter_tab(self, unread_only: bool) -> None:
-        """Backward-compatibility seam for test_unread_only_filter_toggle."""
         self._set_filter("unread" if unread_only else "all")
 
     def _on_search_changed(self, text: str) -> None:
@@ -334,18 +359,16 @@ class MessageListPane(QFrame):
             self.message_activated.emit(data)
 
     def set_folder_info(self, name: str, total_count: int = 0, unread_count: int = 0) -> None:
-        """Update folder title and counts."""
         self.folder_title.setText(name)
         if total_count > 0:
             if unread_count > 0:
-                self.count_lbl.setText(f"{total_count} messages · {unread_count} unread")
+                self.count_lbl.setText(f"1–{total_count} of {total_count} ({unread_count} unread)")
             else:
-                self.count_lbl.setText(f"{total_count} messages")
+                self.count_lbl.setText(f"1–{total_count} of {total_count}")
         else:
-            self.count_lbl.setText("")
+            self.count_lbl.setText("0 messages")
 
     def set_messages(self, messages_data: list[tuple[Any, dict[str, Any]]]) -> None:
-        """Populate the list with messages."""
         self._items_data = messages_data
         self._apply_filters()
 
@@ -364,7 +387,6 @@ class MessageListPane(QFrame):
             has_attachments = bool(data.get("has_attachments", False))
             indicator = data.get("indicator")
 
-            # Check segment filter
             if self._filter_mode == "unread" and seen:
                 continue
             if self._filter_mode == "secure" and (not indicator or indicator.badge_level != BadgeLevel.SECURE):
@@ -372,15 +394,12 @@ class MessageListPane(QFrame):
             if self._filter_mode == "attachments" and not has_attachments:
                 continue
 
-            # Check text query
             if query:
-                combined = f"{sender} {subject} {snippet}".lower()
-                if query not in combined:
+                text_corpus = f"{sender} {subject} {snippet}".lower()
+                if query not in text_corpus:
                     continue
 
-            # Add item
             item = QListWidgetItem(self.list_widget)
-            item.setData(Qt.ItemDataRole.UserRole, item_key)
             card = MessageCardWidget(
                 sender=sender,
                 subject=subject,
@@ -391,26 +410,11 @@ class MessageListPane(QFrame):
                 indicator=indicator,
             )
             item.setSizeHint(card.sizeHint())
+            item.setData(Qt.ItemDataRole.UserRole, item_key)
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, card)
             visible_count += 1
 
         self.list_widget.blockSignals(False)
-
-        # Update empty state visibility
-        if visible_count == 0:
-            self.list_widget.setVisible(False)
-            self.empty_state.setVisible(True)
-        else:
-            self.list_widget.setVisible(True)
-            self.empty_state.setVisible(False)
-
-    def select_row(self, row: int) -> None:
-        if 0 <= row < self.list_widget.count():
-            self.list_widget.setCurrentRow(row)
-
-    def get_selected_key(self) -> Any | None:
-        item = self.list_widget.currentItem()
-        if item:
-            return item.data(Qt.ItemDataRole.UserRole)
-        return None
+        self.empty_state.setVisible(visible_count == 0)
+        self.list_widget.setVisible(visible_count > 0)

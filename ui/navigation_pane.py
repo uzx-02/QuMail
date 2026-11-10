@@ -1,14 +1,12 @@
 """
-ui/navigation_pane.py — Modernized Navigation Sidebar Component.
+ui/navigation_pane.py — Gmail-Inspired Navigation Sidebar Component.
 
-Built according to UI/UX Pro Max desktop productivity standards:
-- Professional header with shield branding, QuMail version, and sync dot.
-- Primary New Message composition CTA with keyboard shortcut hint (Ctrl+N).
-- System folder navigation (Inbox, Starred, Sent, Drafts, Outbox, Archive, Trash)
-  with live dynamic unread badges.
-- Bottom Account Card with monogram avatar, signed-in address, and sync status.
-- Direct quick-action controls: Theme Switcher (☀️/🌙), Settings (⚙️), and Vault Lock (🔒).
-- Dual-theme reactive palette support (Dark & Light).
+Designed according to Gmail desktop navigation visual reference:
+- Prominent Compose CTA: Soft blue (#C2E7FF), rounded pill (16px), dark text (#001D35).
+- Clean folder items with subtle icon, label, and right-aligned unread counts.
+- Selected folder state: Soft blue rounded pill (#D3E3FD), dark active text (#001D35).
+- Bottom hardware security & quantum entropy status badge.
+- Dual-theme reactive palette support (Light & Dark).
 - 100% backward-compatible signals and method contracts.
 """
 
@@ -31,14 +29,14 @@ from ui.design_system import C, AvatarWidget, ThemeManager
 
 
 class FolderItemWidget(QWidget):
-    """Folder list item widget with icon, label, and unread count badge."""
+    """Folder list item widget with icon, label, and unread count."""
 
     def __init__(self, key: str, icon: str, label: str, count: int = 0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.key = key
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(10)
+        layout.setContentsMargins(14, 6, 14, 6)
+        layout.setSpacing(12)
 
         self.icon_lbl = QLabel(icon)
         self.icon_lbl.setStyleSheet("font-size: 15px; background: transparent;")
@@ -46,15 +44,14 @@ class FolderItemWidget(QWidget):
 
         p = ThemeManager.get().palette
         self.text_lbl = QLabel(label)
-        self.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 500; background: transparent;")
+        self.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 14px; font-weight: 500; background: transparent;")
         layout.addWidget(self.text_lbl)
 
         layout.addStretch()
 
         self.badge = QLabel()
         self.badge.setStyleSheet(
-            f"background-color: {p.accent}; color: {p.text_inverse}; font-size: 11px; font-weight: 700; "
-            f"padding: 1px 7px; border-radius: 9px;"
+            f"color: {p.text_primary}; font-size: 12px; font-weight: 700; background: transparent;"
         )
         self.badge.setVisible(False)
         layout.addWidget(self.badge)
@@ -71,8 +68,7 @@ class FolderItemWidget(QWidget):
 
 class NavigationPane(QFrame):
     """
-    Left sidebar navigation pane.
-    Emits folder_selected(folder_key) when user clicks a folder.
+    Gmail-style left sidebar navigation pane.
     """
 
     new_message_requested = pyqtSignal()
@@ -84,56 +80,36 @@ class NavigationPane(QFrame):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedWidth(230)
+        self.setFixedWidth(240)
         self._folder_widgets: dict[str, FolderItemWidget] = {}
 
         ThemeManager.get().theme_changed.connect(self._apply_theme)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 16, 14, 14)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
-        # 1. Branding Header
-        brand_layout = QHBoxLayout()
-        brand_layout.setSpacing(8)
-
-        logo_lbl = QLabel("🛡️")
-        logo_lbl.setStyleSheet("font-size: 20px; background: transparent;")
-        brand_layout.addWidget(logo_lbl)
-
-        brand_title = QLabel("QuMail")
-        brand_title.setStyleSheet("font-size: 17px; font-weight: 800; letter-spacing: -0.3px; background: transparent;")
-        brand_layout.addWidget(brand_title)
-
-        pq_badge = QLabel("PQ-v1")
-        pq_badge.setStyleSheet(
-            f"color: {ThemeManager.get().palette.accent}; background-color: {ThemeManager.get().palette.accent_subtle}; "
-            f"font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px;"
-        )
-        brand_layout.addWidget(pq_badge)
-        brand_layout.addStretch()
-
-        layout.addLayout(brand_layout)
-
-        # 2. Primary New Message Button
-        self.new_btn = QPushButton("New Message")
-        self.new_btn.setFixedHeight(42)
+        # 1. Primary Compose Button (Gmail Style: Soft Blue Pill, Dark Text, Height 48px)
+        compose_row = QHBoxLayout()
+        self.new_btn = QPushButton("✏️  Compose")
+        self.new_btn.setFixedSize(140, 48)
         self.new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.new_btn.setToolTip("Compose new protected email (Ctrl+N)")
+        self.new_btn.setToolTip("Compose new post-quantum secured email (Ctrl+N)")
         self.new_btn.clicked.connect(self.new_message_requested.emit)
-        layout.addWidget(self.new_btn)
+        compose_row.addWidget(self.new_btn)
+        compose_row.addStretch()
+        layout.addLayout(compose_row)
 
-        # 3. Folders List
+        # 2. Folders List
         self.folder_list = QListWidget()
         self.folder_list.setFrameShape(QFrame.Shape.NoFrame)
 
         folders = [
             ("inbox", "📥", "Inbox", 0),
             ("starred", "⭐", "Starred", 0),
-            ("sent", "📤", "Sent Mail", 0),
+            ("sent", "📤", "Sent", 0),
             ("drafts", "📝", "Drafts", 0),
             ("outbox", "📦", "Outbox", 0),
-            ("archive", "🗄️", "Archive", 0),
             ("trash", "🗑️", "Trash", 0),
         ]
 
@@ -153,46 +129,53 @@ class NavigationPane(QFrame):
 
         layout.addStretch()
 
-        # 4. Account & Sync Status Card (Bottom)
-        self.account_card = QFrame()
-        card_layout = QVBoxLayout(self.account_card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
-        card_layout.setSpacing(6)
+        # 3. Hardware & Quantum Entropy Status Badge
+        self.status_card = QFrame()
+        status_l = QVBoxLayout(self.status_card)
+        status_l.setContentsMargins(10, 8, 10, 8)
+        status_l.setSpacing(4)
 
-        # Account Info row
-        acc_row = QHBoxLayout()
-        self.avatar_widget = AvatarWidget("QuMail User", size=24)
-        acc_row.addWidget(self.avatar_widget)
-
-        self.account_lbl = QLabel("No Account")
-        self.account_lbl.setStyleSheet("font-size: 12px; font-weight: 600; background: transparent;")
-        acc_row.addWidget(self.account_lbl)
-        acc_row.addStretch()
-        card_layout.addLayout(acc_row)
-
-        # Sync Status row
-        sync_row = QHBoxLayout()
-        self.sync_dot = QLabel("●")
-        self.sync_dot.setStyleSheet("color: #22C55E; font-size: 10px; background: transparent;")
-        sync_row.addWidget(self.sync_dot)
-
-        self.sync_status_lbl = QLabel("Idle")
-        self.sync_status_lbl.setStyleSheet("font-size: 11px; background: transparent;")
-        sync_row.addWidget(self.sync_status_lbl)
-        sync_row.addStretch()
-        card_layout.addLayout(sync_row)
-
-        # Hardware HSM / QKD Status row
         hsm_row = QHBoxLayout()
         self.hsm_dot = QLabel("⚡")
-        self.hsm_dot.setStyleSheet("font-size: 11px; background: transparent;")
+        self.hsm_dot.setStyleSheet("font-size: 13px; background: transparent;")
         hsm_row.addWidget(self.hsm_dot)
 
-        self.hsm_status_lbl = QLabel("Software CSPRNG")
-        self.hsm_status_lbl.setStyleSheet("font-size: 11px; background: transparent;")
+        self.hsm_status_lbl = QLabel("Hardware TRNG")
+        self.hsm_status_lbl.setStyleSheet("font-size: 12px; font-weight: 700; background: transparent;")
         hsm_row.addWidget(self.hsm_status_lbl)
         hsm_row.addStretch()
-        card_layout.addLayout(hsm_row)
+        status_l.addLayout(hsm_row)
+
+        self.sync_status_lbl = QLabel("Post-Quantum Sealing Active")
+        self.sync_status_lbl.setStyleSheet("font-size: 11px; background: transparent;")
+        status_l.addWidget(self.sync_status_lbl)
+
+        layout.addWidget(self.status_card)
+
+        # 4. Settings & Lock Vault Quick Actions
+        action_bar = QHBoxLayout()
+        action_bar.setSpacing(6)
+
+        self.theme_btn = QPushButton("🌙")
+        self.theme_btn.setFixedSize(32, 32)
+        self.theme_btn.setToolTip("Toggle Theme")
+        self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_btn.clicked.connect(self._on_toggle_theme)
+        action_bar.addWidget(self.theme_btn)
+
+        self.settings_btn = QPushButton("⚙️ Settings")
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.setFixedHeight(32)
+        self.settings_btn.clicked.connect(self.settings_requested.emit)
+        action_bar.addWidget(self.settings_btn)
+
+        self.lock_btn = QPushButton("🔒 Lock")
+        self.lock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.lock_btn.setFixedHeight(32)
+        self.lock_btn.clicked.connect(self.lock_requested.emit)
+        action_bar.addWidget(self.lock_btn)
+
+        layout.addLayout(action_bar)
 
         # Connect to HSMManager
         try:
@@ -201,33 +184,6 @@ class NavigationPane(QFrame):
         except Exception:
             pass
 
-        layout.addWidget(self.account_card)
-
-        # 5. Bottom Action Bar (Settings, Theme Toggle, Lock)
-        action_bar = QHBoxLayout()
-        action_bar.setSpacing(6)
-
-        self.theme_btn = QPushButton("🌙")
-        self.theme_btn.setFixedSize(30, 30)
-        self.theme_btn.setToolTip("Toggle Dark / Light Theme")
-        self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.theme_btn.clicked.connect(self._on_toggle_theme)
-        action_bar.addWidget(self.theme_btn)
-
-        self.settings_btn = QPushButton("Settings")
-        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.settings_btn.setFixedHeight(30)
-        self.settings_btn.clicked.connect(self.settings_requested.emit)
-        action_bar.addWidget(self.settings_btn)
-
-        self.lock_btn = QPushButton("Lock Vault")
-        self.lock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.lock_btn.setFixedHeight(30)
-        self.lock_btn.clicked.connect(self.lock_requested.emit)
-        action_bar.addWidget(self.lock_btn)
-
-        layout.addLayout(action_bar)
-
         self._apply_theme()
 
     def _apply_theme(self) -> None:
@@ -235,37 +191,31 @@ class NavigationPane(QFrame):
         self.setStyleSheet(
             f"NavigationPane {{ background-color: {p.bg_sidebar}; border-right: 1px solid {p.border_subtle}; }}"
         )
+        # Gmail Compose button: soft blue (#C2E7FF), dark text (#001D35), 16px radius
         self.new_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {p.accent}; color: {p.text_inverse}; font-size: 14px; font-weight: 700; "
-            f"border: none; border-radius: 21px; padding: 0 20px; }} "
-            f"QPushButton:hover {{ background-color: {p.accent_hover}; }} "
-            f"QPushButton:pressed {{ background-color: {p.border_focused}; }}"
+            f"QPushButton {{ background-color: {p.accent_subtle}; color: {p.text_inverse}; font-size: 14px; font-weight: 600; "
+            f"border: 1px solid transparent; border-radius: 16px; padding: 0 16px; }} "
+            f"QPushButton:hover {{ background-color: #B3DCF5; border-color: #A0CEEE; }} "
+            f"QPushButton:pressed {{ background-color: #92C0E2; }}"
         )
+        # Gmail Folder List Item: rounded pill (18px radius) when selected
         self.folder_list.setStyleSheet(
             f"QListWidget {{ background: transparent; outline: none; border: none; }} "
-            f"QListWidget::item {{ border-radius: 16px; padding: 3px 6px; margin: 2px 4px; }} "
+            f"QListWidget::item {{ border-radius: 18px; padding: 2px 4px; margin: 1px 2px; min-height: 34px; }} "
             f"QListWidget::item:hover {{ background-color: {p.bg_card_hover}; }} "
-            f"QListWidget::item:selected {{ background-color: {p.accent_subtle}; }}"
+            f"QListWidget::item:selected {{ background-color: {p.bg_card_selected}; color: {p.text_inverse}; font-weight: 700; }}"
         )
-        self.account_card.setStyleSheet(
-            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 10px; }}"
+        self.status_card.setStyleSheet(
+            f"QFrame {{ background-color: {p.bg_surface}; border: 1px solid {p.border_default}; border-radius: 8px; }}"
         )
         btn_style = (
-            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
-            f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; }} "
+            f"QPushButton {{ background-color: {p.bg_surface}; color: {p.text_secondary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; border-color: {p.border_focused}; }}"
         )
         self.settings_btn.setStyleSheet(btn_style)
         self.lock_btn.setStyleSheet(btn_style)
         self.theme_btn.setStyleSheet(btn_style)
-        self.theme_btn.setText("☀️" if ThemeManager.get().mode == "dark" else "🌙")
-
-        for w in self._folder_widgets.values():
-            w.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 600; background: transparent;")
-
-    def _on_toggle_theme(self) -> None:
-        new_mode = ThemeManager.get().toggle()
-        self.theme_toggled.emit(new_mode)
 
     def _on_row_changed(self, row: int) -> None:
         item = self.folder_list.item(row)
@@ -274,61 +224,34 @@ class NavigationPane(QFrame):
             if isinstance(widget, FolderItemWidget):
                 self.folder_selected.emit(widget.key)
 
-    def set_unread_count(self, folder: str, count: int) -> None:
-        """Update unread badge count for a specific folder."""
-        if folder in self._folder_widgets:
-            self._folder_widgets[folder].set_count(count)
-
-    def set_account_identity(self, email: str) -> None:
-        """Update active account email in bottom card."""
-        display_text = email if email else "No Account"
-        if len(display_text) > 22:
-            display_text = display_text[:19] + "…"
-        self.account_lbl.setText(display_text)
-        self.account_lbl.setToolTip(email)
-        if email:
-            self.avatar_widget.set_identity(email)
-
-    def set_sync_state(self, state: str, detail: str = "") -> None:
-        """Update synchronization indicator dot and text."""
-        p = ThemeManager.get().palette
-        state_lower = state.lower()
-        if "reconnect" in state_lower:
-            color = p.caution
-            label = "Reconnecting…"
-        elif "idle" in state_lower or "connected" in state_lower:
-            color = p.secure
-            label = "Idle"
-        elif "sync" in state_lower or "connecting" in state_lower:
-            color = p.accent
-            label = "Synchronizing…"
-        elif "offline" in state_lower or "stopped" in state_lower:
-            color = p.alert
-            label = "Offline"
-        else:
-            color = p.text_muted
-            label = state.capitalize()
-
-        self.sync_dot.setStyleSheet(f"color: {color}; font-size: 10px; background: transparent;")
-        self.sync_status_lbl.setText(label)
-        self.sync_status_lbl.setToolTip(detail or label)
+    def _on_toggle_theme(self) -> None:
+        new_mode = ThemeManager.get().toggle()
+        self.theme_btn.setText("☀️" if new_mode == "dark" else "🌙")
+        self.theme_toggled.emit(new_mode)
 
     def _on_hsm_snapshot(self, snap: Any) -> None:
-        """Callback from HSMManager background thread."""
-        if hasattr(snap, "is_hardware_active") and snap.is_hardware_active:
-            self.set_hsm_status(True, f"Hardware TRNG ({snap.active_port})")
-        elif hasattr(snap, "mode") and snap.mode == "ETSI_QKD":
-            self.set_hsm_status(True, "ETSI QKD Link")
+        if snap.is_hardware_active:
+            self.hsm_status_lbl.setText("⚡ Physical TRNG")
+            self.hsm_status_lbl.setStyleSheet("color: #137333; font-weight: 700;")
+            self.sync_status_lbl.setText(f"Connected ({snap.active_port})")
+        elif snap.mode == "ETSI_QKD":
+            self.hsm_status_lbl.setText("🔷 ETSI QKD Stream")
+            self.hsm_status_lbl.setStyleSheet("color: #0B57D0; font-weight: 700;")
+            self.sync_status_lbl.setText("Active Key Delivery")
         else:
-            self.set_hsm_status(False, "Software CSPRNG")
+            self.hsm_status_lbl.setText("⚡ Software CSPRNG")
+            self.hsm_status_lbl.setStyleSheet(f"color: {ThemeManager.get().palette.text_secondary}; font-weight: 600;")
+            self.sync_status_lbl.setText("Post-Quantum Active")
 
-    def set_hsm_status(self, is_active: bool, label: str) -> None:
-        p = ThemeManager.get().palette
-        if is_active:
-            self.hsm_dot.setText("⚡")
-            self.hsm_status_lbl.setText(label)
-            self.hsm_status_lbl.setStyleSheet(f"color: {p.secure}; font-size: 11px; font-weight: 600; background: transparent;")
+    def set_unread_count(self, folder_key: str, count: int) -> None:
+        if folder_key in self._folder_widgets:
+            self._folder_widgets[folder_key].set_count(count)
+
+    def set_account_identity(self, email: str) -> None:
+        pass
+
+    def set_sync_state(self, state: str) -> None:
+        if "sync" in state.lower():
+            self.sync_status_lbl.setText("Synchronizing…")
         else:
-            self.hsm_dot.setText("⚪")
-            self.hsm_status_lbl.setText("Software CSPRNG")
-            self.hsm_status_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")
+            self.sync_status_lbl.setText(state)

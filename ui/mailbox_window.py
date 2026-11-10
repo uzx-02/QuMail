@@ -26,12 +26,13 @@ import threading
 import time
 from typing import Any
 
-from PyQt6.QtCore import Qt, QTimer, QUrl
+from PyQt6.QtCore import Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -64,8 +65,143 @@ from ui.message_list_pane import MessageListPane, format_message_date
 from ui.navigation_pane import NavigationPane
 from ui.reading_pane import ReadingPane
 from ui.settings_dialog import SettingsDialog
+from ui.design_system import ThemeManager
 
 logger = get_logger("ui.mailbox")
+
+
+class GlobalHeader(QFrame):
+    """
+    Gmail-style global application header across the top of QuMail.
+    Left: Hamburger menu, Logo 🛡️, QuMail title
+    Center: Search Bar pill with magnifying glass and filter icon
+    Right: Help, Settings gear, Profile avatar with email
+    """
+    sidebar_toggled = pyqtSignal()
+    search_changed = pyqtSignal(str)
+    settings_requested = pyqtSignal()
+    help_requested = pyqtSignal()
+    account_clicked = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFixedHeight(64)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(16)
+
+        # 1. Left: Hamburger + Brand
+        left_box = QHBoxLayout()
+        left_box.setSpacing(10)
+
+        self.hamburger_btn = QPushButton("≡")
+        self.hamburger_btn.setFixedSize(36, 36)
+        self.hamburger_btn.setToolTip("Main menu")
+        self.hamburger_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.hamburger_btn.clicked.connect(self.sidebar_toggled.emit)
+        left_box.addWidget(self.hamburger_btn)
+
+        self.logo_lbl = QLabel("🛡️")
+        self.logo_lbl.setStyleSheet("font-size: 22px; background: transparent;")
+        left_box.addWidget(self.logo_lbl)
+
+        self.title_lbl = QLabel("QuMail")
+        self.title_lbl.setStyleSheet("font-size: 20px; font-weight: 700; background: transparent; letter-spacing: -0.3px;")
+        left_box.addWidget(self.title_lbl)
+
+        layout.addLayout(left_box)
+
+        # 2. Center: Large rounded search field (Gmail pill)
+        layout.addStretch(1)
+
+        self.search_frame = QFrame()
+        self.search_frame.setFixedHeight(44)
+        self.search_frame.setMinimumWidth(380)
+        self.search_frame.setMaximumWidth(720)
+        search_l = QHBoxLayout(self.search_frame)
+        search_l.setContentsMargins(16, 0, 16, 0)
+        search_l.setSpacing(10)
+
+        search_icon = QLabel("🔍")
+        search_icon.setStyleSheet("font-size: 14px; background: transparent;")
+        search_l.addWidget(search_icon)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search mail")
+        self.search_input.textChanged.connect(self.search_changed.emit)
+        search_l.addWidget(self.search_input, stretch=1)
+
+        filter_icon = QLabel("⚙️")
+        filter_icon.setStyleSheet("font-size: 13px; background: transparent;")
+        search_l.addWidget(filter_icon)
+
+        layout.addWidget(self.search_frame, stretch=3)
+        layout.addStretch(1)
+
+        # 3. Right: Help, Settings, Profile Avatar
+        right_box = QHBoxLayout()
+        right_box.setSpacing(8)
+
+        self.help_btn = QPushButton("❓")
+        self.help_btn.setFixedSize(36, 36)
+        self.help_btn.setToolTip("Support & About QuMail")
+        self.help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.help_btn.clicked.connect(self.help_requested.emit)
+        right_box.addWidget(self.help_btn)
+
+        self.settings_btn = QPushButton("⚙️")
+        self.settings_btn.setFixedSize(36, 36)
+        self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.clicked.connect(self.settings_requested.emit)
+        right_box.addWidget(self.settings_btn)
+
+        self.avatar_btn = QPushButton("U")
+        self.avatar_btn.setFixedSize(36, 36)
+        self.avatar_btn.setToolTip("QuMail Account")
+        self.avatar_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.avatar_btn.clicked.connect(self.account_clicked.emit)
+        right_box.addWidget(self.avatar_btn)
+
+        layout.addLayout(right_box)
+
+        self._apply_theme()
+        ThemeManager.get().theme_changed.connect(self._apply_theme)
+
+    def _apply_theme(self) -> None:
+        p = ThemeManager.get().palette
+        self.setStyleSheet(
+            f"GlobalHeader {{ background-color: {p.bg_canvas}; border-bottom: 1px solid {p.border_subtle}; }}"
+        )
+        self.title_lbl.setStyleSheet(f"font-size: 20px; font-weight: 700; color: {p.text_primary}; background: transparent;")
+        icon_btn_style = (
+            f"QPushButton {{ background-color: transparent; border: none; border-radius: 18px; font-size: 15px; color: {p.text_secondary}; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }}"
+        )
+        self.hamburger_btn.setStyleSheet(icon_btn_style)
+        self.help_btn.setStyleSheet(icon_btn_style)
+        self.settings_btn.setStyleSheet(icon_btn_style)
+
+        # Search pill
+        self.search_frame.setStyleSheet(
+            f"QFrame {{ background-color: {p.bg_input}; border-radius: 22px; border: 1px solid transparent; }} "
+            f"QFrame:hover {{ border-color: {p.border_default}; }}"
+        )
+        self.search_input.setStyleSheet(
+            f"QLineEdit {{ background: transparent; color: {p.text_primary}; border: none; font-size: 14px; outline: none; }} "
+            f"QLineEdit:focus {{ border: none; }}"
+        )
+        # Avatar button
+        self.avatar_btn.setStyleSheet(
+            f"QPushButton {{ background-color: #0B57D0; color: #FFFFFF; font-size: 14px; font-weight: 700; "
+            f"border: none; border-radius: 18px; }} QPushButton:hover {{ background-color: #0842A0; }}"
+        )
+
+    def set_account_identity(self, email: str) -> None:
+        initial = email[0].upper() if email else "U"
+        self.avatar_btn.setText(initial)
+        self.avatar_btn.setToolTip(f"Connected Account: {email or 'No account connected'}")
 
 
 class MailboxWindow(QWidget):
@@ -117,6 +253,17 @@ class MailboxWindow(QWidget):
 
         # Top banner removed for clean production experience
         self.banner = None
+
+        # -------------------------------------------------------------
+        # GLOBAL APPLICATION TOP HEADER (Gmail Top Shell)
+        # -------------------------------------------------------------
+        self.header = GlobalHeader(self)
+        self.header.sidebar_toggled.connect(self._toggle_sidebar)
+        self.header.search_changed.connect(self._on_global_search)
+        self.header.settings_requested.connect(self.show_modern_settings)
+        self.header.help_requested.connect(self._show_help)
+        self.header.account_clicked.connect(self.show_modern_settings)
+        root_layout.addWidget(self.header)
 
         # -------------------------------------------------------------
         # THREE-PANE DESKTOP SPLITTER
@@ -285,6 +432,26 @@ class MailboxWindow(QWidget):
         from .onboarding_wizard import OnboardingWizard
         wizard = OnboardingWizard(self.identity, self)
         wizard.exec()
+
+    def _toggle_sidebar(self) -> None:
+        self.navigation_pane.setVisible(not self.navigation_pane.isVisible())
+
+    def _on_global_search(self, text: str) -> None:
+        self.message_list_pane.search_input.setText(text)
+
+    def _show_help(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self,
+            "About QuMail — Aavishkar Research Convention",
+            "QuMail 1.0 (Aavishkar 2026 Edition)\n\n"
+            "Post-Quantum Cryptographic wrapper securing standard email communications (Gmail, Yahoo, IMAP/SMTP) "
+            "against Harvest Now, Decrypt Later (HNDL) attacks.\n\n"
+            "• Key Encapsulation: NIST FIPS 203 (ML-KEM-768)\n"
+            "• Digital Signatures: NIST FIPS 204 (ML-DSA-65)\n"
+            "• True Randomness: Hardware TRNG & QKD Stream Ingestion\n"
+            "• Supporting India's National Quantum Mission (Viksit Bharat 2047)."
+        )
 
     def open_compose(
         self,
@@ -499,6 +666,8 @@ class MailboxWindow(QWidget):
         # Update NavigationPane account info
         active_email = snapshot.active.address if snapshot.active else ""
         self.navigation_pane.set_account_identity(active_email)
+        if hasattr(self, "header"):
+            self.header.set_account_identity(active_email)
         self.navigation_pane.set_sync_state("Idle" if self.lease else "Offline")
 
         self.status.setText(
