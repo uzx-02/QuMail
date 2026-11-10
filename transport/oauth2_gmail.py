@@ -6,11 +6,15 @@
 # Do not store tokens in this file — pass them to core/session.py via the caller.
 
 import base64
+import http.server
 import json
 import logging
 import os
 import stat
 import sys
+import time
+import webbrowser
+from urllib.parse import urlparse, parse_qs
 
 from google.oauth2.credentials        import Credentials
 from google.auth.transport.requests   import Request
@@ -87,6 +91,7 @@ sanitize_ssl_environment()
 
 
 # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 # Visual Browser Success Landing Page
 # -------------------------------------------------------------------------
 
@@ -109,16 +114,16 @@ SUCCESS_HTML_PAGE = """<!DOCTYPE html>
       padding: 24px;
     }
     .card {
-      background: rgba(15, 23, 42, 0.88);
+      background: rgba(15, 23, 42, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border-radius: 24px;
       padding: 48px 40px;
       max-width: 480px;
       width: 100%;
       text-align: center;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 60px rgba(16, 185, 129, 0.18);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 60px rgba(16, 185, 129, 0.2);
       animation: fadeIn 0.4s ease-out;
     }
     @keyframes fadeIn {
@@ -135,7 +140,7 @@ SUCCESS_HTML_PAGE = """<!DOCTYPE html>
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 30px rgba(16, 185, 129, 0.35);
+      box-shadow: 0 0 32px rgba(16, 185, 129, 0.4);
     }
     .icon-wrap svg {
       width: 44px;
@@ -168,38 +173,40 @@ SUCCESS_HTML_PAGE = """<!DOCTYPE html>
       font-weight: 500;
       margin-bottom: 28px;
     }
-    .countdown-box {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 14px;
-      font-size: 14px;
-      color: #e2e8f0;
-      margin-bottom: 24px;
+    .guidance-banner {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 14px;
+      padding: 16px 20px;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
     }
-    .countdown-number {
-      font-weight: 700;
-      color: #38bdf8;
-      font-variant-numeric: tabular-nums;
-      font-size: 18px;
-    }
-    .btn {
-      display: inline-block;
-      width: 100%;
-      padding: 13px 24px;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    .guidance-check {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #10b981;
       color: #ffffff;
-      font-weight: 600;
-      font-size: 14px;
-      border-radius: 12px;
-      border: none;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
     }
-    .btn:hover {
-      background: linear-gradient(135deg, #1d4ed8, #1e40af);
-      transform: translateY(-1px);
+    .guidance-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 2px;
+    }
+    .guidance-desc {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.4;
     }
     .subtext {
       margin-top: 16px;
@@ -215,60 +222,21 @@ SUCCESS_HTML_PAGE = """<!DOCTYPE html>
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     </div>
-    <h1>Authentication Successful</h1>
-    <p class="desc">Your Google account has been verified and securely connected to QuMail. You may now return to the desktop client.</p>
+    <h1>Authentication Complete</h1>
+    <p class="desc">Your Google account has been verified and securely connected to QuMail.</p>
     <div class="badge">
       <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
       Post-Quantum ML-KEM Vault Bound
     </div>
-    <div class="countdown-box" id="status-box">
-      Closing automatically in <span class="countdown-number" id="timer">5</span> seconds...
+    <div class="guidance-banner">
+      <div class="guidance-check">✓</div>
+      <div>
+        <div class="guidance-title">Please close this browser tab</div>
+        <div class="guidance-desc">Return to the QuMail desktop application to access your secured inbox.</div>
+      </div>
     </div>
-    <button class="btn" id="action-btn" onclick="closeWindow()">Close Window Now</button>
-    <p class="subtext" id="subtext-note">If your browser security prevents automatic closure, you can safely close this tab.</p>
+    <p class="subtext">Your QuMail desktop app is authenticated and active.</p>
   </div>
-
-  <script>
-    let secondsLeft = 5;
-    const timerEl = document.getElementById('timer');
-    const statusBox = document.getElementById('status-box');
-    const actionBtn = document.getElementById('action-btn');
-    const subtextNote = document.getElementById('subtext-note');
-
-    function closeWindow() {
-      try { window.open('', '_self', ''); } catch (e) {}
-      try { window.close(); } catch (e) {}
-
-      // In modern browsers, scripts can only close tabs opened via window.open().
-      // If the browser blocked programmatic closure, update UI immediately:
-      if (statusBox) {
-        statusBox.style.background = 'rgba(16, 185, 129, 0.15)';
-        statusBox.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-        statusBox.style.color = '#34d399';
-        statusBox.innerHTML = '<div style="font-weight:700; font-size:15px; margin-bottom:4px;">✓ Logged In Successfully</div><div style="font-size:12px; color:#cbd5e1; line-height:1.5;">Your browser protects tabs from being closed by external scripts.<br/><b style="color:#ffffff;">You can now close this tab</b> and return to QuMail.</div>';
-      }
-      if (actionBtn) {
-        actionBtn.innerText = 'Switch Back to QuMail';
-        actionBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
-        actionBtn.onclick = function() {
-          try { window.close(); } catch (e) {}
-        };
-      }
-      if (subtextNote) {
-        subtextNote.style.color = '#94a3b8';
-        subtextNote.innerText = 'Your QuMail desktop app is authenticated and ready to use.';
-      }
-    }
-
-    const interval = setInterval(() => {
-      secondsLeft--;
-      if (timerEl) timerEl.textContent = secondsLeft;
-      if (secondsLeft <= 0) {
-        clearInterval(interval);
-        closeWindow();
-      }
-    }, 1000);
-  </script>
 </body>
 </html>
 """
@@ -362,6 +330,97 @@ def _save_credentials(creds: Credentials) -> None:
 
 
 # -------------------------------------------------------------------------
+# Clean Dedicated Loopback OAuth Server
+# -------------------------------------------------------------------------
+
+class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
+    """
+    Minimal, clean HTTP request handler for the OAuth2 redirect callback.
+    Responds to Google's loopback GET with the visual success landing page,
+    flushes the response, closes the connection cleanly, and yields control.
+    """
+    def log_message(self, *args):
+        pass  # Never log OAuth callback requests or sensitive URL parameters
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+
+        if "code" in qs and qs["code"]:
+            self.server.oauth_code = qs["code"][0]
+        if "error" in qs and qs["error"]:
+            self.server.oauth_error = qs["error"][0]
+        if "state" in qs and qs["state"]:
+            self.server.oauth_state = qs["state"][0]
+
+        html_bytes = SUCCESS_HTML_PAGE.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html_bytes)))
+        self.send_header("Connection", "close")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(html_bytes)
+        self.wfile.flush()
+
+
+class _OAuthLoopbackServer(http.server.HTTPServer):
+    """Loopback HTTP server bound strictly to IPv4 127.0.0.1 on an OS-assigned ephemeral port."""
+    def __init__(self, host: str = "127.0.0.1"):
+        super().__init__((host, 0), _OAuthCallbackHandler)
+        self.timeout = 1.0
+        self.oauth_code: str | None = None
+        self.oauth_error: str | None = None
+        self.oauth_state: str | None = None
+
+
+def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credentials:
+    """
+    Run a clean, isolated IPv4 loopback HTTP server to receive Google's OAuth callback.
+    Avoids wsgiref keep-alive connection drops, IPv6 localhost resolution mismatch,
+    and CPython SSL WinSock abort errors (CPython #35324 / #102547).
+    """
+    server = _OAuthLoopbackServer("127.0.0.1")
+    port = server.server_port
+    redirect_uri = f"http://127.0.0.1:{port}/"
+    flow.redirect_uri = redirect_uri
+
+    auth_url, state = flow.authorization_url(
+        prompt="select_account consent",
+        access_type="offline",
+    )
+    logger.info("Opening system browser for Google OAuth: redirect=%s", redirect_uri)
+    webbrowser.open(auth_url, new=1, autoraise=True)
+
+    deadline = time.time() + timeout
+    while time.time() < deadline and not server.oauth_code and not server.oauth_error:
+        server.handle_request()
+
+    # Clean server teardown: Close the loopback socket completely BEFORE calling fetch_token
+    # to guarantee zero port collisions or WinSock reset interference with outbound HTTPS.
+    server.server_close()
+    time.sleep(0.1)
+
+    if server.oauth_error:
+        raise GmailAuthError(f"Google sign-in was declined: {server.oauth_error}")
+    if not server.oauth_code:
+        raise GmailAuthError("Google sign-in timed out waiting for browser consent.")
+
+    # Exchange authorization code for tokens with retry logic for transient TLS interruptions
+    last_exc = None
+    for attempt in range(1, 4):
+        try:
+            flow.fetch_token(code=server.oauth_code)
+            return flow.credentials
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("OAuth token exchange attempt %d encountered %s; retrying...", attempt, exc)
+            time.sleep(0.5 * attempt)
+
+    raise GmailAuthError(f"OAuth token exchange failed after retries: {last_exc}") from last_exc
+
+
+# -------------------------------------------------------------------------
 # Public interface
 # -------------------------------------------------------------------------
 
@@ -417,7 +476,7 @@ def get_access_token() -> str:
                 "Please select your client_secret.json or connect your Gmail account "
                 "using an App Password under Custom Mailbox."
             )
-        creds = flow.run_local_server(port=0, success_message=SUCCESS_HTML_PAGE)
+        creds = _run_loopback_flow(flow)
         _save_credentials(creds)
         return creds.token
 
@@ -433,26 +492,9 @@ def authorize_google_account() -> dict:
     """
     Run browser Google OAuth 2.0 PKCE consent flow and return verified user profile and tokens.
     Uses custom client_secret.json if present, or seamless preconfigured desktop credentials.
-    Presents an animated 5-second countdown closure screen in the browser upon success.
+    Presents an informative confirmation card in the browser instructing the user to close the tab.
     """
     sanitize_ssl_environment()
-
-    # Monkeypatch google_auth_oauthlib's redirect WSGI app to serve HTML
-    try:
-        import google_auth_oauthlib.flow as fl
-        import wsgiref.util
-
-        def _html_redirect_call(self, environ, start_response):
-            if self._success_message.strip().startswith("<!DOCTYPE html>") or "<html" in self._success_message:
-                start_response("200 OK", [("Content-type", "text/html; charset=utf-8")])
-            else:
-                start_response("200 OK", [("Content-type", "text/plain; charset=utf-8")])
-            self.last_request_uri = wsgiref.util.request_uri(environ)
-            return [self._success_message.encode("utf-8")]
-
-        fl._RedirectWSGIApp.__call__ = _html_redirect_call
-    except Exception as patch_err:
-        logger.warning("Could not patch redirect WSGI app for HTML: %s", patch_err)
 
     # Initialize flow: custom secrets file takes precedence; otherwise builtin desktop config
     if os.path.exists(GMAIL_CLIENT_SECRETS_PATH):
@@ -474,11 +516,7 @@ def authorize_google_account() -> dict:
             "using an App Password under Custom Mailbox."
         )
 
-    creds = flow.run_local_server(
-        port=0,
-        open_browser=True,
-        success_message=SUCCESS_HTML_PAGE,
-    )
+    creds = _run_loopback_flow(flow)
     _save_credentials(creds)
 
     user_email = ""

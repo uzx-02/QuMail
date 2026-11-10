@@ -206,8 +206,8 @@ class QuMailJsApi:
                 self.account_org = "Google Workspace / Gmail"
                 logger.info("Google OAuth successfully authenticated: %s", user_email)
 
-                # Fetch live real emails
-                self.fetchInbox()
+                # Trigger live inbox sync in background so authentication returns instantly
+                threading.Thread(target=self.fetchInbox, daemon=True, name="qumail-inbox-sync").start()
 
                 return {
                     "success": True,

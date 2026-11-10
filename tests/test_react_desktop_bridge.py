@@ -184,15 +184,14 @@ def test_custom_mailbox_authentication_and_host_inference(tmp_path, monkeypatch)
 
 
 def test_google_oauth_html_success_page_and_ssl_sanitization(monkeypatch):
-    """Verify HTML success landing page has 5-second countdown and SSL environment sanitization."""
+    """Verify HTML success landing page has clear, truthful guidance and SSL environment sanitization."""
     from transport.oauth2_gmail import SUCCESS_HTML_PAGE, sanitize_ssl_environment
 
     # Verify HTML template structure
     assert "<!DOCTYPE html>" in SUCCESS_HTML_PAGE
-    assert "Authentication Successful" in SUCCESS_HTML_PAGE
-    assert "window.close()" in SUCCESS_HTML_PAGE
-    assert 'id="timer"' in SUCCESS_HTML_PAGE
-    assert "5" in SUCCESS_HTML_PAGE
+    assert "Authentication Complete" in SUCCESS_HTML_PAGE
+    assert "Please close this browser tab" in SUCCESS_HTML_PAGE
+    assert "Post-Quantum ML-KEM Vault Bound" in SUCCESS_HTML_PAGE
 
     # Verify SSL sanitization removes nonexistent SSLKEYLOGFILE
     monkeypatch.setenv("SSLKEYLOGFILE", r"C:\nonexistent_qumail_dir_12345\keylog.txt")

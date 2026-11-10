@@ -106,14 +106,14 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='QuMail-Modern',
+    name='QuMail-App',
 )
 
 # Post-build: Ensure secrets directory is present directly next to QuMail.exe
 import shutil
 secrets_src = REPO_ROOT / 'secrets'
 if secrets_src.is_dir():
-    secrets_dst = REPO_ROOT / 'dist' / 'QuMail-Modern' / 'secrets'
+    secrets_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'secrets'
     secrets_dst.mkdir(parents=True, exist_ok=True)
     for f in secrets_src.glob('*'):
         if f.is_file():
