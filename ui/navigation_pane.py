@@ -1,56 +1,59 @@
 """
-Left Navigation Pane Component (WS-05).
+ui/navigation_pane.py — Modernized Navigation Sidebar Component.
 
-Provides the left sidebar of the three-pane desktop layout:
-- QuMail branding & post-quantum status
-- Prominent 'New Message' primary composition action
+Built according to UI/UX Pro Max desktop productivity standards:
+- Professional header with shield branding, QuMail version, and sync dot.
+- Primary New Message composition CTA with keyboard shortcut hint (Ctrl+N).
 - System folder navigation (Inbox, Starred, Sent, Drafts, Outbox, Archive, Trash)
-- Live unread badge count updates derived from WS-03 index APIs
-- Active account display & identity switcher
-- Unobtrusive synchronization state indicator (IDLE, Syncing, Reconnecting, Offline)
-- Quick access to Settings and Vault Lock
+  with live dynamic unread badges.
+- Bottom Account Card with monogram avatar, signed-in address, and sync status.
+- Direct quick-action controls: Theme Switcher (☀️/🌙), Settings (⚙️), and Vault Lock (🔒).
+- Dual-theme reactive palette support (Dark & Light).
+- 100% backward-compatible signals and method contracts.
 """
 
 from __future__ import annotations
 
+from typing import Any
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QListWidget,
-    QListWidgetItem,
 )
 
-from ui.design_system import C, StatusPill
+from ui.design_system import C, AvatarWidget, ThemeManager
 
 
 class FolderItemWidget(QWidget):
-    """Custom widget for folder list item with icon, label, and unread badge."""
+    """Folder list item widget with icon, label, and unread count badge."""
 
     def __init__(self, key: str, icon: str, label: str, count: int = 0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.key = key
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(10, 6, 10, 6)
         layout.setSpacing(10)
 
         self.icon_lbl = QLabel(icon)
-        self.icon_lbl.setStyleSheet("font-size: 15px;")
+        self.icon_lbl.setStyleSheet("font-size: 15px; background: transparent;")
         layout.addWidget(self.icon_lbl)
 
+        p = ThemeManager.get().palette
         self.text_lbl = QLabel(label)
-        self.text_lbl.setStyleSheet(f"color: {C['text_primary']}; font-size: 13px; font-weight: 500;")
+        self.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 500; background: transparent;")
         layout.addWidget(self.text_lbl)
 
         layout.addStretch()
 
         self.badge = QLabel()
         self.badge.setStyleSheet(
-            f"background-color: {C['accent']}; color: #FFFFFF; font-size: 11px; font-weight: 700; "
+            f"background-color: {p.accent}; color: {p.text_inverse}; font-size: 11px; font-weight: 700; "
             f"padding: 1px 7px; border-radius: 9px;"
         )
         self.badge.setVisible(False)
@@ -77,33 +80,34 @@ class NavigationPane(QFrame):
     settings_requested = pyqtSignal()
     lock_requested = pyqtSignal()
     account_switch_requested = pyqtSignal()
+    theme_toggled = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedWidth(230)
-        self.setStyleSheet(
-            f"NavigationPane {{ background-color: {C['bg_sidebar']}; border-right: 1px solid {C['border']}; }}"
-        )
+        self._folder_widgets: dict[str, FolderItemWidget] = {}
+
+        ThemeManager.get().theme_changed.connect(self._apply_theme)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 16, 14, 14)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
 
         # 1. Branding Header
         brand_layout = QHBoxLayout()
         brand_layout.setSpacing(8)
 
         logo_lbl = QLabel("🛡️")
-        logo_lbl.setStyleSheet("font-size: 20px;")
+        logo_lbl.setStyleSheet("font-size: 20px; background: transparent;")
         brand_layout.addWidget(logo_lbl)
 
         brand_title = QLabel("QuMail")
-        brand_title.setStyleSheet(f"color: {C['text_primary']}; font-size: 17px; font-weight: 800; letter-spacing: -0.3px;")
+        brand_title.setStyleSheet("font-size: 17px; font-weight: 800; letter-spacing: -0.3px; background: transparent;")
         brand_layout.addWidget(brand_title)
 
         pq_badge = QLabel("PQ-v1")
         pq_badge.setStyleSheet(
-            f"color: {C['accent_light']}; background-color: {C['accent_muted']}; "
+            f"color: {ThemeManager.get().palette.accent}; background-color: {ThemeManager.get().palette.accent_subtle}; "
             f"font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 4px;"
         )
         brand_layout.addWidget(pq_badge)
@@ -115,26 +119,14 @@ class NavigationPane(QFrame):
         self.new_btn = QPushButton("✏️  New Message")
         self.new_btn.setFixedHeight(38)
         self.new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.new_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['accent']}; color: #FFFFFF; font-size: 13px; font-weight: 700; "
-            f"border: none; border-radius: 7px; padding: 0 16px; text-align: center; }} "
-            f"QPushButton:hover {{ background-color: {C['accent_glow']}; }} "
-            f"QPushButton:pressed {{ background-color: {C['accent_muted']}; }}"
-        )
+        self.new_btn.setToolTip("Compose new protected email (Ctrl+N)")
         self.new_btn.clicked.connect(self.new_message_requested.emit)
         layout.addWidget(self.new_btn)
 
         # 3. Folders List
         self.folder_list = QListWidget()
         self.folder_list.setFrameShape(QFrame.Shape.NoFrame)
-        self.folder_list.setStyleSheet(
-            f"QListWidget {{ background: transparent; outline: none; border: none; }} "
-            f"QListWidget::item {{ border-radius: 6px; padding: 2px 0; margin-bottom: 2px; }} "
-            f"QListWidget::item:hover {{ background-color: {C['bg_hover']}; }} "
-            f"QListWidget::item:selected {{ background-color: {C['accent_muted']}; border-left: 3px solid {C['accent']}; }}"
-        )
 
-        self._folder_widgets: dict[str, FolderItemWidget] = {}
         folders = [
             ("inbox", "📥", "Inbox", 0),
             ("starred", "⭐", "Starred", 0),
@@ -162,23 +154,18 @@ class NavigationPane(QFrame):
         layout.addStretch()
 
         # 4. Account & Sync Status Card (Bottom)
-        account_card = QFrame()
-        account_card.setStyleSheet(
-            f"QFrame {{ background-color: {C['bg_card']}; border: 1px solid {C['border']}; border-radius: 8px; padding: 8px; }}"
-        )
-        card_layout = QVBoxLayout(account_card)
-        card_layout.setContentsMargins(6, 6, 6, 6)
+        self.account_card = QFrame()
+        card_layout = QVBoxLayout(self.account_card)
+        card_layout.setContentsMargins(8, 8, 8, 8)
         card_layout.setSpacing(6)
 
         # Account Info row
         acc_row = QHBoxLayout()
-        self.avatar_lbl = QLabel("👤")
-        self.avatar_lbl.setStyleSheet("font-size: 14px;")
-        acc_row.addWidget(self.avatar_lbl)
+        self.avatar_widget = AvatarWidget("QuMail User", size=24)
+        acc_row.addWidget(self.avatar_widget)
 
         self.account_lbl = QLabel("No Account")
-        self.account_lbl.setStyleSheet(f"color: {C['text_primary']}; font-size: 12px; font-weight: 600;")
-        self.account_lbl.setWordWrap(False)
+        self.account_lbl.setStyleSheet("font-size: 12px; font-weight: 600; background: transparent;")
         acc_row.addWidget(self.account_lbl)
         acc_row.addStretch()
         card_layout.addLayout(acc_row)
@@ -186,42 +173,80 @@ class NavigationPane(QFrame):
         # Sync Status row
         sync_row = QHBoxLayout()
         self.sync_dot = QLabel("●")
-        self.sync_dot.setStyleSheet(f"color: {C['online']}; font-size: 10px;")
+        self.sync_dot.setStyleSheet("color: #22C55E; font-size: 10px; background: transparent;")
         sync_row.addWidget(self.sync_dot)
 
         self.sync_status_lbl = QLabel("Idle")
-        self.sync_status_lbl.setStyleSheet(f"color: {C['text_secondary']}; font-size: 11px;")
+        self.sync_status_lbl.setStyleSheet("font-size: 11px; background: transparent;")
         sync_row.addWidget(self.sync_status_lbl)
         sync_row.addStretch()
         card_layout.addLayout(sync_row)
 
-        layout.addWidget(account_card)
+        layout.addWidget(self.account_card)
 
-        # 5. Settings & Lock Action Bar
+        # 5. Bottom Action Bar (Settings, Theme Toggle, Lock)
         action_bar = QHBoxLayout()
         action_bar.setSpacing(6)
 
+        self.theme_btn = QPushButton("🌙")
+        self.theme_btn.setFixedSize(30, 30)
+        self.theme_btn.setToolTip("Toggle Dark / Light Theme")
+        self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_btn.clicked.connect(self._on_toggle_theme)
+        action_bar.addWidget(self.theme_btn)
+
         self.settings_btn = QPushButton("⚙️ Settings")
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.settings_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_secondary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 10px; font-size: 11px; }} "
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
-        )
+        self.settings_btn.setFixedHeight(30)
         self.settings_btn.clicked.connect(self.settings_requested.emit)
         action_bar.addWidget(self.settings_btn)
 
         self.lock_btn = QPushButton("🔒 Lock")
         self.lock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.lock_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_secondary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 10px; font-size: 11px; }} "
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
-        )
+        self.lock_btn.setFixedHeight(30)
         self.lock_btn.clicked.connect(self.lock_requested.emit)
         action_bar.addWidget(self.lock_btn)
 
         layout.addLayout(action_bar)
+
+        self._apply_theme()
+
+    def _apply_theme(self) -> None:
+        p = ThemeManager.get().palette
+        self.setStyleSheet(
+            f"NavigationPane {{ background-color: {p.bg_sidebar}; border-right: 1px solid {p.border_subtle}; }}"
+        )
+        self.new_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {p.accent}; color: {p.text_inverse}; font-size: 13px; font-weight: 700; "
+            f"border: none; border-radius: 6px; padding: 0 16px; }} "
+            f"QPushButton:hover {{ background-color: {p.accent_hover}; }} "
+            f"QPushButton:pressed {{ background-color: {p.border_focused}; }}"
+        )
+        self.folder_list.setStyleSheet(
+            f"QListWidget {{ background: transparent; outline: none; border: none; }} "
+            f"QListWidget::item {{ border-radius: 6px; padding: 2px 0; margin-bottom: 2px; }} "
+            f"QListWidget::item:hover {{ background-color: {p.bg_card_hover}; }} "
+            f"QListWidget::item:selected {{ background-color: {p.accent_subtle}; border-left: 3px solid {p.accent}; }}"
+        )
+        self.account_card.setStyleSheet(
+            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 8px; }}"
+        )
+        btn_style = (
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 4px 8px; font-size: 11px; font-weight: 500; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; border-color: {p.border_focused}; }}"
+        )
+        self.settings_btn.setStyleSheet(btn_style)
+        self.lock_btn.setStyleSheet(btn_style)
+        self.theme_btn.setStyleSheet(btn_style)
+        self.theme_btn.setText("☀️" if ThemeManager.get().mode == "dark" else "🌙")
+
+        for w in self._folder_widgets.values():
+            w.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 13px; font-weight: 500; background: transparent;")
+
+    def _on_toggle_theme(self) -> None:
+        new_mode = ThemeManager.get().toggle()
+        self.theme_toggled.emit(new_mode)
 
     def _on_row_changed(self, row: int) -> None:
         item = self.folder_list.item(row)
@@ -242,26 +267,29 @@ class NavigationPane(QFrame):
             display_text = display_text[:19] + "…"
         self.account_lbl.setText(display_text)
         self.account_lbl.setToolTip(email)
+        if email:
+            self.avatar_widget.set_identity(email)
 
     def set_sync_state(self, state: str, detail: str = "") -> None:
         """Update synchronization indicator dot and text."""
+        p = ThemeManager.get().palette
         state_lower = state.lower()
         if "reconnect" in state_lower:
-            color = C["warning"]
+            color = p.caution
             label = "Reconnecting…"
         elif "idle" in state_lower or "connected" in state_lower:
-            color = C["online"]
+            color = p.secure
             label = "Idle"
         elif "sync" in state_lower or "connecting" in state_lower:
-            color = C["accent_light"]
+            color = p.accent
             label = "Synchronizing…"
         elif "offline" in state_lower or "stopped" in state_lower:
-            color = C["offline"]
+            color = p.alert
             label = "Offline"
         else:
-            color = C["text_tertiary"]
+            color = p.text_muted
             label = state.capitalize()
 
-        self.sync_dot.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self.sync_dot.setStyleSheet(f"color: {color}; font-size: 10px; background: transparent;")
         self.sync_status_lbl.setText(label)
         self.sync_status_lbl.setToolTip(detail or label)

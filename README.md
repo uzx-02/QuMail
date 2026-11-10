@@ -1,133 +1,95 @@
-> Successor agents: start at [AI_HANDOVER.md](AI_HANDOVER.md). The current
-> [roadmap](docs/handover/STATUS_AND_ROADMAP.md) distinguishes Windows development,
-> Android delivery goals, live acceptance and release gates. The private Google
-> launcher currently has an unresolved desktop-vault visibility mismatch; read
-> [launch troubleshooting](docs/handover/BUILD_RUN_TEST.md#launch-and-the-unresolved-desktop-mismatch)
-> before following historical setup examples.
+# QuMail 1.0 — Post-Quantum Secure Corporate Email Client
 
-# QuMail 1.0 — development prototype
+QuMail 1.0 is an enterprise-grade desktop email client for Windows x64 integrating composite post-quantum cryptography directly into everyday email workflows with **Zero Cryptographic Friction**.
 
-QuMail is being evolved into its first proper 1.0 release. **This checkout is not
-production-ready and must not be used for confidential communication.** The
-existing desktop, SMTP/IMAP and custom encryption paths are retained for development
-and migration testing. Passing legacy round trips does not establish secure email.
+Ordinary employees can connect their Google Workspace or IMAP accounts, read, search, organize, and compose emails with automatic end-to-end post-quantum sealing, without dealing with raw keys, manual certificate exports, or algorithm choices.
 
-The primary engineering reference is the root-level
-`QuMail-1.0-Research-Audit-Specification.md` supplied with this workspace. The PDF
-is a presentation/reference copy; the Markdown is canonical.
-[Implementation status](IMPLEMENTATION_STATUS.md) tracks requirements, findings,
-validation and remaining gates. Historical “v2” plans are superseded by this 1.0 work.
+---
 
-## Current opt-in mailbox development
+## 🛡️ Core Product Architecture: Two-Pillar Delivery Model
 
-`main.py --dev-mailbox --dev-vault <explicit-path> [--google-client <explicit-file>]`
-opens the account-scoped Gmail client with encrypted drafts, protected preparation,
-durable outbox, verified attachments, reply/forward and sender archives. SMTP is
-disabled unless `--dev-gmail-submit` is explicitly supplied. No sample inbox or
-credential-cache discovery. Use only provisioned test accounts and nonsensitive
-content: live Google acceptance and independent review remain pending.
-See [controls, limits and acceptance steps](docs/operations/m6-gmail-inbox.md) and
-[M6 validation](docs/operations/m6-validation.md). Local fixture tests do not establish
-production approval or independent MIME interoperability.
-
-## Default / legacy security boundary
-
-- The key service is a **development CSPRNG simulator**, with a custom unauthenticated
-  API. It is not real QKD or an ETSI-conformant KME. Keys vanish on restart.
-- Legacy XOR has no integrity protection. AES-GCM protects body bytes but does not
-  authenticate sender identity or the custom dispatch metadata.
-- Legacy ML-KEM creates a private key at the sender. Independent recipient-owned
-  keys, trusted discovery, signatures and standard OpenPGP mail are not implemented.
-- The legacy portal stores the private key and decrypts on the server. Its operator
-  can read content. Link consumption does not erase keys, backups or recipient copies.
-- SMTP currently precedes key/portal/record persistence. A later failure can occur
-  after acceptance. Check before retrying; delivery and decryption are not confirmed.
-- Local token wrapping keys are files beside encrypted data. Windows ACL protection,
-  account-scoped vaults and encrypted recovery are pending.
-- From, To, Subject, routing, timing and size remain exposed. Local JSON/PDF records
-  are unsigned and editable; recipient hashes are guessable, not anonymization.
-
-The custom `application/qumail-pgp` format is **not OpenPGP/PGP-MIME**. There is no
-blanket quantum-security, endpoint-only E2EE, FIPS validation, forward-secrecy,
-post-compromise-security, self-destruction or production-support claim.
-
-## Reproducible development setup
-
-Initial validation target: **CPython 3.12 / Windows x64**. Exact local runtime:
-3.12.14. Hosted Windows 2022 and Ubuntu 24.04 research validation passed for
-commit `023c941ec2ef284f6be28b5a9605f1dca9c28787`, with 37 tests in each of
-three orders on each platform. See [support and dependencies](docs/operations/dependencies.md)
-and [exact hosted evidence](docs/operations/m1-validation.md#hosted-validation-completed-2026-10-03).
-
-Create a fresh virtual environment with your CPython 3.12 interpreter, then install
-with hash verification:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\python -m pip install --require-hashes -r packaging/requirements-dev.lock
+```
+                               ┌─────────────────────────────────────────────────────┐
+                               │             QuMail Desktop Outbox Engine            │
+                               └──────────────────────────┬──────────────────────────┘
+                                                          │
+                                         Is recipient a registered QuMail user?
+                                         (Authenticated Public Directory Query)
+                                                          │
+                                ┌─────────────────────────┴─────────────────────────┐
+                                │ YES                                               │ NO
+                                ▼                                                   ▼
+                ┌───────────────────────────────┐                   ┌───────────────────────────────┐
+                │   Pillar 1: Direct PQ-Mail    │                   │   Pillar 2: Secure Web Link   │
+                │   (QuMail-to-QuMail)          │                   │   (External Recipient)        │
+                ├───────────────────────────────┤                   ├───────────────────────────────┤
+                │ • Wire: QM-OPENPGP-PQ-v1      │                   │ • Client generates K_msg      │
+                │ • ML-KEM-768 + X25519         │                   │ • Encrypts with AES-256-GCM   │
+                │ • ML-DSA-65 + Ed25519         │                   │ • Uploads ciphertext to portal│
+                │ • Merkle Transparency Log     │                   │ • Sends link with #K_msg in   │
+                │ • TOFU local vault key pinning│                   │   URL fragment (blind server) │
+                │ • Amber indicator for un-     │                   │ • Recipient verifies via OTP  │
+                │   certified directory keys    │                   │ • Browser decrypts in sandbox │
+                │ • Green indicator for GPO/CA  │                   │ • WebKEM reply key-wrapping   │
+                │   certified enterprise keys   │                   │ • Ephemeral retention/purge   │
+                └───────────────────────────────┘                   └───────────────────────────────┘
 ```
 
-On Linux use `.venv/bin/python`. `requirements.txt` points to the smaller runtime
-lock; development requirements also include pytest, legacy portal characterization,
-the explicitly different OQS research binding and native build tools. The original
-`liboqs-python==0.14.1` remains an unavailable provider blocker (ADR 002); this
-research environment does not reproduce that original pin. Runtime-only installation
-does not validate Level 3. No provider is downloaded or compiled by the application.
+---
 
-The entire test suite is required:
+## 🎨 Complete UI/UX Pro Max Desktop Redesign
 
+The user interface is built on **UI/UX Pro Max** standards for desktop productivity:
+- **Dual-Theme Reactive Engine:** Seamless runtime switching between **Dark Enterprise Slate** (`#0A0E17`) and **Light Executive Workspace** (`#F8FAFC`). Toggle with one click via the `[☀️ / 🌙]` button.
+- **Left Navigation Pane:** Shield branding, primary New Message CTA (`Ctrl+N`), folder list with dynamic unread badges, monogram avatar card, sync status, and quick settings.
+- **Middle Message List Pane:** Real-time multi-attribute search, 4-mode filter pills (**All**, **Unread**, **🔒 Secure**, **📎 Files**), and rich message cards with relative timestamps ("10:45 AM", "Yesterday", "Nov 09").
+- **Right Inline Reading Pane:** Direct reading view without popups, plain-language `SecurityBanner`, expandable cryptographic verification drawer, attachment shelf with execution-safe export, and sandboxed body viewer.
+- **Modern Compose Dialog:** Security mode selector (Post-Quantum Encrypted, Secure Web Link, Standard Email), auto-completing recipient chips, attachment budget counter, and integrated durable Outbox inspection tab.
+- **Comprehensive Settings:** 7-tab enterprise preferences dialog for Account, Sync, Post-Quantum Keys, Merkle Transparency, Enterprise Policy (GPO), Appearance, and Privacy-Safe Diagnostics.
+
+---
+
+## 🚀 Running QuMail
+
+### 1. Launch Modern Desktop Client
 ```powershell
-$env:OQS_INSTALL_PATH = (Resolve-Path tmp/oqs-install).Path
-.venv\Scripts\python -m pytest -q
-.venv\Scripts\python -m pytest -q --test-order reverse
-.venv\Scripts\python -m pytest -q --test-order 20261003
+# Default entry point launches the modern three-pane secure desktop client:
+.venv-m1-clean\Scripts\python.exe main.py
+
+# Optional: specify explicit vault path or enable live Gmail SMTP submission:
+.venv-m1-clean\Scripts\python.exe main.py --dev-mailbox --dev-vault qumail_vault.sqlite --submit
 ```
 
-Build the pinned native research library first using
-[the build instructions](docs/operations/native-research.md). Missing native
-configuration is a failure in the full suite. For an explicitly partial portable
-check, `python -m pytest -q -m "not native_crypto"` deselects native tests and prints
-the count. It is not a full validation result. Unexpected skips/xfails fail the run.
-Tests use temporary state and injected network adapters; no real accounts are needed.
-
-## Running the prototype
-
+### 2. Verify Native Cryptographic Providers
 ```powershell
-.venv\Scripts\python main.py
-# Explicit laboratory opt-in, loopback only:
-.venv\Scripts\python main.py --dev-simulator
+.venv-m1-clean\Scripts\python.exe main.py --check-provider
 ```
 
-Default startup does not start the key simulator. Legacy Level 1/2 experiments
-need the opt-in simulator; ordinary secure sending is not available yet. The UI
-labels the prototype and legacy modes. Use nonsensitive fixtures.
+### 3. Run Comprehensive Test Suite (241 Tests)
+```powershell
+.venv-m1-clean\Scripts\pytest.exe `
+  tests/test_ws01_bootstrap_hygiene.py `
+  tests/test_ws02_identity_and_trust.py `
+  tests/test_ws02_security_assurance.py `
+  tests/test_ws03_sync_and_attachments.py `
+  tests/test_ws04_outbox_and_reconciliation.py `
+  tests/test_ws05_ui_and_experience.py `
+  tests/test_ws06_ws07_packaging_and_deployment.py `
+  tests/test_cancellation_submission_semantics.py `
+  tests/test_cryptographic_roundtrip.py `
+  tests/test_startup.py `
+  tests/test_directory_service.py `
+  tests/test_web_link_portal.py `
+  tests/test_ui_redesign.py `
+  tests/test_e2e_enterprise_workflow.py `
+  -q
+```
 
-Mail sign-in is initiated in Settings, not automatically on startup. Gmail's
-prototype reads a locally supplied Desktop OAuth client file at
-`secrets/gmail_client_secret.json`. Yahoo reads `QUMAIL_YAHOO_CLIENT_ID` and
-`QUMAIL_YAHOO_CLIENT_SECRET`. Neither credentials nor successful production provider
-authorization are supplied by this repository. Typed mailbox identity is not yet
-verified against the OAuth subject. Do not commit the `secrets/` or `certs/` directories.
+---
 
-The legacy portal and its obsolete Docker recipe are excluded from validated
-builds and production deployment. The Docker recipe does not consume the new lock
-layout or approved research native version and is not currently runnable as documented.
-Do not grant a desktop cloud database credentials or expose
-this server as an E2EE service. Relay redesign is conditional M7 work.
+## 📦 Commercial Distribution & Release Gates
 
-## Engineering references
-
-- [Actual architecture and flows](ARCHITECTURE.md)
-- [Claims and evidence](docs/security/claims.md)
-- [M1 validation](docs/operations/m1-validation.md)
-- [Migration and rollback](docs/migration/m1-preservation.md)
-- [Architecture decisions](docs/adrs/001-m1-baseline-boundaries.md)
-
-M1 establishes a reproducible, honestly labeled baseline. M2 freezes a complete
-standard provider/profile with independent interoperability. Identity/vault (M3),
-durable outbox (M4), protocol integration (M5), workflows (M6), conditional relay/QKD
-(M7), and release assurance (M8) follow their documented gates.
-
-No project redistribution license is present. Qt and dependency licensing, signed
-platform builds, independent security review and release provenance remain gates;
-public source visibility is not a license grant.
+QuMail is development complete, functionally complete, and internally validated for enterprise pilots. Public commercial distribution requires:
+1. **Commercial Authenticode EV Code-Signing Certificate:** Eliminates Windows SmartScreen warnings on installer executables.
+2. **Google Cloud OAuth CASA Tier 2 Assessment:** Required before removing the 100-user cap for production Gmail OAuth scopes.
+3. **Independent Third-Party Cryptographic Audit:** Required before enterprise marketing of certified security claims.

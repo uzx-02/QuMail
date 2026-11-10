@@ -1,15 +1,16 @@
 """
-Right Reading Pane Component (WS-05).
+ui/reading_pane.py — Modernized Right Reading Pane Component.
 
-Provides the right reading pane of the three-pane desktop layout:
-- Inline message reader: opens selected messages directly without separate popups
-- Security banner presenting plain-language verified/caution/alert trust state
-- Header metadata: Subject, Sender, Recipients (To/Cc), Date
-- Quick message action bar (Reply, Forward, Mark Read/Unread, Delete)
-- Safe plain-text message body rendering (zero script execution, zero remote assets)
-- Modern attachment cards with filename, formatted size, and explicit Save/Open actions
-- Defensive attachment security: never auto-executes files
-- Elegant empty state placeholder when no message is selected
+Built according to UI/UX Pro Max desktop productivity standards:
+- Inline message reader: opens selected messages directly without separate popups.
+- Security banner presenting plain-language verified/caution/alert trust state.
+- Header metadata: Subject, Sender avatar + address, Recipients (To/Cc), Date.
+- Quick message action bar (Reply, Forward, Mark Read/Unread, Delete).
+- Safe plain-text message body rendering (zero script execution, zero remote assets).
+- Modern attachment cards with filename, formatted size, and explicit Save/Open actions.
+- Defensive attachment security: never auto-executes files.
+- Dual-theme reactive palette support (Dark & Light).
+- 100% backward-compatible signals and method contracts.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.security_indicators import BadgeLevel, SecurityIndicator
-from ui.design_system import C, EmptyState
+from ui.design_system import C, AvatarWidget, EmptyState, ThemeManager
 from ui.security_badge_widget import SecurityBanner
 
 
@@ -63,9 +64,11 @@ class AttachmentCard(QFrame):
         super().__init__(parent)
         self.index = index
         self.setFrameShape(QFrame.Shape.StyledPanel)
+
+        p = ThemeManager.get().palette
         self.setStyleSheet(
-            f"AttachmentCard {{ background-color: {C['bg_card']}; border: 1px solid {C['border']}; "
-            f"border-radius: 6px; padding: 6px; }} AttachmentCard:hover {{ border-color: {C['accent_muted']}; }}"
+            f"AttachmentCard {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; "
+            f"border-radius: 6px; padding: 6px; }} AttachmentCard:hover {{ border-color: {p.border_focused}; }}"
         )
 
         layout = QHBoxLayout(self)
@@ -76,15 +79,15 @@ class AttachmentCard(QFrame):
         ext = Path(name).suffix.lower()
         if ext in (".pdf",):
             icon_str = "📄"
-        elif ext in (".png", ".jpg", ".jpeg", ".gif"):
+        elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp"):
             icon_str = "🖼️"
-        elif ext in (".txt", ".md", ".csv"):
+        elif ext in (".txt", ".md", ".csv", ".json"):
             icon_str = "📝"
         else:
             icon_str = "📦"
 
         icon_lbl = QLabel(icon_str)
-        icon_lbl.setStyleSheet("font-size: 16px;")
+        icon_lbl.setStyleSheet("font-size: 16px; background: transparent;")
         layout.addWidget(icon_lbl)
 
         # Name and size details
@@ -92,14 +95,14 @@ class AttachmentCard(QFrame):
         info_col.setSpacing(2)
 
         name_lbl = QLabel(name)
-        name_lbl.setStyleSheet(f"color: {C['text_primary']}; font-size: 12px; font-weight: 600;")
+        name_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 12px; font-weight: 600; background: transparent;")
         info_col.addWidget(name_lbl)
 
         size_text = format_file_size(size_bytes)
         if media_type:
             size_text += f" · {media_type}"
         size_lbl = QLabel(size_text)
-        size_lbl.setStyleSheet(f"color: {C['text_tertiary']}; font-size: 11px;")
+        size_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")
         info_col.addWidget(size_lbl)
 
         layout.addLayout(info_col)
@@ -109,9 +112,9 @@ class AttachmentCard(QFrame):
         self.save_btn = QPushButton("💾 Save as…")
         self.save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px; }} "
-            f"QPushButton:hover {{ background-color: {C['accent_muted']}; color: {C['accent_light']}; border-color: {C['accent']}; }}"
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_primary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 4px; padding: 4px 10px; font-size: 11px; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; border-color: {p.border_focused}; }}"
         )
         self.save_btn.clicked.connect(lambda: self.save_requested.emit(self.index))
         layout.addWidget(self.save_btn)
@@ -119,9 +122,9 @@ class AttachmentCard(QFrame):
         self.open_btn = QPushButton("📂 Open")
         self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 4px; padding: 4px 10px; font-size: 11px; }} "
-            f"QPushButton:hover {{ background-color: {C['accent_muted']}; color: {C['accent_light']}; border-color: {C['accent']}; }}"
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_primary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 4px; padding: 4px 10px; font-size: 11px; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; border-color: {p.border_focused}; }}"
         )
         self.open_btn.clicked.connect(lambda: self.open_requested.emit(self.index))
         layout.addWidget(self.open_btn)
@@ -129,7 +132,7 @@ class AttachmentCard(QFrame):
 
 class ReadingPane(QFrame):
     """
-    Right inline message reader pane.
+    Right inline message reader pane with security banner and attachment handling.
     """
 
     reply_requested = pyqtSignal()
@@ -142,7 +145,8 @@ class ReadingPane(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumWidth(380)
-        self.setStyleSheet(f"ReadingPane {{ background-color: {C['bg_base']}; }}")
+
+        ThemeManager.get().theme_changed.connect(self._apply_theme)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -168,31 +172,16 @@ class ReadingPane(QFrame):
 
         self.reply_btn = QPushButton("↩️ Reply")
         self.reply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.reply_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 12px; font-size: 12px; font-weight: 600; }} "
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
-        )
         self.reply_btn.clicked.connect(self.reply_requested.emit)
         self.toolbar.addWidget(self.reply_btn)
 
         self.forward_btn = QPushButton("↪️ Forward")
         self.forward_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.forward_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_primary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 12px; font-size: 12px; font-weight: 600; }} "
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; }}"
-        )
         self.forward_btn.clicked.connect(self.forward_requested.emit)
         self.toolbar.addWidget(self.forward_btn)
 
         self.mark_unread_btn = QPushButton("📩 Mark Unread")
         self.mark_unread_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.mark_unread_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['text_secondary']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 12px; font-size: 12px; }} "
-            f"QPushButton:hover {{ background-color: {C['bg_hover']}; color: {C['text_primary']}; }}"
-        )
         self.mark_unread_btn.clicked.connect(lambda: self.mark_seen_requested.emit(False))
         self.toolbar.addWidget(self.mark_unread_btn)
 
@@ -201,11 +190,6 @@ class ReadingPane(QFrame):
         self.delete_btn = QPushButton("🗑️")
         self.delete_btn.setToolTip("Delete message")
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.delete_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {C['bg_card']}; color: {C['offline']}; "
-            f"border: 1px solid {C['border']}; border-radius: 5px; padding: 5px 10px; font-size: 12px; }} "
-            f"QPushButton:hover {{ background-color: #450A0A; }}"
-        )
         self.delete_btn.clicked.connect(self.delete_requested.emit)
         self.toolbar.addWidget(self.delete_btn)
 
@@ -218,69 +202,61 @@ class ReadingPane(QFrame):
         # Subject Title
         self.subject_lbl = QLabel()
         self.subject_lbl.setWordWrap(True)
-        self.subject_lbl.setStyleSheet(f"color: {C['text_primary']}; font-size: 18px; font-weight: 800; line-height: 1.3;")
         content_layout.addWidget(self.subject_lbl)
 
-        # Header Info Card (Sender, Recipients, Date)
-        header_card = QFrame()
-        header_card.setStyleSheet(
-            f"QFrame {{ background-color: {C['bg_card']}; border: 1px solid {C['border']}; border-radius: 6px; padding: 10px; }}"
-        )
-        header_layout = QVBoxLayout(header_card)
-        header_layout.setContentsMargins(8, 8, 8, 8)
-        header_layout.setSpacing(4)
+        # Header Info Card (Sender Avatar, Addresses, Date)
+        self.header_card = QFrame()
+        header_layout = QVBoxLayout(self.header_card)
+        header_layout.setContentsMargins(10, 10, 10, 10)
+        header_layout.setSpacing(6)
 
         # Sender row
         sender_row = QHBoxLayout()
+        sender_row.setSpacing(8)
+
+        self.sender_avatar = AvatarWidget("Sender", size=28)
+        sender_row.addWidget(self.sender_avatar)
+
         self.from_lbl = QLabel("From:")
-        self.from_lbl.setStyleSheet(f"color: {C['text_secondary']}; font-size: 12px; font-weight: 600; width: 45px;")
+        self.from_lbl.setFixedWidth(40)
         sender_row.addWidget(self.from_lbl)
 
         self.sender_val = QLabel()
-        self.sender_val.setStyleSheet(f"color: {C['text_primary']}; font-size: 12px; font-weight: 600;")
         sender_row.addWidget(self.sender_val)
         sender_row.addStretch()
 
         self.date_val = QLabel()
-        self.date_val.setStyleSheet(f"color: {C['text_secondary']}; font-size: 11px;")
         sender_row.addWidget(self.date_val)
         header_layout.addLayout(sender_row)
 
         # Recipients row
         to_row = QHBoxLayout()
         self.to_lbl = QLabel("To:")
-        self.to_lbl.setStyleSheet(f"color: {C['text_secondary']}; font-size: 12px; font-weight: 600; width: 45px;")
+        self.to_lbl.setFixedWidth(40)
         to_row.addWidget(self.to_lbl)
 
         self.recipients_val = QLabel()
-        self.recipients_val.setStyleSheet(f"color: {C['text_secondary']}; font-size: 12px;")
         self.recipients_val.setWordWrap(True)
         to_row.addWidget(self.recipients_val)
         to_row.addStretch()
         header_layout.addLayout(to_row)
 
-        content_layout.addWidget(header_card)
+        content_layout.addWidget(self.header_card)
 
         # Message Body (Safe Plain Text Viewer)
         self.body_view = QPlainTextEdit()
         self.body_view.setReadOnly(True)
         self.body_view.setFrameShape(QFrame.Shape.NoFrame)
         self.body_view.setTabChangesFocus(True)
-        self.body_view.setStyleSheet(
-            f"QPlainTextEdit {{ background-color: {C['bg_base']}; color: {C['text_primary']}; "
-            f"font-size: 13px; line-height: 1.6; border: none; padding: 4px; }} "
-            f"QPlainTextEdit:focus {{ outline: none; }}"
-        )
         content_layout.addWidget(self.body_view, stretch=1)
 
-        # Attachments Section (Scrollable list of cards)
+        # Attachments Section
         self.attachments_container = QWidget()
         self.attachments_layout = QVBoxLayout(self.attachments_container)
         self.attachments_layout.setContentsMargins(0, 0, 0, 0)
         self.attachments_layout.setSpacing(6)
 
         self.attachments_header = QLabel("📎 Attachments")
-        self.attachments_header.setStyleSheet(f"color: {C['text_secondary']}; font-size: 12px; font-weight: 700;")
         self.attachments_layout.addWidget(self.attachments_header)
 
         self.attachments_card_layout = QVBoxLayout()
@@ -288,11 +264,50 @@ class ReadingPane(QFrame):
         self.attachments_layout.addLayout(self.attachments_card_layout)
 
         content_layout.addWidget(self.attachments_container)
-
         main_layout.addWidget(self.content_container)
 
-        # Default: show empty container
+        self._apply_theme()
         self.clear()
+
+    def _apply_theme(self) -> None:
+        p = ThemeManager.get().palette
+        self.setStyleSheet(f"ReadingPane {{ background-color: {p.bg_canvas}; }}")
+
+        btn_style = (
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_primary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 5px 12px; font-size: 12px; font-weight: 600; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; border-color: {p.border_focused}; }}"
+        )
+        self.reply_btn.setStyleSheet(btn_style)
+        self.forward_btn.setStyleSheet(btn_style)
+
+        self.mark_unread_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
+            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 5px 12px; font-size: 12px; }} "
+            f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }}"
+        )
+        self.delete_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {p.bg_card}; color: {p.alert}; "
+            f"border: 1px solid {p.border_default}; border-radius: 5px; padding: 5px 10px; font-size: 12px; }} "
+            f"QPushButton:hover {{ background-color: {p.alert_bg}; border-color: {p.alert}; }}"
+        )
+
+        self.subject_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 18px; font-weight: 800; line-height: 1.3; background: transparent;")
+        self.header_card.setStyleSheet(
+            f"QFrame {{ background-color: {p.bg_card}; border: 1px solid {p.border_default}; border-radius: 6px; }}"
+        )
+        self.from_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 600; background: transparent;")
+        self.to_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 600; background: transparent;")
+        self.sender_val.setStyleSheet(f"color: {p.text_primary}; font-size: 12px; font-weight: 600; background: transparent;")
+        self.date_val.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")
+        self.recipients_val.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; background: transparent;")
+
+        self.body_view.setStyleSheet(
+            f"QPlainTextEdit {{ background-color: {p.bg_canvas}; color: {p.text_primary}; "
+            f"font-size: 13px; line-height: 1.6; border: none; padding: 4px; }} "
+            f"QPlainTextEdit:focus {{ outline: none; }}"
+        )
+        self.attachments_header.setStyleSheet(f"color: {p.text_secondary}; font-size: 12px; font-weight: 700; background: transparent;")
 
     def clear(self) -> None:
         """Clear message and show empty state placeholder."""
@@ -326,14 +341,13 @@ class ReadingPane(QFrame):
         attachments: list[dict[str, Any]] | None = None,
         raw_display: Any | None = None,
     ) -> None:
-        """
-        Render an opened message inside the inline reading pane.
-        """
+        """Render an opened message inside the inline reading pane."""
         self.current_display = raw_display
         self.current_attachments = attachments or []
 
         self.subject_lbl.setText(subject or "(No Subject)")
         self.sender_val.setText(sender)
+        self.sender_avatar.set_identity(sender)
         self.recipients_val.setText(recipients or "You")
         self.date_val.setText(date_str)
         self.body_view.setPlainText(body)
@@ -365,7 +379,6 @@ class ReadingPane(QFrame):
         self.content_container.setVisible(True)
 
     def _on_save_attachment(self, index: int) -> None:
-        """Prompt user with file dialog for save destination."""
         if not (0 <= index < len(self.current_attachments)):
             return
         att = self.current_attachments[index]

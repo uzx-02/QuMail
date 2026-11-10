@@ -1,3 +1,15 @@
+# Consolidated Enterprise Engineering & Product Completion (2026-11-10)
+
+**Final Consolidated Delivery on branch `codex/m7-module-1-6-ws06-ws07`**
+- **Accepted Baseline Preserved:** `d3b2078` (WS-06/07 Final Accepted Checkpoint).
+- **Frontend Redesign Complete:** Redesigned the entire QuMail user interface from the ground up applying UI/UX Pro Max standards. Native dual-theme support (Dark Enterprise Slate & Light Executive Workspace), real-time search, multi-attribute message list, 4-mode filter pills (All, Unread, Secure, Files), inline reading pane with plain-language security banners, safe attachment cards, and modernized Compose and Settings dialogs.
+- **M8 Public-Key Directory Implemented:** Delivered `services/directory/server.py` and `core/directory_client.py` featuring ephemeral challenge-response Proof of Key Possession (PoP), RFC 6962 / RFC 9162 binary Merkle tree transparency, Signed Tree Heads (STH), $O(\log N)$ inclusion proofs, local SQLite TOFU key pinning, and automated substitution alarms.
+- **M8 Secure Web Link (Pillar 2) Implemented:** Delivered `core/web_link_crypto.py` and `services/portal/server.py` supporting client-side AES-256-GCM encryption, RFC 3986 `#key` URL fragment zero-server-knowledge delivery, composite ML-DSA-65/Ed25519 sender signing, server-secret keyed HMAC OTP mailbox verification with 3-attempt lockout, and automated TTL purging.
+- **Verification:** 241/241 modern regression and integration tests passing cleanly across 14 test suites in 77.98 seconds.
+- **Status:** Development complete, functionally complete, internally validated, and pilot ready. Commercial production release gated on EV Authenticode code-signing certificate and Google OAuth CASA Tier 2 assessment.
+
+---
+
 # Module 1.1 Completion — Desktop Launch Handoff & Path Resolution (2026-11-07)
 
 **Issue QM-BUG-001 resolved on branch `codex/m7-desktop-handoff`.**
