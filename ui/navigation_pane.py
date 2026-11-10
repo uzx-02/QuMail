@@ -25,21 +25,33 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.design_system import C, AvatarWidget, ThemeManager
+from ui.design_system import C, AvatarWidget, ThemeManager, LIGHT_PALETTE
+from ui.icons import get_icon, get_pixmap, IconWidget
+
+_FOLDER_ICON_MAP = {
+    "inbox": "inbox",
+    "starred": "star",
+    "sent": "send",
+    "drafts": "draft",
+    "outbox": "send",
+    "trash": "trash",
+}
 
 
 class FolderItemWidget(QWidget):
-    """Folder list item widget with icon, label, and unread count."""
+    """Folder list item widget with vector icon, label, and unread count."""
 
     def __init__(self, key: str, icon: str, label: str, count: int = 0, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.key = key
+        self.icon_name = _FOLDER_ICON_MAP.get(key, "inbox")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 6, 14, 6)
         layout.setSpacing(12)
 
-        self.icon_lbl = QLabel(icon)
-        self.icon_lbl.setStyleSheet("font-size: 15px; background: transparent;")
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setStyleSheet("background: transparent;")
+        self.icon_lbl.setPixmap(get_pixmap(self.icon_name, size=18))
         layout.addWidget(self.icon_lbl)
 
         p = ThemeManager.get().palette
@@ -57,6 +69,12 @@ class FolderItemWidget(QWidget):
         layout.addWidget(self.badge)
 
         self.set_count(count)
+        ThemeManager.get().theme_changed.connect(self._apply_theme)
+
+    def _apply_theme(self) -> None:
+        p = ThemeManager.get().palette
+        self.icon_lbl.setPixmap(get_pixmap(self.icon_name, color=p.text_secondary, size=18))
+        self.text_lbl.setStyleSheet(f"color: {p.text_primary}; font-size: 14px; font-weight: 500; background: transparent;")
 
     def set_count(self, count: int) -> None:
         if count > 0:
@@ -91,9 +109,10 @@ class NavigationPane(QFrame):
 
         # 1. Primary Compose Button (Gmail Style: Soft Blue Pill, Dark Text, Height 48px)
         compose_row = QHBoxLayout()
-        self.new_btn = QPushButton("✏️  Compose")
+        self.new_btn = QPushButton("  Compose")
         self.new_btn.setFixedSize(140, 48)
         self.new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.new_btn.setIcon(get_icon("compose", color="#001D35", size=20))
         self.new_btn.setToolTip("Compose new post-quantum secured email (Ctrl+N)")
         self.new_btn.clicked.connect(self.new_message_requested.emit)
         compose_row.addWidget(self.new_btn)
@@ -105,12 +124,12 @@ class NavigationPane(QFrame):
         self.folder_list.setFrameShape(QFrame.Shape.NoFrame)
 
         folders = [
-            ("inbox", "📥", "Inbox", 0),
-            ("starred", "⭐", "Starred", 0),
-            ("sent", "📤", "Sent", 0),
-            ("drafts", "📝", "Drafts", 0),
-            ("outbox", "📦", "Outbox", 0),
-            ("trash", "🗑️", "Trash", 0),
+            ("inbox", "inbox", "Inbox", 0),
+            ("starred", "star", "Starred", 0),
+            ("sent", "send", "Sent", 0),
+            ("drafts", "draft", "Drafts", 0),
+            ("outbox", "send", "Outbox", 0),
+            ("trash", "trash", "Trash", 0),
         ]
 
         for key, icon, label, count in folders:
@@ -136,8 +155,9 @@ class NavigationPane(QFrame):
         status_l.setSpacing(4)
 
         hsm_row = QHBoxLayout()
-        self.hsm_dot = QLabel("⚡")
-        self.hsm_dot.setStyleSheet("font-size: 13px; background: transparent;")
+        self.hsm_dot = QLabel()
+        self.hsm_dot.setStyleSheet("background: transparent;")
+        self.hsm_dot.setPixmap(get_pixmap("hardware", color="#137333", size=16))
         hsm_row.addWidget(self.hsm_dot)
 
         self.hsm_status_lbl = QLabel("Hardware TRNG")
@@ -156,20 +176,23 @@ class NavigationPane(QFrame):
         action_bar = QHBoxLayout()
         action_bar.setSpacing(6)
 
-        self.theme_btn = QPushButton("🌙")
+        self.theme_btn = QPushButton()
         self.theme_btn.setFixedSize(32, 32)
         self.theme_btn.setToolTip("Toggle Theme")
         self.theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_btn.setIcon(get_icon("moon" if ThemeManager.get().mode == "light" else "sun", size=16))
         self.theme_btn.clicked.connect(self._on_toggle_theme)
         action_bar.addWidget(self.theme_btn)
 
-        self.settings_btn = QPushButton("⚙️ Settings")
+        self.settings_btn = QPushButton(" Settings")
+        self.settings_btn.setIcon(get_icon("settings", size=16))
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setFixedHeight(32)
         self.settings_btn.clicked.connect(self.settings_requested.emit)
         action_bar.addWidget(self.settings_btn)
 
-        self.lock_btn = QPushButton("🔒 Lock")
+        self.lock_btn = QPushButton(" Lock")
+        self.lock_btn.setIcon(get_icon("lock", size=16))
         self.lock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lock_btn.setFixedHeight(32)
         self.lock_btn.clicked.connect(self.lock_requested.emit)
@@ -208,6 +231,12 @@ class NavigationPane(QFrame):
         self.status_card.setStyleSheet(
             f"QFrame {{ background-color: {p.bg_surface}; border: 1px solid {p.border_default}; border-radius: 8px; }}"
         )
+        compose_icon_color = p.text_inverse if p == LIGHT_PALETTE else "#FFFFFF"
+        self.new_btn.setIcon(get_icon("compose", color=compose_icon_color, size=20))
+        self.theme_btn.setIcon(get_icon("moon" if ThemeManager.get().mode == "light" else "sun", color=p.text_secondary, size=16))
+        self.settings_btn.setIcon(get_icon("settings", color=p.text_secondary, size=16))
+        self.lock_btn.setIcon(get_icon("lock", color=p.text_secondary, size=16))
+
         btn_style = (
             f"QPushButton {{ background-color: {p.bg_surface}; color: {p.text_secondary}; "
             f"border: 1px solid {p.border_default}; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; }} "
@@ -226,7 +255,7 @@ class NavigationPane(QFrame):
 
     def _on_toggle_theme(self) -> None:
         new_mode = ThemeManager.get().toggle()
-        self.theme_btn.setText("☀️" if new_mode == "dark" else "🌙")
+        self.theme_btn.setIcon(get_icon("moon" if new_mode == "light" else "sun", size=16))
         self.theme_toggled.emit(new_mode)
 
     def _on_hsm_snapshot(self, snap: Any) -> None:

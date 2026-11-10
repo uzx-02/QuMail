@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 
 from core.security_indicators import BadgeLevel, SecurityIndicator
 from ui.design_system import C, AvatarWidget, EmptyState, ThemeManager
+from ui.icons import get_icon, get_pixmap, IconWidget
 from ui.security_badge_widget import SecurityBanner
 
 
@@ -75,19 +76,10 @@ class AttachmentCard(QFrame):
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(10)
 
-        # File Icon based on extension
-        ext = Path(name).suffix.lower()
-        if ext in (".pdf",):
-            icon_str = "📄"
-        elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp"):
-            icon_str = "🖼️"
-        elif ext in (".txt", ".md", ".csv", ".json"):
-            icon_str = "📝"
-        else:
-            icon_str = "📦"
-
-        icon_lbl = QLabel(icon_str)
-        icon_lbl.setStyleSheet("font-size: 16px; background: transparent;")
+        # File Icon
+        icon_lbl = QLabel()
+        icon_lbl.setStyleSheet("background: transparent;")
+        icon_lbl.setPixmap(get_pixmap("draft", color=p.accent, size=18))
         layout.addWidget(icon_lbl)
 
         # Name and size details
@@ -170,12 +162,14 @@ class ReadingPane(QFrame):
         self.toolbar = QHBoxLayout()
         self.toolbar.setSpacing(6)
 
-        self.reply_btn = QPushButton("Reply")
+        self.reply_btn = QPushButton(" Reply")
+        self.reply_btn.setIcon(get_icon("reply", size=15))
         self.reply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reply_btn.clicked.connect(self.reply_requested.emit)
         self.toolbar.addWidget(self.reply_btn)
 
-        self.forward_btn = QPushButton("Forward")
+        self.forward_btn = QPushButton(" Forward")
+        self.forward_btn.setIcon(get_icon("forward", size=15))
         self.forward_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.forward_btn.clicked.connect(self.forward_requested.emit)
         self.toolbar.addWidget(self.forward_btn)
@@ -187,7 +181,8 @@ class ReadingPane(QFrame):
 
         self.toolbar.addStretch()
 
-        self.delete_btn = QPushButton("Delete")
+        self.delete_btn = QPushButton(" Delete")
+        self.delete_btn.setIcon(get_icon("trash", size=15))
         self.delete_btn.setToolTip("Delete message")
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.clicked.connect(self.delete_requested.emit)
@@ -256,7 +251,7 @@ class ReadingPane(QFrame):
         self.attachments_layout.setContentsMargins(0, 0, 0, 0)
         self.attachments_layout.setSpacing(6)
 
-        self.attachments_header = QLabel("📎 Attachments")
+        self.attachments_header = QLabel("Attachments")
         self.attachments_layout.addWidget(self.attachments_header)
 
         self.attachments_card_layout = QVBoxLayout()
@@ -280,6 +275,10 @@ class ReadingPane(QFrame):
         )
         self.reply_btn.setStyleSheet(btn_style)
         self.forward_btn.setStyleSheet(btn_style)
+
+        self.reply_btn.setIcon(get_icon("reply", color=p.text_primary, size=15))
+        self.forward_btn.setIcon(get_icon("forward", color=p.text_primary, size=15))
+        self.delete_btn.setIcon(get_icon("trash", color=p.alert, size=15))
 
         self.mark_unread_btn.setStyleSheet(
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_secondary}; "
@@ -362,7 +361,7 @@ class ReadingPane(QFrame):
         # Attachments
         self._clear_attachment_cards()
         if self.current_attachments:
-            self.attachments_header.setText(f"📎 Attachments ({len(self.current_attachments)})")
+            self.attachments_header.setText(f"Attachments ({len(self.current_attachments)})")
             for idx, a in enumerate(self.current_attachments):
                 name = a.get("name", f"attachment_{idx+1}")
                 size = a.get("size", len(a.get("data", b"")))

@@ -50,6 +50,7 @@ from experiments.m3.types import EmailAddress
 from experiments.m5.model import Attachment, Budget, Draft
 from mailbox_client.workflows import Workflows, import_attachment
 from ui.design_system import C, ThemeManager
+from ui.icons import get_icon, get_pixmap, IconWidget
 from ui.security_badge_widget import SecurityPill
 
 
@@ -106,9 +107,12 @@ class ComposeDialog(QDialog):
         sec_header.addWidget(self.trust_pill)
 
         self.mode_combo = QComboBox()
-        self.mode_combo.addItem("🔒 Maximum Security (End-to-End Encrypted)", "pq")
-        self.mode_combo.addItem("🔗 Secure Link (For Non-QuMail Recipients)", "weblink")
-        self.mode_combo.addItem("✉️ Standard Email (Unencrypted)", "standard")
+        self.mode_combo.addItem("Maximum Security (End-to-End Encrypted)", "pq")
+        self.mode_combo.setItemIcon(0, get_icon("shield_secure", color="#137333", size=16))
+        self.mode_combo.addItem("Secure Link (For External Recipient)", "weblink")
+        self.mode_combo.setItemIcon(1, get_icon("quantum", color="#0B57D0", size=16))
+        self.mode_combo.addItem("Standard Email (Unencrypted)", "standard")
+        self.mode_combo.setItemIcon(2, get_icon("draft", color="#5F6368", size=16))
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         sec_header.addWidget(self.mode_combo)
 
@@ -158,7 +162,8 @@ class ComposeDialog(QDialog):
 
         # Attachments Strip
         att_row = QHBoxLayout()
-        self.add_att_btn = QPushButton("Add Attachment")
+        self.add_att_btn = QPushButton(" Attach")
+        self.add_att_btn.setIcon(get_icon("paperclip", size=15))
         self.add_att_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_att_btn.clicked.connect(self._on_add_attachment)
         att_row.addWidget(self.add_att_btn)
@@ -175,12 +180,14 @@ class ComposeDialog(QDialog):
         bot_bar.addWidget(self.status_lbl)
         bot_bar.addStretch()
 
-        self.save_draft_btn = QPushButton("Save Draft")
+        self.save_draft_btn = QPushButton(" Save Draft")
+        self.save_draft_btn.setIcon(get_icon("draft", size=15))
         self.save_draft_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_draft_btn.clicked.connect(self._on_save_draft)
         bot_bar.addWidget(self.save_draft_btn)
 
-        self.send_btn = QPushButton("Send Securely")
+        self.send_btn = QPushButton(" Send Securely")
+        self.send_btn.setIcon(get_icon("send", color="#FFFFFF", size=16))
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.clicked.connect(self._on_send_securely)
         bot_bar.addWidget(self.send_btn)
@@ -208,7 +215,8 @@ class ComposeDialog(QDialog):
 
         # Outbox Actions
         out_actions = QHBoxLayout()
-        self.refresh_outbox_btn = QPushButton("Refresh Queue")
+        self.refresh_outbox_btn = QPushButton(" Refresh")
+        self.refresh_outbox_btn.setIcon(get_icon("refresh", size=14))
         self.refresh_outbox_btn.clicked.connect(self.refresh_outbox)
         out_actions.addWidget(self.refresh_outbox_btn)
 
@@ -216,14 +224,15 @@ class ComposeDialog(QDialog):
         self.retry_outbox_btn.clicked.connect(self._on_retry_selected)
         out_actions.addWidget(self.retry_outbox_btn)
 
-        self.discard_outbox_btn = QPushButton("Discard")
+        self.discard_outbox_btn = QPushButton(" Discard")
+        self.discard_outbox_btn.setIcon(get_icon("trash", size=14))
         self.discard_outbox_btn.clicked.connect(self._on_discard_selected)
         out_actions.addWidget(self.discard_outbox_btn)
 
         out_actions.addStretch()
         out_layout.addLayout(out_actions)
 
-        self.tabs.addTab(outbox_tab, "📦 Delivery Status")
+        self.tabs.addTab(outbox_tab, "Delivery Queue")
         main_layout.addWidget(self.tabs)
 
         self._apply_theme()
@@ -309,13 +318,16 @@ class ComposeDialog(QDialog):
     def _on_mode_changed(self, index: int) -> None:
         mode = self.mode_combo.itemData(index)
         if mode == "weblink":
-            self.send_btn.setText("🔗 Send via Secure Web Link")
+            self.send_btn.setText(" Send via Web Link")
+            self.send_btn.setIcon(get_icon("quantum", color="#FFFFFF", size=16))
             self.policy_note.setText("Zero-install web delivery · Client AES-256-GCM + OTP")
         elif mode == "standard":
-            self.send_btn.setText("✉️ Send (Unencrypted)")
+            self.send_btn.setText(" Send (Unencrypted)")
+            self.send_btn.setIcon(get_icon("send", color="#FFFFFF", size=16))
             self.policy_note.setText("Standard email · No post-quantum protection")
         else:
-            self.send_btn.setText("🚀 Send Securely")
+            self.send_btn.setText(" Send Securely")
+            self.send_btn.setIcon(get_icon("send", color="#FFFFFF", size=16))
             self.policy_note.setText("Post-quantum encryption · Zero plaintext release")
 
     def _on_recipients_changed(self) -> None:
@@ -340,7 +352,8 @@ class ComposeDialog(QDialog):
             try:
                 att = import_attachment(path)
                 self.attachments.append(att)
-                item = QListWidgetItem(f"📎 {att.name} ({len(att.data)//1024} KB)")
+                item = QListWidgetItem(f"  {att.name} ({len(att.data)//1024} KB)")
+                item.setIcon(get_icon("paperclip", size=14))
                 self.att_list.addItem(item)
             except Exception as e:
                 QMessageBox.warning(self, "Attachment Limit", f"Could not attach file: {e}")

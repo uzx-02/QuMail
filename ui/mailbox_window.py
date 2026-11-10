@@ -58,6 +58,7 @@ from mailbox_client.service import MailboxService
 from mailbox_client.workflows import Workflows
 from ui.compose_dialog import ComposeDialog
 from ui.design_system import C
+from ui.icons import get_icon, get_pixmap, IconWidget
 from ui.identity_settings import IdentitySettings
 from ui.mail_accessibility import configure, error_message
 from ui.mail_actions import MailActions
@@ -73,7 +74,7 @@ logger = get_logger("ui.mailbox")
 class GlobalHeader(QFrame):
     """
     Gmail-style global application header across the top of QuMail.
-    Left: Hamburger menu, Logo 🛡️, QuMail title
+    Left: Hamburger menu, Vector Logo, QuMail title
     Center: Search Bar pill with magnifying glass and filter icon
     Right: Help, Settings gear, Profile avatar with email
     """
@@ -93,17 +94,19 @@ class GlobalHeader(QFrame):
 
         # 1. Left: Hamburger + Brand
         left_box = QHBoxLayout()
-        left_box.setSpacing(10)
+        left_box.setSpacing(12)
 
-        self.hamburger_btn = QPushButton("≡")
+        self.hamburger_btn = QPushButton()
         self.hamburger_btn.setFixedSize(36, 36)
         self.hamburger_btn.setToolTip("Main menu")
         self.hamburger_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.hamburger_btn.setIcon(get_icon("menu", size=20))
         self.hamburger_btn.clicked.connect(self.sidebar_toggled.emit)
         left_box.addWidget(self.hamburger_btn)
 
-        self.logo_lbl = QLabel("🛡️")
-        self.logo_lbl.setStyleSheet("font-size: 22px; background: transparent;")
+        self.logo_lbl = QLabel()
+        self.logo_lbl.setStyleSheet("background: transparent;")
+        self.logo_lbl.setPixmap(get_pixmap("quantum", color="#0B57D0", size=26))
         left_box.addWidget(self.logo_lbl)
 
         self.title_lbl = QLabel("QuMail")
@@ -123,18 +126,20 @@ class GlobalHeader(QFrame):
         search_l.setContentsMargins(16, 0, 16, 0)
         search_l.setSpacing(10)
 
-        search_icon = QLabel("🔍")
-        search_icon.setStyleSheet("font-size: 14px; background: transparent;")
-        search_l.addWidget(search_icon)
+        self.search_icon_lbl = QLabel()
+        self.search_icon_lbl.setStyleSheet("background: transparent;")
+        self.search_icon_lbl.setPixmap(get_pixmap("search", size=18))
+        search_l.addWidget(self.search_icon_lbl)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search mail")
         self.search_input.textChanged.connect(self.search_changed.emit)
         search_l.addWidget(self.search_input, stretch=1)
 
-        filter_icon = QLabel("⚙️")
-        filter_icon.setStyleSheet("font-size: 13px; background: transparent;")
-        search_l.addWidget(filter_icon)
+        self.filter_icon_lbl = QLabel()
+        self.filter_icon_lbl.setStyleSheet("background: transparent;")
+        self.filter_icon_lbl.setPixmap(get_pixmap("filter", size=16))
+        search_l.addWidget(self.filter_icon_lbl)
 
         layout.addWidget(self.search_frame, stretch=3)
         layout.addStretch(1)
@@ -143,17 +148,19 @@ class GlobalHeader(QFrame):
         right_box = QHBoxLayout()
         right_box.setSpacing(8)
 
-        self.help_btn = QPushButton("❓")
+        self.help_btn = QPushButton()
         self.help_btn.setFixedSize(36, 36)
         self.help_btn.setToolTip("Support & About QuMail")
         self.help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.help_btn.setIcon(get_icon("help", size=20))
         self.help_btn.clicked.connect(self.help_requested.emit)
         right_box.addWidget(self.help_btn)
 
-        self.settings_btn = QPushButton("⚙️")
+        self.settings_btn = QPushButton()
         self.settings_btn.setFixedSize(36, 36)
         self.settings_btn.setToolTip("Settings")
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.settings_btn.setIcon(get_icon("settings", size=20))
         self.settings_btn.clicked.connect(self.settings_requested.emit)
         right_box.addWidget(self.settings_btn)
 
@@ -175,8 +182,18 @@ class GlobalHeader(QFrame):
             f"GlobalHeader {{ background-color: {p.bg_canvas}; border-bottom: 1px solid {p.border_subtle}; }}"
         )
         self.title_lbl.setStyleSheet(f"font-size: 20px; font-weight: 700; color: {p.text_primary}; background: transparent;")
+        
+        # Repaint vector icons with theme colors
+        logo_color = "#818CF8" if ThemeManager.get().mode == "dark" else "#0B57D0"
+        self.logo_lbl.setPixmap(get_pixmap("quantum", color=logo_color, size=26))
+        self.hamburger_btn.setIcon(get_icon("menu", color=p.text_secondary, size=20))
+        self.search_icon_lbl.setPixmap(get_pixmap("search", color=p.text_secondary, size=18))
+        self.filter_icon_lbl.setPixmap(get_pixmap("filter", color=p.text_muted, size=16))
+        self.help_btn.setIcon(get_icon("help", color=p.text_secondary, size=20))
+        self.settings_btn.setIcon(get_icon("settings", color=p.text_secondary, size=20))
+
         icon_btn_style = (
-            f"QPushButton {{ background-color: transparent; border: none; border-radius: 18px; font-size: 15px; color: {p.text_secondary}; }} "
+            f"QPushButton {{ background-color: transparent; border: none; border-radius: 18px; color: {p.text_secondary}; }} "
             f"QPushButton:hover {{ background-color: {p.bg_card_hover}; color: {p.text_primary}; }}"
         )
         self.hamburger_btn.setStyleSheet(icon_btn_style)
@@ -194,8 +211,8 @@ class GlobalHeader(QFrame):
         )
         # Avatar button
         self.avatar_btn.setStyleSheet(
-            f"QPushButton {{ background-color: #0B57D0; color: #FFFFFF; font-size: 14px; font-weight: 700; "
-            f"border: none; border-radius: 18px; }} QPushButton:hover {{ background-color: #0842A0; }}"
+            f"QPushButton {{ background-color: {p.accent}; color: #FFFFFF; font-size: 14px; font-weight: 700; "
+            f"border: none; border-radius: 18px; }} QPushButton:hover {{ background-color: {p.accent_hover}; }}"
         )
 
     def set_account_identity(self, email: str) -> None:

@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
 from core.diagnostics import DiagnosticsCollector
 from core.hsm import HSMManager, list_com_ports
 from ui.design_system import C, ThemeManager
+from ui.icons import get_icon, get_pixmap
 
 
 def _create_setting_row(label_text: str, hint_text: str, control_widget: QWidget) -> QWidget:
@@ -204,6 +205,66 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(gen_tab, "General")
 
         # -------------------------------------------------------------
+        # Tab 2: Labels & Categories (Gmail Reference Structure)
+        # -------------------------------------------------------------
+        labels_tab = QWidget()
+        labels_layout = QVBoxLayout(labels_tab)
+        labels_layout.setContentsMargins(0, 8, 0, 8)
+        labels_layout.setSpacing(0)
+
+        labels_scroll = QScrollArea()
+        labels_scroll.setWidgetResizable(True)
+        labels_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        labels_content = QWidget()
+        labels_c_layout = QVBoxLayout(labels_content)
+        labels_c_layout.setContentsMargins(0, 0, 0, 0)
+        labels_c_layout.setSpacing(0)
+
+        # 1. System Labels
+        sys_box = QWidget()
+        sys_l = QVBoxLayout(sys_box)
+        sys_l.setContentsMargins(0, 0, 0, 0)
+        sys_l.setSpacing(6)
+        for name in ["Inbox", "Starred", "Sent Mail", "Drafts", "Trash"]:
+            cb = QCheckBox(f"Show in sidebar: {name}")
+            cb.setChecked(True)
+            sys_l.addWidget(cb)
+        labels_c_layout.addWidget(_create_setting_row("System Labels", "Choose which system folders appear in the navigation pane", sys_box))
+
+        # 2. Categories
+        cat_box = QWidget()
+        cat_l = QVBoxLayout(cat_box)
+        cat_l.setContentsMargins(0, 0, 0, 0)
+        cat_l.setSpacing(6)
+        for cat in [
+            "Primary (Important personal and corporate communications)",
+            "Updates (Automated alerts, confirmations, status notifications)",
+            "Promotions (Announcements and partner communications)",
+        ]:
+            cb = QCheckBox(cat)
+            cb.setChecked(True)
+            cat_l.addWidget(cb)
+        labels_c_layout.addWidget(_create_setting_row("Categories", "Organize incoming email into segmented views", cat_box))
+
+        # 3. Security Tags
+        sec_tag_box = QWidget()
+        sec_tag_l = QVBoxLayout(sec_tag_box)
+        sec_tag_l.setContentsMargins(0, 0, 0, 0)
+        sec_tag_l.setSpacing(6)
+        cb_pq = QCheckBox("Display 'Post-Quantum Verified' badges on cryptographic emails")
+        cb_pq.setChecked(True)
+        cb_zk = QCheckBox("Display 'Zero-Knowledge Portal' indicator for external ephemeral links")
+        cb_zk.setChecked(True)
+        sec_tag_l.addWidget(cb_pq)
+        sec_tag_l.addWidget(cb_zk)
+        labels_c_layout.addWidget(_create_setting_row("Security Badges", "Visual indicators for quantum encryption assurance", sec_tag_box))
+
+        labels_c_layout.addStretch()
+        labels_scroll.setWidget(labels_content)
+        labels_layout.addWidget(labels_scroll)
+        self.tabs.addTab(labels_tab, "Labels")
+
+        # -------------------------------------------------------------
         # Tab 2: Accounts & Direct Email Sign-In
         # -------------------------------------------------------------
         acc_tab = QWidget()
@@ -326,7 +387,7 @@ class SettingsDialog(QDialog):
         hsm_l.setContentsMargins(0, 0, 0, 0)
         hsm_l.setSpacing(8)
 
-        self.hsm_status_lbl = QLabel("⚪ Software Entropy (Windows CryptGenRandom)")
+        self.hsm_status_lbl = QLabel("Software Entropy (Windows CryptGenRandom)")
         self.hsm_status_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #137333;")
         hsm_l.addWidget(self.hsm_status_lbl)
 
@@ -347,14 +408,16 @@ class SettingsDialog(QDialog):
         self.hsm_port_combo = QComboBox()
         self._refresh_hsm_ports()
         port_row.addWidget(self.hsm_port_combo)
-        self.hsm_refresh_btn = QPushButton("🔄 Refresh Ports")
+        self.hsm_refresh_btn = QPushButton(" Refresh")
+        self.hsm_refresh_btn.setIcon(get_icon("refresh", size=14))
         self.hsm_refresh_btn.clicked.connect(self._refresh_hsm_ports)
         port_row.addWidget(self.hsm_refresh_btn)
         port_row.addStretch()
         hsm_l.addLayout(port_row)
 
         # Test action
-        self.sample_entropy_btn = QPushButton("⚡ Test Physical Connection & Sample Entropy")
+        self.sample_entropy_btn = QPushButton(" Test Physical Connection & Sample Entropy")
+        self.sample_entropy_btn.setIcon(get_icon("hardware", size=14))
         self.sample_entropy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.sample_entropy_btn.setStyleSheet("font-weight: 700; padding: 6px 14px;")
         self.sample_entropy_btn.clicked.connect(self._on_sample_entropy)
@@ -378,7 +441,8 @@ class SettingsDialog(QDialog):
         diag_l.setContentsMargins(0, 0, 0, 0)
         diag_l.setSpacing(6)
         diag_l.addWidget(QLabel("Continuous Health Verification: <b>NIST SP 800-90B PASSED</b>"))
-        self.export_diag_btn = QPushButton("📋 Export Support Diagnostics (Privacy-Safe)")
+        self.export_diag_btn = QPushButton(" Export Support Diagnostics (Privacy-Safe)")
+        self.export_diag_btn.setIcon(get_icon("download", size=14))
         self.export_diag_btn.clicked.connect(self._on_export_diagnostics)
         diag_l.addWidget(self.export_diag_btn)
         hsm_c_layout.addWidget(_create_setting_row("Verification & Diagnostics", "SP 800-90B health checks and diagnostic bundles", diag_box))
@@ -389,7 +453,7 @@ class SettingsDialog(QDialog):
         self.tabs.addTab(hsm_tab, "Security & Hardware")
 
         # -------------------------------------------------------------
-        # Tab 4: Appearance (Themes & Density)
+        # Tab 5: Appearance (Themes & Density)
         # -------------------------------------------------------------
         app_tab = QWidget()
         app_layout = QVBoxLayout(app_tab)
@@ -410,8 +474,8 @@ class SettingsDialog(QDialog):
         theme_l.setContentsMargins(0, 0, 0, 0)
         theme_l.setSpacing(6)
 
-        self.rb_theme_light = QRadioButton("☀️ Light (Gmail Default)")
-        self.rb_theme_dark = QRadioButton("🌙 Dark Enterprise Slate")
+        self.rb_theme_light = QRadioButton("Light (Executive Workspace)")
+        self.rb_theme_dark = QRadioButton("Dark (Enterprise Slate)")
         theme_grp = QButtonGroup(self)
         theme_grp.addButton(self.rb_theme_light)
         theme_grp.addButton(self.rb_theme_dark)
@@ -601,13 +665,13 @@ class SettingsDialog(QDialog):
     def _update_hsm_ui(self) -> None:
         snap = HSMManager.get().get_snapshot()
         if snap.is_hardware_active:
-            self.hsm_status_lbl.setText(f"🟢 Physical Hardware TRNG Connected ({snap.active_port})")
+            self.hsm_status_lbl.setText(f"Active · Physical Hardware TRNG Connected ({snap.active_port})")
             self.hsm_status_lbl.setStyleSheet("color: #137333; font-weight: 700;")
         elif snap.mode == "ETSI_QKD":
-            self.hsm_status_lbl.setText("🔷 ETSI GS QKD 014 Key Delivery Service Active")
+            self.hsm_status_lbl.setText("Active · ETSI GS QKD 014 Key Delivery Service")
             self.hsm_status_lbl.setStyleSheet("color: #0B57D0; font-weight: 700;")
         else:
-            self.hsm_status_lbl.setText("⚪ Software Entropy (Windows CryptGenRandom)")
+            self.hsm_status_lbl.setText("Software Entropy (Windows CryptGenRandom)")
             self.hsm_status_lbl.setStyleSheet("color: #5F6368; font-weight: 600;")
 
     def _on_connect_manual_account(self) -> None:

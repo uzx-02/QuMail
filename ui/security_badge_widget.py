@@ -24,7 +24,15 @@ from PyQt6.QtWidgets import (
 
 from core.security_indicators import BadgeLevel, IndicatorCode, SecurityIndicator
 from ui.design_system import C
+from ui.icons import get_pixmap
 
+
+BADGE_ICONS: dict[BadgeLevel, str] = {
+    BadgeLevel.SECURE: "shield_secure",
+    BadgeLevel.CAUTION: "shield_caution",
+    BadgeLevel.ALERT: "shield_alert",
+    BadgeLevel.NEUTRAL: "shield_neutral",
+}
 
 BADGE_COLORS: dict[BadgeLevel, dict[str, str]] = {
     BadgeLevel.SECURE: {
@@ -98,7 +106,8 @@ class SecurityPill(QFrame):
         else:
             label_text = "Standard"
 
-        self._icon_lbl.setText(colors["icon"])
+        icon_name = BADGE_ICONS.get(indicator.badge_level, "shield_neutral")
+        self._icon_lbl.setPixmap(get_pixmap(icon_name, color=colors["fg"], size=13))
         self._text_lbl.setText(label_text)
         self._text_lbl.setStyleSheet(f"color: {colors['fg']}; font-size: 11px; font-weight: 600;")
         self.setStyleSheet(
@@ -161,7 +170,8 @@ class SecurityBanner(QFrame):
         self.indicator = indicator
         colors = BADGE_COLORS.get(indicator.badge_level, BADGE_COLORS[BadgeLevel.NEUTRAL])
 
-        self.icon_label.setText(colors["icon"])
+        icon_name = BADGE_ICONS.get(indicator.badge_level, "shield_neutral")
+        self.icon_label.setPixmap(get_pixmap(icon_name, color=colors["fg"], size=18))
         self.headline_label.setText(indicator.headline)
         self.headline_label.setStyleSheet(f"color: {colors['fg']}; font-size: 13px; font-weight: 700;")
 

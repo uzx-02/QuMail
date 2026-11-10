@@ -42,6 +42,7 @@ from PyQt6.QtWidgets import (
 from core.mailbox_index import IndexedMessage, sanitize_snippet
 from core.security_indicators import BadgeLevel, SecurityIndicator
 from ui.design_system import C, EmptyState, SearchInput, ThemeManager
+from ui.icons import get_icon, get_pixmap, IconWidget
 from ui.security_badge_widget import SecurityPill
 
 
@@ -108,8 +109,9 @@ class MessageCardWidget(QWidget):
         layout.addWidget(self.checkbox)
 
         # 2. Star
-        self.star_lbl = QLabel("☆")
-        self.star_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 15px; background: transparent;")
+        self.star_lbl = QLabel()
+        self.star_lbl.setStyleSheet("background: transparent;")
+        self.star_lbl.setPixmap(get_pixmap("star", color=p.text_muted, size=16))
         layout.addWidget(self.star_lbl)
 
         # 3. Sender Name
@@ -142,8 +144,9 @@ class MessageCardWidget(QWidget):
 
         # 5. Attachment Clip Badge
         if has_attachments:
-            self.clip_lbl = QLabel("📎")
-            self.clip_lbl.setStyleSheet(f"color: {p.text_secondary}; font-size: 13px; background: transparent;")
+            self.clip_lbl = QLabel()
+            self.clip_lbl.setStyleSheet("background: transparent;")
+            self.clip_lbl.setPixmap(get_pixmap("paperclip", color=p.text_secondary, size=14))
             layout.addWidget(self.clip_lbl)
 
         # 6. Security Indicator Pill
@@ -194,21 +197,24 @@ class MessageListPane(QFrame):
         self.select_all_cb.setToolTip("Select all")
         tb_layout.addWidget(self.select_all_cb)
 
-        self.refresh_btn = QPushButton("🔄")
+        self.refresh_btn = QPushButton()
         self.refresh_btn.setFixedSize(28, 28)
+        self.refresh_btn.setIcon(get_icon("refresh", size=16))
         self.refresh_btn.setToolTip("Refresh (Ctrl+R)")
         self.refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.refresh_btn.clicked.connect(self.refresh_requested.emit)
         tb_layout.addWidget(self.refresh_btn)
 
-        self.mark_read_btn = QPushButton("✉️")
+        self.mark_read_btn = QPushButton()
         self.mark_read_btn.setFixedSize(28, 28)
+        self.mark_read_btn.setIcon(get_icon("draft", size=16))
         self.mark_read_btn.setToolTip("Mark as read")
         self.mark_read_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         tb_layout.addWidget(self.mark_read_btn)
 
-        self.delete_btn = QPushButton("🗑️")
+        self.delete_btn = QPushButton()
         self.delete_btn.setFixedSize(28, 28)
+        self.delete_btn.setIcon(get_icon("trash", size=16))
         self.delete_btn.setToolTip("Delete")
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         tb_layout.addWidget(self.delete_btn)
@@ -234,7 +240,8 @@ class MessageListPane(QFrame):
         cat_layout.setContentsMargins(14, 0, 14, 0)
         cat_layout.setSpacing(16)
 
-        self.all_tab = QPushButton("📥  Primary")
+        self.all_tab = QPushButton("  Primary")
+        self.all_tab.setIcon(get_icon("inbox", color="#0B57D0", size=16))
         self.all_tab.setCheckable(True)
         self.all_tab.setChecked(True)
         self.all_tab.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -246,13 +253,15 @@ class MessageListPane(QFrame):
         self.unread_tab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.unread_tab.clicked.connect(lambda: self._set_filter("unread"))
 
-        self.secure_tab = QPushButton("🛡️ Quantum Secured")
+        self.secure_tab = QPushButton("  Quantum Secured")
+        self.secure_tab.setIcon(get_icon("shield_secure", color="#137333", size=16))
         self.secure_tab.setCheckable(True)
         self.secure_tab.setChecked(False)
         self.secure_tab.setCursor(Qt.CursorShape.PointingHandCursor)
         self.secure_tab.clicked.connect(lambda: self._set_filter("secure"))
 
-        self.attach_tab = QPushButton("📎 Files")
+        self.attach_tab = QPushButton("  Attachments")
+        self.attach_tab.setIcon(get_icon("paperclip", size=15))
         self.attach_tab.setCheckable(True)
         self.attach_tab.setChecked(False)
         self.attach_tab.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -313,6 +322,13 @@ class MessageListPane(QFrame):
         self.refresh_btn.setStyleSheet(tool_btn_style)
         self.mark_read_btn.setStyleSheet(tool_btn_style)
         self.delete_btn.setStyleSheet(tool_btn_style)
+
+        self.refresh_btn.setIcon(get_icon("refresh", color=p.text_secondary, size=16))
+        self.mark_read_btn.setIcon(get_icon("draft", color=p.text_secondary, size=16))
+        self.delete_btn.setIcon(get_icon("trash", color=p.text_secondary, size=16))
+        self.all_tab.setIcon(get_icon("inbox", color=p.accent, size=16))
+        self.secure_tab.setIcon(get_icon("shield_secure", color=p.secure, size=16))
+        self.attach_tab.setIcon(get_icon("paperclip", color=p.text_secondary, size=15))
 
         # Gmail Category Tab styling: active tab has blue text (#0B57D0) and 2px solid bottom underline
         cat_btn_style = (
