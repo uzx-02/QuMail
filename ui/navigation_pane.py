@@ -182,6 +182,25 @@ class NavigationPane(QFrame):
         sync_row.addStretch()
         card_layout.addLayout(sync_row)
 
+        # Hardware HSM / QKD Status row
+        hsm_row = QHBoxLayout()
+        self.hsm_dot = QLabel("⚡")
+        self.hsm_dot.setStyleSheet("font-size: 11px; background: transparent;")
+        hsm_row.addWidget(self.hsm_dot)
+
+        self.hsm_status_lbl = QLabel("Software CSPRNG")
+        self.hsm_status_lbl.setStyleSheet("font-size: 11px; background: transparent;")
+        hsm_row.addWidget(self.hsm_status_lbl)
+        hsm_row.addStretch()
+        card_layout.addLayout(hsm_row)
+
+        # Connect to HSMManager
+        try:
+            from core.hsm import HSMManager
+            HSMManager.get().add_listener(self._on_hsm_snapshot)
+        except Exception:
+            pass
+
         layout.addWidget(self.account_card)
 
         # 5. Bottom Action Bar (Settings, Theme Toggle, Lock)
@@ -293,3 +312,23 @@ class NavigationPane(QFrame):
         self.sync_dot.setStyleSheet(f"color: {color}; font-size: 10px; background: transparent;")
         self.sync_status_lbl.setText(label)
         self.sync_status_lbl.setToolTip(detail or label)
+
+    def _on_hsm_snapshot(self, snap: Any) -> None:
+        """Callback from HSMManager background thread."""
+        if hasattr(snap, "is_hardware_active") and snap.is_hardware_active:
+            self.set_hsm_status(True, f"Hardware TRNG ({snap.active_port})")
+        elif hasattr(snap, "mode") and snap.mode == "ETSI_QKD":
+            self.set_hsm_status(True, "ETSI QKD Link")
+        else:
+            self.set_hsm_status(False, "Software CSPRNG")
+
+    def set_hsm_status(self, is_active: bool, label: str) -> None:
+        p = ThemeManager.get().palette
+        if is_active:
+            self.hsm_dot.setText("⚡")
+            self.hsm_status_lbl.setText(label)
+            self.hsm_status_lbl.setStyleSheet(f"color: {p.secure}; font-size: 11px; font-weight: 600; background: transparent;")
+        else:
+            self.hsm_dot.setText("⚪")
+            self.hsm_status_lbl.setText("Software CSPRNG")
+            self.hsm_status_lbl.setStyleSheet(f"color: {p.text_muted}; font-size: 11px; background: transparent;")

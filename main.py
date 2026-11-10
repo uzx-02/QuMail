@@ -163,7 +163,14 @@ def main(argv: list[str] | None = None) -> int:
         "--dev-gmail-submit",
         action="store_true",
         dest="submit",
-        help="enable live Gmail SMTP transmission (disabled by default in development)",
+        help="enable live Gmail SMTP transmission (enabled by default in normal desktop launch)",
+    )
+    parser.add_argument(
+        "--offline",
+        "--dry-run",
+        action="store_true",
+        dest="offline",
+        help="disable external SMTP transmission (dry-run mode)",
     )
     parser.add_argument(
         "--check-provider",
@@ -263,7 +270,18 @@ def main(argv: list[str] | None = None) -> int:
         else:
             vault_path = str(default_sys_vault)
 
-    return _launch_mailbox(vault_path, args.google_client, gmail_enabled=args.submit)
+    # Determine live submission status:
+    # If explicitly running in dev-mailbox mode without --submit, preserve dry-run isolation
+    # If running with --offline, disable submission
+    # Otherwise (standard desktop executable launch or explicit --submit), enable live submission
+    if args.offline:
+        submission_enabled = False
+    elif args.dev_mailbox:
+        submission_enabled = args.submit
+    else:
+        submission_enabled = True
+
+    return _launch_mailbox(vault_path, args.google_client, gmail_enabled=submission_enabled)
 
 
 if __name__ == "__main__":

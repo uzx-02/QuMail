@@ -115,14 +115,8 @@ class MailboxWindow(QWidget):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # Optional Top Banner
-        self.banner = QLabel(
-            "🔒  " + ("Gmail submission enabled" if gmail_enabled else "Gmail submission disabled — launch with --dev-gmail-submit to send")
-        )
-        self.banner.setStyleSheet(
-            f"color: {C['accent_light']}; background: {C['accent_muted']}; padding: 4px 14px; font-size: 11px; font-weight: 600;"
-        )
-        root_layout.addWidget(self.banner)
+        # Top banner removed for clean production experience
+        self.banner = None
 
         # -------------------------------------------------------------
         # THREE-PANE DESKTOP SPLITTER

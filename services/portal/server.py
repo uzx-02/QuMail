@@ -194,4 +194,175 @@ def create_portal_app(service: Optional[PortalService] = None) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc)}), 400
 
+    @app.route("/view/<message_id>", methods=["GET"])
+    def endpoint_view_html(message_id):
+        """Zero-Knowledge Client-Side Decryption Portal Viewer with Viral Invitation Loop."""
+        return HTML_VIEWER_TEMPLATE, 200, {"Content-Type": "text/html; charset=utf-8"}
+
     return app
+
+
+HTML_VIEWER_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuMail Secure Message Portal</title>
+    <style>
+        :root {
+            --bg: #0A0E17; --card: #161F33; --border: #2A3B5F;
+            --text: #F1F5F9; --text-muted: #94A3B8; --accent: #6366F1;
+            --secure: #10B981; --alert: #EF4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg); color: var(--text);
+            margin: 0; padding: 24px; display: flex; justify-content: center;
+        }
+        .container { max-width: 680px; width: 100%; }
+        .header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+        .badge { background: #1E2342; color: #818CF8; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+        .field input { width: 100%; box-sizing: border-box; background: #0D1320; border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 6px; font-size: 14px; }
+        .btn { background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; }
+        .btn:hover { background: #4F46E5; }
+        .status-box { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+        .status-secure { background: #064E3B; color: #A7F3D0; border: 1px solid var(--secure); }
+        .status-error { background: #450A0A; color: #FECACA; border: 1px solid var(--alert); }
+        .body-box { background: #0D1320; border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: monospace; white-space: pre-wrap; margin-top: 16px; line-height: 1.5; }
+        .invitation-card {
+            background: linear-gradient(135deg, #161F33 0%, #1E1A3A 100%);
+            border: 1px solid #4F46E5; border-radius: 10px; padding: 20px; text-align: center;
+        }
+        .invitation-card h3 { margin: 0 0 8px 0; font-size: 16px; color: #F1F5F9; }
+        .invitation-card p { font-size: 13px; color: #94A3B8; margin: 0 0 16px 0; line-height: 1.4; }
+        .app-links { display: flex; gap: 12px; justify-content: center; }
+        .app-btn { background: #2A3B5F; color: #F1F5F9; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .app-btn:hover { background: #4F46E5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2 style="margin: 0;">🛡️ QuMail</h2>
+            <span class="badge">Zero-Knowledge Secure Portal</span>
+        </div>
+
+        <div id="auth-panel" class="card">
+            <h3>Verify Recipient Access</h3>
+            <p style="color: var(--text-muted); font-size: 13px;">This message was encrypted using Post-Quantum Cryptography. Enter your email and verification code to decrypt locally in your browser.</p>
+            <div id="notice-msg" style="display: none;" class="status-box"></div>
+            <div class="field">
+                <label>Your Email Address</label>
+                <input type="email" id="email-input" placeholder="recipient@example.com">
+            </div>
+            <div class="field">
+                <label>6-Digit Security Code</label>
+                <input type="text" id="otp-input" placeholder="123456" maxlength="6">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn" onclick="requestOTP()">Send Code to Email</button>
+                <button class="btn" style="background: #10B981;" onclick="decryptMessage()">🔓 Decrypt Message</button>
+            </div>
+        </div>
+
+        <div id="message-panel" class="card" style="display: none;">
+            <div class="status-box status-secure">
+                🛡️ Verified Zero-Knowledge Decryption: Decrypted client-side in browser memory. Key was never transmitted to any server.
+            </div>
+            <div style="margin-bottom: 8px;"><strong id="sender-lbl"></strong></div>
+            <div class="body-box" id="body-text"></div>
+        </div>
+
+        <div class="invitation-card">
+            <h3>🔒 Secured with QuMail Post-Quantum Technology</h3>
+            <p>Tired of manually decrypting links in your browser? Keep your existing Gmail, Outlook, or Yahoo email address and automate zero-click post-quantum security on your devices.</p>
+            <div class="app-links">
+                <a class="app-btn" href="https://qumail.org/download/windows">💻 Download for Windows</a>
+                <a class="app-btn" href="https://qumail.org/download/android">📱 Get for Android</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messageId = window.location.pathname.split("/").pop();
+        const keyHex = window.location.hash.substring(1);
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            }
+            return bytes;
+        }
+
+        async function requestOTP() {
+            const email = document.getElementById("email-input").value.trim();
+            if (!email) { alert("Please enter your email address."); return; }
+            try {
+                const res = await fetch("/api/v1/portal/request_otp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message_id: messageId, recipient_email: email })
+                });
+                const data = await res.json();
+                const notice = document.getElementById("notice-msg");
+                notice.style.display = "block";
+                notice.className = "status-box status-secure";
+                notice.innerText = "A 6-digit verification code has been sent to your email.";
+            } catch (err) {
+                alert("Failed to request code: " + err);
+            }
+        }
+
+        async function decryptMessage() {
+            const otp = document.getElementById("otp-input").value.trim();
+            if (!otp) { alert("Please enter the 6-digit code."); return; }
+            if (!keyHex) { alert("Decryption key missing from URL fragment!"); return; }
+
+            try {
+                const res = await fetch("/api/v1/portal/verify_otp", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message_id: messageId, otp: otp })
+                });
+                const result = await res.json();
+                if (!res.ok) {
+                    const notice = document.getElementById("notice-msg");
+                    notice.style.display = "block";
+                    notice.className = "status-box status-error";
+                    notice.innerText = result.error || "Verification failed";
+                    return;
+                }
+
+                const blob = result.blob;
+                const rawKey = hexToBytes(keyHex);
+                const cryptoKey = await window.crypto.subtle.importKey(
+                    "raw", rawKey, "AES-GCM", false, ["decrypt"]
+                );
+
+                const ctBytes = Uint8Array.from(atob(blob.ciphertext_b64), c => c.charCodeAt(0));
+                const nonceBytes = Uint8Array.from(atob(blob.nonce_b64), c => c.charCodeAt(0));
+                const aadBytes = new TextEncoder().encode(blob.aad);
+
+                const decryptedBytes = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: nonceBytes, additionalData: aadBytes },
+                    cryptoKey,
+                    ctBytes
+                );
+
+                const plaintext = new TextDecoder().decode(decryptedBytes);
+                document.getElementById("auth-panel").style.display = "none";
+                document.getElementById("message-panel").style.display = "block";
+                document.getElementById("sender-lbl").innerText = "From: " + blob.sender_email;
+                document.getElementById("body-text").innerText = plaintext;
+            } catch (err) {
+                alert("Decryption failed: " + err);
+            }
+        }
+    </script>
+</body>
+</html>
+"""

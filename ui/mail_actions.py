@@ -81,7 +81,7 @@ class MailActions(QDialog):
         self.buttons['Submit once'].setEnabled(gmail_enabled or factory is not None)
         stop=QPushButton('Cancel active work / clear plaintext'); stop.clicked.connect(lambda:self.stop(True)); layout.addWidget(stop)
         self.stop_button=stop
-        self.status=QLabel('Ready. Submission requires --dev-gmail-submit flag. No automatic sending.')
+        self.status=QLabel('Ready to compose secure message.')
         self.status.setTextFormat(Qt.TextFormat.PlainText); self.status.setWordWrap(True); layout.addWidget(self.status)
         self.timer=QTimer(self); self.timer.timeout.connect(self.poll); self.timer.start(50)
         configure(self,[(self.to,'To recipients, comma separated'),(self.cc,'Cc recipients, comma separated; Bcc unavailable'),
@@ -241,7 +241,7 @@ class MailActions(QDialog):
             reply = QMessageBox.information(
                 self,
                 'Prepare Secure Message',
-                f'Message will be encrypted and stored in the local Outbox for:\n\n{to_recipients}\n\nNote: SMTP submission is disabled in development mode without --dev-gmail-submit.',
+                f'Message will be encrypted and stored in the local Outbox for:\n\n{to_recipients}\n\nNote: Mail submission is in draft preparation mode. Connect your account in Settings to enable direct delivery.',
                 QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Ok
             )

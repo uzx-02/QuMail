@@ -303,7 +303,7 @@ OUTBOX_STATE_LABELS: dict[str, str] = {
     "Prepared": "Ready to send",
     "Submitting": "Sending securely\u2026",
     "Accepted": "Accepted by mail server",
-    "Failed": "Not sent \u2014 click to retry",
+    "Failed": "Not sent",
     "Unknown": "Delivery uncertain \u2014 check Sent folder",
 }
 

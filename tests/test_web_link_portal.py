@@ -156,3 +156,21 @@ def test_portal_ttl_purge_and_sender_revocation():
     # Requesting OTP for revoked message must fail
     with pytest.raises(ValueError, match="revoked by the sender"):
         portal.request_otp(pkg2["message_id"], "bob@external.invalid")
+
+
+def test_portal_html_viewer_endpoint_and_viral_card():
+    """Verify that GET /view/<message_id> serves the zero-knowledge WebCrypto page with viral invitation loop."""
+    app = create_portal_app()
+    client = app.test_client()
+
+    resp = client.get("/view/msg-test-123")
+    assert resp.status_code == 200
+    html = resp.data.decode("utf-8")
+
+    # Invariants: Zero-knowledge client-side script and viral invitation loop
+    assert "Zero-Knowledge Secure Portal" in html
+    assert "window.crypto.subtle" in html
+    assert "window.location.hash" in html
+    assert "Secured with QuMail Post-Quantum Technology" in html
+    assert "Download for Windows" in html
+    assert "Get for Android" in html
