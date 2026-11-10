@@ -28,12 +28,17 @@ if (-not (Test-Path $ExePath)) {
 }
 
 # Ensure resources and version.json are present
+$ProjectRes = Join-Path $ProjectRoot "resources"
 $ResDir = Join-Path $DistDir "resources"
-if (-not (Test-Path $ResDir)) {
-    New-Item -ItemType Directory -Path $ResDir -Force | Out-Null
-    Copy-Item (Join-Path $ProjectRoot "resources\*") -Destination $ResDir -Recurse -Force
+if (Test-Path $ProjectRes) {
+    if (-not (Test-Path $ResDir)) {
+        New-Item -ItemType Directory -Path $ResDir -Force | Out-Null
+    }
+    Copy-Item "$ProjectRes\*" -Destination $ResDir -Recurse -Force
 }
-Copy-Item (Join-Path $ProjectRoot "version.json") -Destination $DistDir -Force
+if (Test-Path (Join-Path $ProjectRoot "version.json")) {
+    Copy-Item (Join-Path $ProjectRoot "version.json") -Destination $DistDir -Force
+}
 
 Write-Host "OK: QuMail.exe distribution verified at $DistDir" -ForegroundColor Green
 
@@ -72,8 +77,13 @@ foreach ($cand in $IsccCandidates) {
 
 if ($IsccPath) {
     Write-Host "INFO: Compiling Windows Installer with Inno Setup..." -ForegroundColor Yellow
-    & $IsccPath $IssFile
     $SetupExe = Join-Path $InstallerDir "Setup-QuMail-v1.0.exe"
+    if (Test-Path $SetupExe) { Remove-Item $SetupExe -Force }
+    & $IsccPath $IssFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Inno Setup compilation failed with exit code $LASTEXITCODE" -ForegroundColor Red
+        exit $LASTEXITCODE
+    }
     if (Test-Path $SetupExe) {
         $SetupSizeMB = [math]::Round((Get-Item $SetupExe).Length / 1MB, 2)
         Write-Host "SUCCESS: Windows Setup Wizard compiled: $SetupExe ($SetupSizeMB MB)" -ForegroundColor Green
