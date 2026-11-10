@@ -116,7 +116,7 @@ class NavigationPane(QFrame):
         layout.addLayout(brand_layout)
 
         # 2. Primary New Message Button
-        self.new_btn = QPushButton("✏️  New Message")
+        self.new_btn = QPushButton("New Message")
         self.new_btn.setFixedHeight(42)
         self.new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_btn.setToolTip("Compose new protected email (Ctrl+N)")
@@ -214,13 +214,13 @@ class NavigationPane(QFrame):
         self.theme_btn.clicked.connect(self._on_toggle_theme)
         action_bar.addWidget(self.theme_btn)
 
-        self.settings_btn = QPushButton("⚙️ Settings")
+        self.settings_btn = QPushButton("Settings")
         self.settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.settings_btn.setFixedHeight(30)
         self.settings_btn.clicked.connect(self.settings_requested.emit)
         action_bar.addWidget(self.settings_btn)
 
-        self.lock_btn = QPushButton("🔒 Lock")
+        self.lock_btn = QPushButton("Lock Vault")
         self.lock_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.lock_btn.setFixedHeight(30)
         self.lock_btn.clicked.connect(self.lock_requested.emit)

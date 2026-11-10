@@ -196,8 +196,15 @@ def create_portal_app(service: Optional[PortalService] = None) -> Flask:
 
     @app.route("/view/<message_id>", methods=["GET"])
     def endpoint_view_html(message_id):
-        """Zero-Knowledge Client-Side Decryption Portal Viewer with Viral Invitation Loop."""
-        return HTML_VIEWER_TEMPLATE, 200, {"Content-Type": "text/html; charset=utf-8"}
+        """Zero-Knowledge Client-Side Decryption Portal Viewer with Strict Security Headers."""
+        headers = {
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none';",
+            "Referrer-Policy": "no-referrer",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store, no-cache, must-revalidate, private",
+        }
+        return HTML_VIEWER_TEMPLATE, 200, headers
 
     return app
 
@@ -288,7 +295,12 @@ HTML_VIEWER_TEMPLATE = """<!DOCTYPE html>
 
     <script>
         const messageId = window.location.pathname.split("/").pop();
-        const keyHex = window.location.hash.substring(1);
+        let keyHex = window.location.hash.substring(1);
+        // Security boundary: sanitize browser URL and address bar history immediately
+        // so browser extensions or inspection cannot observe the key fragment later
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, "", window.location.pathname);
+        }
 
         function hexToBytes(hex) {
             const bytes = new Uint8Array(hex.length / 2);

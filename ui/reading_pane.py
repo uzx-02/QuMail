@@ -109,7 +109,7 @@ class AttachmentCard(QFrame):
         layout.addStretch()
 
         # Action Buttons
-        self.save_btn = QPushButton("💾 Save as…")
+        self.save_btn = QPushButton("Save as…")
         self.save_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_btn.setStyleSheet(
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_primary}; "
@@ -119,7 +119,7 @@ class AttachmentCard(QFrame):
         self.save_btn.clicked.connect(lambda: self.save_requested.emit(self.index))
         layout.addWidget(self.save_btn)
 
-        self.open_btn = QPushButton("📂 Open")
+        self.open_btn = QPushButton("Open")
         self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_btn.setStyleSheet(
             f"QPushButton {{ background-color: {p.bg_card}; color: {p.text_primary}; "
@@ -170,24 +170,24 @@ class ReadingPane(QFrame):
         self.toolbar = QHBoxLayout()
         self.toolbar.setSpacing(6)
 
-        self.reply_btn = QPushButton("↩️ Reply")
+        self.reply_btn = QPushButton("Reply")
         self.reply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.reply_btn.clicked.connect(self.reply_requested.emit)
         self.toolbar.addWidget(self.reply_btn)
 
-        self.forward_btn = QPushButton("↪️ Forward")
+        self.forward_btn = QPushButton("Forward")
         self.forward_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.forward_btn.clicked.connect(self.forward_requested.emit)
         self.toolbar.addWidget(self.forward_btn)
 
-        self.mark_unread_btn = QPushButton("📩 Mark Unread")
+        self.mark_unread_btn = QPushButton("Mark Unread")
         self.mark_unread_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mark_unread_btn.clicked.connect(lambda: self.mark_seen_requested.emit(False))
         self.toolbar.addWidget(self.mark_unread_btn)
 
         self.toolbar.addStretch()
 
-        self.delete_btn = QPushButton("🗑️")
+        self.delete_btn = QPushButton("Delete")
         self.delete_btn.setToolTip("Delete message")
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.clicked.connect(self.delete_requested.emit)

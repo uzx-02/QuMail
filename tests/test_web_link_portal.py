@@ -171,6 +171,34 @@ def test_portal_html_viewer_endpoint_and_viral_card():
     assert "Zero-Knowledge Secure Portal" in html
     assert "window.crypto.subtle" in html
     assert "window.location.hash" in html
+    assert "replaceState" in html
     assert "Secured with QuMail Post-Quantum Technology" in html
     assert "Download for Windows" in html
     assert "Get for Android" in html
+
+    # Verify strict browser defense headers
+    assert resp.headers.get("Referrer-Policy") == "no-referrer"
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+    assert "default-src 'self'" in resp.headers.get("Content-Security-Policy", "")
+    assert "no-store" in resp.headers.get("Cache-Control", "")
+
+
+def test_altered_aad_fails_authentication():
+    """Verify that altering Authenticated Additional Data (AAD) causes cryptographic failure."""
+    sender_key = ed25519.Ed25519PrivateKey.generate()
+    pkg = create_secure_web_link_package(
+        plaintext_body="Classified AAD Bound Message",
+        sender_email="alice@company.invalid",
+        recipient_email="bob@external.invalid",
+        sender_signing_key=sender_key,
+    )
+    blob = pkg["blob_to_upload"]
+    key_hex = pkg["key_hex"]
+
+    # Alter AAD metadata (tamper with base64 encoded AAD)
+    raw_aad = bytearray(base64.b64decode(blob["aad_b64"]))
+    raw_aad[0] ^= 0xFF
+    blob["aad_b64"] = base64.b64encode(raw_aad).decode("ascii")
+
+    with pytest.raises(Exception):
+        decrypt_secure_web_link_package(blob, key_hex)

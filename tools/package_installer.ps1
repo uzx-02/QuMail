@@ -53,6 +53,8 @@ if (-not $SkipZip) {
 # 3. Locate Inno Setup Compiler (ISCC.exe)
 $IsccCandidates = @(
     "iscc",
+    "C:\Program Files\Inno Setup 7\ISCC.exe",
+    "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
     "C:\Program Files\Inno Setup 6\ISCC.exe"
 )

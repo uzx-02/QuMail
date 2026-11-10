@@ -158,7 +158,7 @@ class ComposeDialog(QDialog):
 
         # Attachments Strip
         att_row = QHBoxLayout()
-        self.add_att_btn = QPushButton("📎 Add Attachment")
+        self.add_att_btn = QPushButton("Add Attachment")
         self.add_att_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.add_att_btn.clicked.connect(self._on_add_attachment)
         att_row.addWidget(self.add_att_btn)
@@ -175,18 +175,18 @@ class ComposeDialog(QDialog):
         bot_bar.addWidget(self.status_lbl)
         bot_bar.addStretch()
 
-        self.save_draft_btn = QPushButton("💾 Save Draft")
+        self.save_draft_btn = QPushButton("Save Draft")
         self.save_draft_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.save_draft_btn.clicked.connect(self._on_save_draft)
         bot_bar.addWidget(self.save_draft_btn)
 
-        self.send_btn = QPushButton("🚀 Send Securely")
+        self.send_btn = QPushButton("Send Securely")
         self.send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.send_btn.clicked.connect(self._on_send_securely)
         bot_bar.addWidget(self.send_btn)
 
         comp_layout.addLayout(bot_bar)
-        self.tabs.addTab(compose_tab, "✏️ Compose")
+        self.tabs.addTab(compose_tab, "Compose")
 
         # -------------------------------------------------------------
         # Tab 2: Outbox & Delivery Status
@@ -208,15 +208,15 @@ class ComposeDialog(QDialog):
 
         # Outbox Actions
         out_actions = QHBoxLayout()
-        self.refresh_outbox_btn = QPushButton("🔄 Refresh Queue")
+        self.refresh_outbox_btn = QPushButton("Refresh Queue")
         self.refresh_outbox_btn.clicked.connect(self.refresh_outbox)
         out_actions.addWidget(self.refresh_outbox_btn)
 
-        self.retry_outbox_btn = QPushButton("🔁 Retry Selected")
+        self.retry_outbox_btn = QPushButton("Retry Selected")
         self.retry_outbox_btn.clicked.connect(self._on_retry_selected)
         out_actions.addWidget(self.retry_outbox_btn)
 
-        self.discard_outbox_btn = QPushButton("🗑️ Discard")
+        self.discard_outbox_btn = QPushButton("Discard")
         self.discard_outbox_btn.clicked.connect(self._on_discard_selected)
         out_actions.addWidget(self.discard_outbox_btn)
 
