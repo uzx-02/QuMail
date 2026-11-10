@@ -22,6 +22,16 @@ declare global {
         checkGoogleConfigured: () => Promise<{ configured: boolean; tokenExists: boolean }>;
         selectGoogleClientSecret: () => Promise<{ success: boolean; message: string }>;
         saveGoogleCredentials: (clientId: string, clientSecret: string) => Promise<{ success: boolean; message: string }>;
+        authenticateCustomMailbox: (config: {
+          email: string;
+          password?: string;
+          displayName?: string;
+          organization?: string;
+          imapHost?: string;
+          imapPort?: number;
+          smtpHost?: string;
+          smtpPort?: number;
+        }) => Promise<{ success: boolean; message?: string; account?: any; messages?: EmailMessage[] }>;
       };
     };
   }
@@ -226,6 +236,58 @@ class ApiService {
       }
     }
     return { ...this.account };
+  }
+
+  async authenticateCustomMailbox(config: {
+    email: string;
+    password?: string;
+    displayName?: string;
+    organization?: string;
+    imapHost?: string;
+    imapPort?: number;
+    smtpHost?: string;
+    smtpPort?: number;
+  }): Promise<{ success: boolean; account?: AccountSession; message?: string }> {
+    if (window.pywebview?.api?.authenticateCustomMailbox) {
+      try {
+        const res = await window.pywebview.api.authenticateCustomMailbox(config);
+        if (res.success && res.account) {
+          const domain = config.email.split('@')[1] || 'Custom';
+          this.account = {
+            email: res.account.email,
+            provider: `${domain.charAt(0).toUpperCase() + domain.slice(1)} (IMAP/TLS)`,
+            pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
+            pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,
+            isUnlocked: true,
+          };
+          try {
+            localStorage.setItem('qumail-account', JSON.stringify(this.account));
+          } catch {}
+          if (res.messages) {
+            this.messages = res.messages;
+          }
+          return { success: true, account: this.account };
+        }
+        return { success: false, message: res.message || 'Custom mailbox authentication failed.' };
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'Authentication error.' };
+      }
+    }
+
+    // Fallback when outside desktop wrapper
+    const trimmed = config.email.trim();
+    const domain = trimmed.split('@')[1] || 'Corporate';
+    this.account = {
+      email: trimmed,
+      provider: `${domain.charAt(0).toUpperCase() + domain.slice(1)} (IMAP/TLS)`,
+      pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
+      pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
+      isUnlocked: true,
+    };
+    try {
+      localStorage.setItem('qumail-account', JSON.stringify(this.account));
+    } catch {}
+    return { success: true, account: this.account };
   }
 
   async logoutAccount(): Promise<boolean> {

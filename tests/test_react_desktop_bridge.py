@@ -134,3 +134,73 @@ def test_qumail_js_api_google_auth_and_ports():
 
     # Vault lock
     assert api.lockVault() is True
+
+
+def test_custom_mailbox_authentication_and_host_inference(tmp_path, monkeypatch):
+    """Verify custom mailbox host inference, credentials rejection, and Fernet storage."""
+    from transport.custom_mailbox import (
+        infer_server_hosts,
+        save_custom_account,
+        load_custom_account,
+        clear_custom_account,
+    )
+
+    # 1. Host inference checks
+    assert infer_server_hosts("alice@outlook.com") == ("outlook.office365.com", 993, "smtp.office365.com", 587)
+    assert infer_server_hosts("bob@gmail.com") == ("imap.gmail.com", 993, "smtp.gmail.com", 587)
+    assert infer_server_hosts("charlie@yahoo.com") == ("imap.mail.yahoo.com", 993, "smtp.mail.yahoo.com", 587)
+    assert infer_server_hosts("dave@zoho.com") == ("imap.zoho.com", 993, "smtp.zoho.com", 587)
+    assert infer_server_hosts("eve@icloud.com") == ("imap.mail.me.com", 993, "smtp.mail.me.com", 587)
+    assert infer_server_hosts("user@custom-corp.org") == ("imap.custom-corp.org", 993, "smtp.custom-corp.org", 587)
+
+    # 2. QuMailJsApi rejection of invalid custom mailbox inputs
+    api = QuMailJsApi()
+    res1 = api.authenticateCustomMailbox({"email": "not-an-email", "password": "pass"})
+    assert res1["success"] is False
+    assert "valid email" in res1["message"].lower()
+
+    res2 = api.authenticateCustomMailbox({"email": "valid@corp.com", "password": ""})
+    assert res2["success"] is False
+    assert "password" in res2["message"].lower()
+
+    # 3. Encrypted credentials persistence check
+    assert save_custom_account(
+        email="test@corp.com",
+        password="secret-app-pass",
+        display_name="Test User",
+        organization="Corp",
+        imap_host="imap.corp.com",
+        imap_port=993,
+    ) is True
+
+    loaded = load_custom_account("test@corp.com")
+    assert loaded is not None
+    assert loaded["email"] == "test@corp.com"
+    assert loaded["password"] == "secret-app-pass"
+    assert loaded["imapHost"] == "imap.corp.com"
+
+    # Cleanup
+    clear_custom_account()
+
+
+def test_google_oauth_html_success_page_and_ssl_sanitization(monkeypatch):
+    """Verify HTML success landing page has 5-second countdown and SSL environment sanitization."""
+    from transport.oauth2_gmail import SUCCESS_HTML_PAGE, sanitize_ssl_environment
+
+    # Verify HTML template structure
+    assert "<!DOCTYPE html>" in SUCCESS_HTML_PAGE
+    assert "Authentication Successful" in SUCCESS_HTML_PAGE
+    assert "window.close()" in SUCCESS_HTML_PAGE
+    assert 'id="timer"' in SUCCESS_HTML_PAGE
+    assert "5" in SUCCESS_HTML_PAGE
+
+    # Verify SSL sanitization removes nonexistent SSLKEYLOGFILE
+    monkeypatch.setenv("SSLKEYLOGFILE", r"C:\nonexistent_qumail_dir_12345\keylog.txt")
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", r"C:\nonexistent_qumail_dir_12345\bundle.pem")
+    sanitize_ssl_environment()
+
+    import os
+    assert "SSLKEYLOGFILE" not in os.environ
+    # REQUESTS_CA_BUNDLE was repointed to valid certifi cacert.pem
+    assert "nonexistent" not in os.environ.get("REQUESTS_CA_BUNDLE", "")
+    assert os.path.exists(os.environ["REQUESTS_CA_BUNDLE"])

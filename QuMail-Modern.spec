@@ -40,6 +40,7 @@ hidden_imports = [
     'transport.oauth2_gmail',
     'transport.imap_receiver',
     'transport.smtp_sender',
+    'transport.custom_mailbox',
     'cryptography',
     'sqlite3',
     'ctypes',

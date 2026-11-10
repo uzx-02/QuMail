@@ -248,11 +248,31 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
         UnknownProviderError: Account domain not supported.
         IMAPReceiverError:    Auth failure, connection error, or IMAP-level failure.
     """
-    provider           = _detect_provider(account_email)
-    imap_host, token   = _get_imap_credentials(provider, account_email)
+    from transport.custom_mailbox import load_custom_account
+    custom = load_custom_account(account_email)
+
+    if custom:
+        imap_host = custom.get("imapHost") or "imap.gmail.com"
+        imap_port = custom.get("imapPort") or 993
+        password = custom.get("password", "")
+        try:
+            ssl_ctx = ssl.create_default_context()
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                int(imap_port),
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.login(account_email, password)
+        except Exception as exc:
+            raise IMAPReceiverError(f"Custom IMAP login failed for '{account_email}' on '{imap_host}': {exc}") from exc
+    else:
+        provider           = _detect_provider(account_email)
+        imap_host, token   = _get_imap_credentials(provider, account_email)
+        imap               = _open_imap_connection(imap_host, account_email, token)
 
     try:
-        with _open_imap_connection(imap_host, account_email, token) as imap:
+        with imap:
             # Read-only SELECT — avoids unintentionally marking messages as \Seen
             imap.select(_INBOX_FOLDER, readonly=True)
 
@@ -323,11 +343,31 @@ def fetch_message(account_email: str, uid: str) -> InboxMessage:
         MessageNotFoundError: No message with the given UID exists in INBOX.
         IMAPReceiverError:    Auth failure, connection error, or IMAP-level failure.
     """
-    provider           = _detect_provider(account_email)
-    imap_host, token   = _get_imap_credentials(provider, account_email)
+    from transport.custom_mailbox import load_custom_account
+    custom = load_custom_account(account_email)
+
+    if custom:
+        imap_host = custom.get("imapHost") or "imap.gmail.com"
+        imap_port = custom.get("imapPort") or 993
+        password = custom.get("password", "")
+        try:
+            ssl_ctx = ssl.create_default_context()
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                int(imap_port),
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.login(account_email, password)
+        except Exception as exc:
+            raise IMAPReceiverError(f"Custom IMAP login failed for '{account_email}' on '{imap_host}': {exc}") from exc
+    else:
+        provider           = _detect_provider(account_email)
+        imap_host, token   = _get_imap_credentials(provider, account_email)
+        imap               = _open_imap_connection(imap_host, account_email, token)
 
     try:
-        with _open_imap_connection(imap_host, account_email, token) as imap:
+        with imap:
             imap.select(_INBOX_FOLDER, readonly=True)
 
             status, msg_data = imap.uid("FETCH", uid, "(RFC822)")

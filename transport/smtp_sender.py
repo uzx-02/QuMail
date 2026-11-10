@@ -145,6 +145,29 @@ def send_email(
         UnknownProviderError: Sender domain not supported.
         SMTPSenderError:      Auth failure, connection error, or any SMTP-level failure.
     """
+    from transport.custom_mailbox import load_custom_account
+    custom = load_custom_account(sender_email)
+
+    if custom:
+        smtp_host = custom.get("smtpHost") or "smtp.gmail.com"
+        smtp_port = int(custom.get("smtpPort") or 587)
+        password  = custom.get("password", "")
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=_SMTP_TIMEOUT_SEC) as smtp:
+                smtp.ehlo()
+                if smtp.has_extn("STARTTLS"):
+                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.ehlo()
+                smtp.login(sender_email, password)
+                smtp.sendmail(
+                    from_addr=sender_email,
+                    to_addrs=[recipient_email],
+                    msg=mime_message.as_bytes(),
+                )
+                return
+        except Exception as exc:
+            raise SMTPSenderError(f"Custom SMTP dispatch failed for '{sender_email}' on '{smtp_host}': {exc}") from exc
+
     provider            = _detect_provider(sender_email)
     smtp_host, token    = _get_smtp_credentials(provider, sender_email)
     xoauth2_string      = _build_xoauth2_string(sender_email, token)

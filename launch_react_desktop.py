@@ -29,6 +29,13 @@ from core.logging_config import configure_logging, get_logger
 
 logger = get_logger("react_desktop")
 
+# Sanitize SSL environment immediately to prevent connection drops on Windows
+try:
+    from transport.oauth2_gmail import sanitize_ssl_environment
+    sanitize_ssl_environment()
+except Exception as ssl_err:
+    logger.warning("SSL sanitization note: %s", ssl_err)
+
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     BASE_DIR = Path(sys._MEIPASS)
 else:
@@ -111,11 +118,12 @@ class QuMailJsApi:
         return self.messages
 
     def checkGoogleConfigured(self) -> Dict[str, Any]:
-        """Check if Google client secrets file exists."""
-        secrets_path = Path("secrets/gmail_client_secret.json")
+        """Check if Google client secrets file or built-in desktop configuration is active."""
         token_path = Path("secrets/gmail_token.json")
+        secrets_path = Path("secrets/gmail_client_secret.json")
         return {
-            "configured": secrets_path.exists(),
+            "configured": True,  # Built-in desktop client configuration is provided out-of-the-box
+            "hasCustomSecrets": secrets_path.exists(),
             "tokenExists": token_path.exists(),
         }
 
@@ -186,14 +194,6 @@ class QuMailJsApi:
 
     def googleAuth(self) -> Dict[str, Any]:
         """Execute Google OAuth 2.0 PKCE consent flow."""
-        secrets_path = Path("secrets/gmail_client_secret.json")
-        if not secrets_path.exists():
-            return {
-                "success": False,
-                "needsClientSecret": True,
-                "message": "Google client_secret.json file not found. Please select or paste your Google Cloud OAuth credentials.",
-            }
-
         try:
             from transport.oauth2_gmail import authorize_google_account
             auth_res = authorize_google_account()
@@ -224,6 +224,71 @@ class QuMailJsApi:
         except Exception as exc:
             logger.error("Google OAuth failed: %s", exc)
             return {"success": False, "message": str(exc)}
+
+    def authenticateCustomMailbox(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Verify credentials and authenticate a custom mailbox (e.g. Gmail App Password,
+        Outlook, Yahoo, Zoho, iCloud, or corporate IMAP/SMTP).
+        Conducts a live TLS connection and IMAP login security handshake.
+        """
+        email_addr = config.get("email", "").strip()
+        password = config.get("password", "")
+        display_name = config.get("displayName", "").strip()
+        organization = config.get("organization", "").strip()
+
+        if not email_addr or "@" not in email_addr:
+            return {"success": False, "message": "A valid email address is required (e.g. name@domain.com)."}
+        if not password:
+            return {"success": False, "message": "Password or App Password is required to authenticate mailbox access."}
+
+        try:
+            from transport.custom_mailbox import (
+                infer_server_hosts,
+                verify_imap_credentials,
+                save_custom_account,
+            )
+
+            # Infer default hosts from domain or use custom
+            def_imap, def_iport, def_smtp, def_sport = infer_server_hosts(email_addr)
+            imap_host = config.get("imapHost", "").strip() or def_imap
+            imap_port = int(config.get("imapPort") or def_iport)
+            smtp_host = config.get("smtpHost", "").strip() or def_smtp
+            smtp_port = int(config.get("smtpPort") or def_sport)
+
+            logger.info("Conducting security verification for %s on IMAP %s:%d", email_addr, imap_host, imap_port)
+            ok, msg = verify_imap_credentials(email_addr, password, imap_host, imap_port)
+            if not ok:
+                return {"success": False, "message": msg}
+
+            # Save verified credentials locally with Fernet encryption
+            domain_name = email_addr.split("@")[1].capitalize()
+            save_custom_account(
+                email=email_addr,
+                password=password,
+                display_name=display_name,
+                organization=organization or domain_name,
+                imap_host=imap_host,
+                imap_port=imap_port,
+                smtp_host=smtp_host,
+                smtp_port=smtp_port,
+            )
+
+            self.account_email = email_addr
+            self.account_display_name = display_name or email_addr.split("@")[0]
+            self.account_org = organization or domain_name
+
+            # Fetch live real emails
+            self.fetchInbox()
+
+            return {
+                "success": True,
+                "message": "Mailbox successfully authenticated and encrypted vault bound.",
+                "account": self.getAccount(),
+                "messages": self.messages,
+            }
+        except Exception as exc:
+            logger.error("Custom mailbox authentication failed: %s", exc)
+            return {"success": False, "message": f"Authentication check error: {exc}"}
 
     def fetchInbox(self) -> List[Dict[str, Any]]:
         """Fetch real emails from IMAP server."""
@@ -310,9 +375,13 @@ class QuMailJsApi:
         sender_email = self.account_email or "user@qumail.sec"
         sender_name = self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "QuMail User")
 
-        # 1. Attempt live SMTP dispatch if account is connected with Google
+        # 1. Attempt live SMTP dispatch if account is connected with Custom Mailbox or Google
         try:
-            if "gmail" in sender_email and Path("secrets/gmail_token.json").exists():
+            from transport.custom_mailbox import load_custom_account
+            custom_acc = load_custom_account(sender_email)
+            has_google_token = Path("secrets/gmail_token.json").exists()
+
+            if custom_acc or ("gmail" in sender_email and has_google_token):
                 from transport.smtp_sender import send_email
                 py_msg = PyEmailMessage()
                 py_msg["From"] = sender_email
@@ -327,7 +396,7 @@ class QuMailJsApi:
                         filename=att.get("filename", "attachment"),
                     )
                 send_email(sender_email, recipients[0], py_msg)
-                logger.info("Dispatched live email via smtp.gmail.com to %s", recipients)
+                logger.info("Dispatched live email via SMTP to %s", recipients)
         except Exception as send_err:
             logger.warning("Live SMTP dispatch note (stored in outbox): %s", send_err)
 

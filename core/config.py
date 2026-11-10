@@ -34,11 +34,24 @@ SEND_KEYS_DIR    = "secrets/send_keys"  # encrypted ML-KEM private keys, keyed b
 # --- OAuth2: Gmail ---
 GMAIL_CLIENT_SECRETS_PATH = "secrets/gmail_client_secret.json"
 GMAIL_TOKEN_PATH          = "secrets/gmail_token.json"
+CUSTOM_ACCOUNT_PATH       = "secrets/custom_account.json"
 GMAIL_SCOPES              = [
     "https://mail.google.com/",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
 ]
+
+# Pre-configured Desktop Client ID & Secret for seamless end-user Google Sign-In
+BUILTIN_GMAIL_CLIENT_CONFIG = {
+    "installed": {
+        "client_id": os.getenv("QUMAIL_GMAIL_CLIENT_ID", ""),
+        "client_secret": os.getenv("QUMAIL_GMAIL_CLIENT_SECRET", ""),
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "redirect_uris": ["http://localhost", "http://127.0.0.1"],
+    }
+}
 
 # --- OAuth2: Yahoo ---
 YAHOO_CLIENT_ID     = os.getenv("QUMAIL_YAHOO_CLIENT_ID", "")
