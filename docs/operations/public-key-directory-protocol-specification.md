@@ -13,14 +13,19 @@
 
 ## 1. Overview and Security Objectives
 
-The QuMail Public-Key Directory provides an automated, centralized lookup service mapping user email addresses to their post-quantum public certificates. It eliminates the adoption friction of manual out-of-band certificate exchange while strictly preserving end-to-end cryptographic integrity.
+The QuMail Public-Key Directory provides an automated lookup service mapping user email addresses to their post-quantum public certificates. It eliminates the adoption friction of manual out-of-band certificate exchange while strictly preserving end-to-end cryptographic integrity.
 
-### Core Security Objectives
+### 1.1 Threat Model and Trust Assumptions
+1. **Directory Operator as Honest-But-Curious / Potential Adversary:** The directory server is treated as untrusted infrastructure. It may attempt to harvest metadata, observe social graphs, or under coercion present unauthorized keys (equivocation).
+2. **Zero Plaintext Visibility:** Private keys, database master secrets, OAuth tokens, and message contents **never** enter directory memory, network transit, or persistent storage.
+3. **Trust-On-First-Use (TOFU) Reality:** TOFU detects key changes *after* first contact, but does **NOT** independently authenticate a first-contact key or prevent first-contact equivocation. Directory-discovered keys therefore remain marked with an amber **`CAUTION: Identity Unverified`** badge unless verified against an independent enterprise trust policy (Group Policy or corporate CA).
+
+### 1.2 Core Security Objectives
 1. **Preserve Wire Profile Compatibility:** Shipped certificates strictly adhere to QuMail's accepted `QM-OPENPGP-PQ-v1` composite post-quantum OpenPGP profile (RFC 9580 / draft-ietf-openpgp-pqc).
-2. **Proof of Possession (PoP):** A client registering a public key must cryptographically prove possession of the corresponding private signing key. Rogue key injection is blocked.
-3. **Replacement & Impersonation Protection:** Once registered, an account's public key record cannot be replaced or overwritten by an adversary. Updating a key requires cryptographic authorization from the existing primary key or an authenticated enterprise recovery authority.
-4. **Authenticity & Non-Repudiation of Responses:** Lookup responses carry cryptographic claims signed by a dedicated Directory Authority key, allowing clients to detect tampering by malicious proxies.
-5. **Zero Secret Exposure:** The directory is strictly public infrastructure. Private keys, database master secrets, OAuth tokens, and message contents **never** enter directory memory or storage.
+2. **Independent Verification of Identity and Key Possession:** Proving ownership of an email address and proving possession of the private key are decoupled into distinct cryptographic and authorization checks.
+3. **Cryptographically Bound Proof of Possession (PoP):** Enrolling a public key requires solving a single-use server challenge signed using the complete composite signing profile (`ML-DSA-65` + `Ed25519`). Algorithmic downgrades to classical-only signatures during registration are strictly prohibited.
+4. **Verifiable Merkle Tree Transparency:** Directory operations are committed to a binary Merkle tree issuing cryptographic Signed Tree Heads (STH), $O(\log N)$ inclusion proofs, and consistency proofs to detect equivocation and unauthorized key injection.
+5. **Replacement Protection & Alerting:** Monotonic generation counters and transition signatures prevent arbitrary key replacement. Unexplained key replacement triggers a blocking security alert in the desktop client that cannot be bypassed via an ordinary dismiss dialog.
 
 ---
 
@@ -28,15 +33,13 @@ The QuMail Public-Key Directory provides an automated, centralized lookup servic
 
 The directory accepts and distributes Transferable Public Key (TPK) packet sequences strictly conforming to the `QM-OPENPGP-PQ-v1` profile.
 
-### 2.1 Packet Sequence Structure
-An enrolled public key certificate consists of the following canonical OpenPGP packet sequence:
-
+### 2.1 Canonical OpenPGP Packet Structure
 ```
 +--------------------------------------------------------------------------------+
 | Packet 6:  Primary Key Packet (Version 5 or Version 6)                         |
 |            Algorithm: Ed25519 (0x16) or Composite ML-DSA-65 + Ed25519          |
 |            Creation Timestamp (32-bit uint)                                    |
-|            Public Key Material (32 bytes Ed25519 + optional ML-DSA-65 pubkey)  |
+|            Public Key Material (32 bytes Ed25519 + 1952 bytes ML-DSA-65 pubkey)|
 +--------------------------------------------------------------------------------+
 | Packet 13: User ID Packet                                                      |
 |            Text: "Alice Smith <alice@example.invalid>"                         |
@@ -61,15 +64,13 @@ An enrolled public key certificate consists of the following canonical OpenPGP p
 +--------------------------------------------------------------------------------+
 ```
 
-### 2.2 Wire Compatibility Constraints
-- The directory rejects classical-only (RSA/ECDH) certificates and incomplete packet sequences lacking the post-quantum encryption subkey.
+### 2.2 Profile Compatibility Constraints
+- The directory rejects classical-only (RSA/ECDH) certificates and incomplete packet sequences lacking the composite post-quantum encryption subkey.
 - The directory does not perform transcoding, re-armoring, or algorithm substitution; it validates and stores raw binary OpenPGP packets or standard ASCII-armored blocks (`-----BEGIN PGP PUBLIC KEY BLOCK-----`).
 
 ---
 
 ## 3. Directory Protocols & API Operations
-
-The directory exposes an authenticated REST API over TLS 1.3:
 
 ```
                       +-----------------------------+
@@ -82,18 +83,23 @@ The directory exposes an authenticated REST API over TLS 1.3:
                       | QuMail Directory API        |
                       +-----------------------------+
                                 │           ▲
-     3. Registration (PoP)      │           │  4. Signed Receipt
-                                ▼           │
+     3. Registration (PoP)      │           │  4. Signed Receipt &
+                                ▼           │     Inclusion Proof
                       +-----------------------------+
-                      | Directory Transparency Log  |
+                      | Binary Merkle Tree Log      |
                       +-----------------------------+
 ```
 
-### 3.1 Operation 1: Account Registration & Proof of Possession (PoP)
-Registration binds an email address to a public certificate.
+---
+
+### 3.1 Operation 1: Account Registration & Proof of Key Possession (PoP)
+
+Account enrollment requires two distinct verifications:
+1. **Account Ownership Verification:** Confirms that the client controls the requested email address.
+2. **Proof of Key Possession (PoP):** Confirms that the client holds the private key matching the public certificate.
 
 #### Step 1: Challenge Request
-The client requests a registration challenge from the directory:
+The client requests an enrollment challenge:
 ```http
 POST /api/v1/auth/challenge
 Content-Type: application/json
@@ -103,126 +109,198 @@ Content-Type: application/json
   "client_version": "1.0.0"
 }
 ```
-**Server Response:** Returns an ephemeral, cryptographically secure 256-bit challenge nonce $N_{\text{chal}}$ (valid for 300 seconds).
+**Server Response:**
+Returns an ephemeral 256-bit CSPRNG challenge nonce $N_{\text{chal}}$ bound to a 300-second TTL:
+```json
+{
+  "challenge_id": "c71a39f0-21a4-4f51-b842-8d77c1e54911",
+  "nonce": "a7f92b4c10e3952d...",
+  "audience": "urn:qumail:directory:pop:v1",
+  "issued_utc": "2026-11-10T12:00:00Z",
+  "expires_utc": "2026-11-10T12:05:00Z"
+}
+```
 
-#### Step 2: Proof-of-Possession Submission
-The client submits its registration payload:
+#### Step 2: Proof-of-Possession Construction
+The client constructs the canonical PoP binding payload:
+$$\text{NormEmail} = \text{NormalizeEmail}(\text{email})$$
+$$\text{PoP-Binding} = \text{SHA256}(\text{"QUMAIL-POP-v1"} \parallel \text{NormEmail} \parallel N_{\text{chal}} \parallel \text{Fingerprint} \parallel \text{ProfileVersion} \parallel \text{Audience} \parallel T_{\text{issued}} \parallel T_{\text{expires}})$$
+
+Where:
+- $\text{NormalizeEmail}$: RFC 5321 / RFC 6531 lowercase, Unicode NFC normalized string.
+- $\text{Fingerprint}$: Complete SHA-256 fingerprint over the canonical primary key packet.
+- $\text{ProfileVersion}$: Literal ASCII string `"QM-OPENPGP-PQ-v1"`.
+- $\text{Audience}$: Literal string `"urn:qumail:directory:pop:v1"`.
+- $T_{\text{issued}}, T_{\text{expires}}$: ISO 8601 UTC timestamps matching the server challenge.
+
+**Cryptographic Signature Rule (No Downgrade):**
+- If the enrolled identity uses the composite `ML-DSA-65` + `Ed25519` primary signing key, the client MUST compute a composite signature containing **both** the `ML-DSA-65` signature and the `Ed25519` signature over $\text{PoP-Binding}$.
+- If the primary key is standalone `Ed25519`, an `Ed25519` signature is computed.
+- Submissions attempting to enroll a composite key using only an `Ed25519` signature are **rejected with HTTP 400 Bad Request**.
+
+#### Step 3: Registration Submission
 ```http
 POST /api/v1/keys/register
 Content-Type: application/json
 
 {
+  "challenge_id": "c71a39f0-21a4-4f51-b842-8d77c1e54911",
   "email": "alice@example.invalid",
   "certificate_armor": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...",
-  "pop_signature": "<Ed25519_Signature(N_chal || email || timestamp)>",
-  "auth_token": "<OIDC_Identity_Token_OR_Email_Verification_Token>",
-  "timestamp_utc": "2026-11-10T12:00:00Z"
+  "pop_signature_composite": {
+    "mldsa65_signature_b64": "...",
+    "ed25519_signature_b64": "..."
+  },
+  "auth_credential": {
+    "auth_type": "oidc_token",
+    "token": "eyJhbGciOiJSUzI1NiIs..."
+  }
 }
 ```
 
-#### Step 3: Server Verification Rules
-Before accepting the record, the directory validates:
-1. **Certificate Syntax:** The certificate parses cleanly into the canonical packet sequence; the primary key matches the advertised fingerprint; subkey binding signature verifies.
-2. **Proof of Possession (PoP):** `pop_signature` is verified against the primary public key in the submitted certificate over $N_{\text{chal}} \parallel \text{email} \parallel \text{timestamp}$.
-3. **Identity Verification:**
-   - **Enterprise Mode:** Verified via corporate OIDC ID token signed by the organization's Google Workspace / Microsoft Entra IdP matching `email`.
-   - **Consumer / Standalone Mode:** An out-of-band email containing an activation challenge token is sent to `email`; registration is provisional until the activation link is clicked.
-4. **Collision Check:** If a record for `email` already exists, direct overwrite is **prohibited** (see Section 3.3).
+#### Step 4: Server Verification Rules
+1. **Challenge Validity:** `challenge_id` exists, is unused, matches $N_{\text{chal}}$, and current server time $< T_{\text{expires}}$. The challenge is marked used immediately (replay defense).
+2. **Identity Verification (Independent Check):**
+   - **OIDC Flow (Google Workspace / Microsoft 365):** The directory validates the OIDC ID token against the identity provider's published JWKS. It verifies `iss`, `aud`, expiration, and confirms that `email_verified == true` and that the token `email` claim matches $\text{NormEmail}$.
+   - **Email Activation Flow (Consumer / Standalone):** The directory transmits a 256-bit CSPRNG activation token via SMTP to $\text{NormEmail}$ with a 15-minute expiry. Registration remains in provisional pending state until the recipient submits the activation token.
+3. **Cryptographic PoP Verification:** Directory verifies `pop_signature_composite` against the primary public key in the submitted certificate over the constructed $\text{PoP-Binding}$.
+4. **Collision & Replacement Check:** If a record for $\text{NormEmail}$ already exists, direct overwrite is strictly prohibited (see Section 3.4).
 
 ---
 
-### 3.2 Operation 2: Public Key Lookup
+### 3.2 Operation 2: Lookup Privacy & Authenticated Query Model
 
+#### 3.2.1 Privacy Model Evaluation
+A privacy mechanism must protect against directory scraping while remaining operationally viable for multi-workstation pilots:
+1. **Shared HMAC Key Model (Rejected as Insufficient):**
+   - *Flaw:* Distributing a shared HMAC secret ($K_{\text{directory\_blind}}$) to clients does not prevent directory enumeration. Any authenticated client in possession of the key can run dictionary attacks against prospective email lists offline, compute the blinded hashes, and query the directory to harvest the entire user database.
+2. **Oblivious Pseudorandom Function (OPRF / RFC 9497) (Future Roadmap):**
+   - *Concept:* Client blinds an email address, server evaluates a PRF using a secret key without learning the email, and client unblinds to receive a query token.
+   - *Status:* Cryptographically sound, but introduces significant client-side latency, requires complex protocol state machines, and is reserved for enterprise scale-out milestones.
+3. **Selected Practical Pilot Model: Authenticated Query Model with Strict Rate Limits:**
+   - Queries require client authentication (valid OAuth token or device session token).
+   - Strict rate limiting: Maximum 60 queries/minute per account; maximum 120 queries/minute per IP subnet.
+   - Directory logging policy: The directory server operates under a **zero-query-log policy**—access logs record timestamp, client ID, and HTTP status code, but query parameters (target email addresses) are never written to persistent disk logs.
+   - **Explicit Trust Assumption:** The directory operator is in a position to observe which authenticated accounts perform lookups for specific target email addresses. True query privacy requires local vault caching.
+
+#### 3.2.2 Lookup Protocol
 ```http
-GET /api/v1/keys/lookup?email_hash=<HMAC_SHA256(email, blind_key)>
+GET /api/v1/keys/lookup?email=bob@example.invalid
+Authorization: Bearer <client_auth_token>
 Accept: application/json
 ```
 
-**Directory Response (Directory Claim):**
+**Directory Response:**
 ```json
 {
-  "email_hash": "a1b2c3d4...",
+  "email": "bob@example.invalid",
   "fingerprint": "5ceb47b86bec9b3b8d6e666e718947391c59f8763be1347b0e3c2a692e022241",
   "certificate_armor": "-----BEGIN PGP PUBLIC KEY BLOCK-----\n...",
   "generation": 1,
   "registered_utc": "2026-11-10T12:00:00Z",
   "valid_until_utc": "2027-11-10T12:00:00Z",
   "revoked": false,
-  "log_index": 1042,
-  "directory_signature": "<Ed25519_Signature_by_DirectoryAuthorityKey>"
+  "leaf_index": 1042,
+  "tree_size": 2048,
+  "inclusion_proof": [
+    "a8f12...",
+    "7b09c..."
+  ],
+  "sth": {
+    "tree_size": 2048,
+    "timestamp_utc": "2026-11-10T12:01:00Z",
+    "root_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "signature": "<ML-DSA-65_plus_Ed25519_DirectoryAuthoritySignature>"
+  }
 }
 ```
 
-#### Client Verification:
-1. Client verifies `directory_signature` against the pre-configured `QuMailDirectoryAuthorityKey`.
-2. Computes SHA-256 fingerprint of the returned certificate and verifies equality with `fingerprint`.
-3. Verifies that the internal User ID matches the target email.
-4. Applies trust indicator logic (amber `CAUTION` badge displayed unless certified by corporate CA).
+---
+
+### 3.3 Operation 3: Cryptographic Merkle Tree Transparency
+
+To ensure that the directory cannot equivocate (presenting one public key for Bob to Alice and another to Charlie) without public detection, the directory maintains an append-only binary Merkle tree conforming to RFC 6962 / RFC 9162 principles.
+
+```
+                              Signed Tree Head (Root Hash)
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        │                                     │
+                     Node 0-1                              Node 2-3
+                        │                                     │
+                  ┌─────┴─────┐                         ┌─────┴─────┐
+                  │           │                         │           │
+                Leaf 0      Leaf 1                    Leaf 2      Leaf 3
+              (Alice v1)  (Bob v1)                  (Charlie)   (Alice v2)
+```
+
+#### 3.3.1 Tree Construction Rules
+1. **Leaf Hashing:** Every enrollment, rotation, revocation, or recovery event generates a log leaf:
+   $$\text{LeafData} = \text{Type} \parallel \text{Timestamp} \parallel \text{NormEmail} \parallel \text{Fingerprint} \parallel \text{Generation} \parallel \text{CertBytes}$$
+   $$H(\text{leaf}) = \text{SHA256}(0x00 \parallel \text{LeafData})$$
+   (Byte `0x00` provides domain separation for leaves).
+2. **Internal Node Hashing:**
+   $$H(\text{parent}) = \text{SHA256}(0x01 \parallel H(\text{left\_child}) \parallel H(\text{right\_child}))$$
+   (Byte `0x01` provides domain separation for interior nodes).
+3. **Signed Tree Head (STH):**
+   Periodically (every 60 seconds or on each commit), the directory computes the root hash of the tree and signs the tuple:
+   $$\text{STH-Payload} = \text{tree\_size} \parallel \text{timestamp} \parallel \text{root\_hash}$$
+   $$\text{STH-Signature} = \text{Sign}(SK_{\text{DirectoryAuthority}}, \text{STH-Payload})$$
+
+#### 3.3.2 Verification Mechanisms
+1. **Inclusion Proofs ($O(\log N)$):**
+   - On every lookup, the directory provides an audit path of sibling hashes from `LeafData` up to `root_hash`.
+   - The desktop client recomputes the root hash and validates equality with `sth.root_hash`.
+2. **Consistency Proofs ($O(\log M)$):**
+   - When the client observes a new STH at tree size $M > N$, it requests a consistency proof verifying that the tree at size $M$ is an exact append-only continuation of the tree at cached size $N$.
+   - If consistency verification fails, the client halts directory operations and alerts the user:
+     > *"SECURITY ALERT: Directory split-view or history rewrite detected. Communication halted."*
+3. **Client Cached Checkpoints:**
+   - The desktop client stores the latest verified STH (`tree_size`, `root_hash`, `timestamp`) in its local SQLite database (`directory_checkpoints` table).
+4. **Independent Monitors:**
+   - Third-party monitors (enterprise auditors, automated monitoring daemons) continuously query the log via `GET /api/v1/transparency/entries`, recompute the Merkle tree independently, and cross-compare observed STHs (STH gossiping) to detect conflicting views.
 
 ---
 
-### 3.3 Operation 3: Key Rotation & Replacement Protection
+### 3.4 Operation 4: Key Rotation, Replacement Protection & Trust Indicators
 
-To prevent an attacker from overwriting an existing user's key with an adversary key:
+#### 3.4.1 Monotonic Generations & Authorized Rotation
+- Every user's record has a monotonic integer `generation` (starts at 1).
+- **Authorized Rotation (Subkey Renewal):**
+  - The client submits the updated certificate with an incremented subkey.
+  - The rotation payload **must be signed by the existing active primary signing key**.
+  - The directory verifies the primary signature, increments `generation` ($1 \rightarrow 2$), appends the event as a new leaf in the Merkle tree, and updates the active pointer.
 
-1. **Active Key Authorization (Normal Subkey Rotation):**
-   - The user's client rotates their annual post-quantum subkey.
-   - The rotation update payload **must be signed by the existing primary signing key**.
-   - The directory increments `generation` (e.g., $1 \rightarrow 2$) and logs the update in the append-only history.
-2. **Lost Device / Account Recovery (Primary Key Replacement):**
-   - If the primary private key was lost (device destroyed, no backup):
-   - Replacement requires an **Identity Re-Verification Ceremony**:
-     - Enterprise Mode: Signed administrative revocation statement from the IT administrator.
-     - Consumer Mode: Mandatory 7-day notice period sent to the verified email address alerting the user of key replacement with an abort link, preventing silent account hijacking.
-3. **Client-Side Key Pinning (Trust-On-First-Use / TOFU):**
-   - The QuMail desktop client pins the primary key fingerprint in its local SQLite vault (`contacts` table).
-   - If a directory lookup returns a different primary key for an existing contact without a valid cross-certification or revocation certificate, the client raises a critical security alarm:
-     > *"SECURITY ALERT: The public key for bob@example.invalid has changed. This could indicate a key rotation or a network interception attempt. Verification required before sending."*
+#### 3.4.2 Account Recovery & Key Replacement
+If a user loses access to their primary private key (hardware failure without backup):
+- **Enterprise Mode:** Replacement requires a cryptographically signed recovery instruction from the designated Enterprise Recovery Authority key (configured via WS-07 Group Policy).
+- **Consumer Mode:** The directory initiates a mandatory 7-day cooling-off challenge period. Email notifications and revocation abort links are dispatched to the target address. If not cancelled within 7 days, the new key is committed to the tree with an explicit `RECOVERY` event flag.
 
----
-
-### 3.4 Operation 4: Certificate Revocation
-
-When a subkey or primary key is compromised:
-1. The client submits a standard OpenPGP Revocation Certificate (Packet 2, signature type `0x20` / `0x28`) signed by the primary key or a designated revocation key.
-2. The directory sets `"revoked": true`, marks the tombstone, and includes the revocation certificate in future lookup responses.
-3. Querying clients immediately transition cached contact state to `Trust.REVOKED` and prohibit further encryption to the revoked key.
+#### 3.4.3 Desktop Client Trust Behavior on Key Change
+- The desktop client pins all discovered public keys in its local SQLite vault upon first use.
+- **Unexplained Key Replacement:** If a directory lookup returns a new primary key for an existing contact without a valid primary-to-primary cross-certification signature:
+  1. The client **BLOCKS** email composition and outbox dispatch to that recipient.
+  2. The UI raises a modal alert:
+     > *"SECURITY ALERT: The public encryption key for <recipient> has changed unexpectedly. This may indicate an account compromise or directory manipulation."*
+  3. **No Ordinary Dismissal:** The prompt cannot be bypassed by clicking "Continue" or "OK". The user must explicitly perform an out-of-band fingerprint verification or have corporate IT update the key policy.
+- **Trust Indicators (WS-02 Contract):**
+  - First-time directory lookups without enterprise CA certification display the amber **`CAUTION: Identity Unverified`** badge.
+  - Corporate GPO-provisioned or enterprise-signed keys display the emerald green **`SECURE`** badge.
 
 ---
 
-## 4. Privacy, Abuse & Infrastructure Resilience Analysis
+### 3.5 Operation 5: Certificate Revocation
 
-### 4.1 Directory Enumeration & Harvesting Prevention
-* **Threat:** Spammers or adversaries query the directory sequentially to harvest all corporate email addresses.
-* **Mitigations:**
-  1. **Hashed / Blinded Lookups:** Queries do not submit plaintext email strings. The query uses an HMAC-SHA256 blind hash:
-     $$\text{query\_id} = \text{HMAC-SHA256}(K_{\text{directory\_blind}}, \text{normalized\_email})$$
-     Clients obtain the rotating $K_{\text{directory\_blind}}$ over authenticated TLS.
-  2. **No Wildcard or List Queries:** The directory API strictly rejects prefix queries, listing, or pagination. Only exact 1:1 lookups are permitted.
+When a private key is suspected of compromise:
+1. The client generates an OpenPGP Revocation Certificate (Packet 2, signature type `0x20` for key revocation or `0x28` for subkey revocation).
+2. The client submits the revocation certificate to `/api/v1/keys/revoke`.
+3. The directory records the revocation in the Merkle tree, marks the active record tombstone, and includes the revocation certificate in all future lookup responses.
+4. Clients observing the revocation update the contact record to `Trust.REVOKED` and refuse further encryption.
 
-### 4.2 Query Privacy
-* **Threat:** The directory operator tracks which users Alice is communicating with based on her lookup queries.
-* **Mitigations:**
-  - **Local Vault Cache First:** QuMail checks its local SQLite vault and contacts index before making any directory network request. Repeat communications generate zero directory queries.
-  - **Future Track (PIR):** Evaluation of Private Information Retrieval (PIR) or batched k-anonymity query models for large deployments.
+---
 
-### 4.3 Abuse Prevention & Rate Limiting
-* **Per-IP Rate Limits:** Maximum 60 lookups/minute per IPv4/IPv6 subnet.
-* **Per-Account Registration Limits:** Maximum 3 key registrations/rotations per 24 hours per account.
-* **Payload Size Limits:** Registration payloads capped at 64 KiB (sufficient for composite ML-KEM-768/ML-DSA-65 certificates while rejecting malformed bloat).
+## 4. Abuse Prevention & Operational Resilience
 
-### 4.4 Availability & Offline Resilience
-* **Directory Unavailability Fallback:** If the directory is offline or unreachable:
-  - Existing cached contacts in the local vault continue functioning without interruption.
-  - New un-cached recipients cannot be fetched; QuMail safely falls back to local composition with a clear message: *"Directory unavailable; cannot verify new recipient. Message held in Outbox."*
-  - **Zero Unencrypted Fallback:** Outages never trigger unencrypted transmission.
-
-### 4.5 Server Compromise Risk Analysis
-* **Worst-Case Compromise Scenario:** What happens if an adversary fully compromises the directory server?
-  1. **Cannot Decrypt Past Communications:** The directory holds zero private keys and zero emails. Past and future emails remain encrypted with endpoint post-quantum keys.
-  2. **Cannot Inject Plaintext Exploits:** The directory holds only public keys.
-  3. **Equivocation / MITM Threat:** An adversary on the compromised server could attempt to serve a rogue public key for Bob.
-  4. **Compromise Defenses:**
-     - **WS-02 Trust Indicators:** Directory-retrieved keys display amber `CAUTION: Identity Unverified`. Employees are warned that the identity is not certified by corporate CA.
-     - **Key Pinning (TOFU):** Existing contacts reject changed keys.
-     - **Transparency Log Audit:** Directory records are published to an append-only verifiable log; unauthorized key injection is publicly detectable.
+1. **Rate Limiting:** Enforced via token bucket per authenticated user (60 req/min) and IP subnet (120 req/min).
+2. **Payload Size Capping:** All submissions are capped at 64 KiB, preventing buffer bloat while accommodating composite post-quantum keys.
+3. **Offline Resilience:** If the directory is unreachable, existing contacts cached in the local vault operate unimpeded. Uncached recipients remain queued in the Outbox without sending in plain text.

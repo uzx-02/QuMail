@@ -6,6 +6,7 @@
 **Target Reviewer:** ChatGPT (Technical Lead & Security Architect)  
 **Branch:** `codex/m7-module-1-6-ws06-ws07`  
 **Accepted Baseline:** `d3b2078` (WS-06/07 Final Accepted Checkpoint)  
+**Documentation Checkpoint:** `3cd4845`  
 
 ---
 
@@ -30,25 +31,25 @@ An automated 3-way handshake over email (Alice auto-sends public key $\rightarro
 - **Inbox Clutter on Secondary Devices:** Mobile apps (iOS Mail, Gmail mobile) display machine-generated handshake emails in plain text.
 - **Mail Loops & Quota Risk:** Auto-responders ("Out of Office") trigger infinite loops, exhausting daily SMTP quotas.
 
-### 2.2 Investigated Architecture: The Two-Pillar Product Model
-The project owner approved investigation of the **Two-Pillar Product Model** (similar to ProtonMail, Virtru, and Microsoft 365 Purview):
-- **Pillar 1 (QuMail-to-QuMail):** Automatic public key lookup via a dedicated QuMail Public Key Directory.
-- **Pillar 2 (QuMail-to-External):** Ephemeral Secure Web Link with browser-side decryption and OTP verification for non-QuMail recipients.
+### 2.2 Adopted Direction: The Two-Pillar Product Model
+The project owner approved architectural investigation of the **Two-Pillar Product Model** (conceptually aligned with modern secure communication architectures such as ProtonMail, Virtru, and Microsoft Purview Message Encryption):
+- **Pillar 1 (QuMail-to-QuMail):** Automated discovery and sealing using the composite post-quantum OpenPGP wire profile via a centralized, verifiable QuMail Public-Key Directory.
+- **Pillar 2 (QuMail-to-External):** Ephemeral Secure Web Link with client-side symmetric encryption, URL-fragment key delivery, server-keyed OTP mailbox verification, and browser-side sandboxed decryption for non-QuMail recipients.
 
 ---
 
-## 3. Cryptographic Invariants & Compatibility Decisions
+## 3. Cryptographic Invariants & Architectural Rules
 
 1. **Strict Cryptographic Profile Preservation:**
-   - The directory and web link workflows **MUST preserve 100% compatibility** with QuMail's accepted wire profile `QM-OPENPGP-PQ-v1` (RFC 9580 / draft-ietf-openpgp-pqc):
-     - Encryption: Composite `ML-KEM-768` + `X25519`
-     - Signatures: Composite `ML-DSA-65` + `Ed25519` (or `Ed25519` standalone primary certification)
+   - Both pillars **MUST preserve 100% compatibility** with QuMail's accepted wire profile `QM-OPENPGP-PQ-v1` (RFC 9580 / draft-ietf-openpgp-pqc):
+     - Encryption Subkey: Composite `ML-KEM-768` + `X25519`
+     - Signing Key: Composite `ML-DSA-65` + `Ed25519` (or `Ed25519` standalone primary certification)
      - Symmetric Cipher: `AES-256-GCM`
    - No algorithmic downgrade, provider substitution, or classical-only fallback is permitted.
 2. **Zero Server Plaintext Visibility:**
-   - The directory server and the web link portal server are treated as **untrusted transport infrastructure**.
-   - Neither server possesses decryption keys or access to unencrypted message bodies.
-   - All message encryption occurs client-side in the native provider (`qumail-m5-provider.exe`); decryption occurs either in the desktop client or in client-side browser WebAssembly via URL fragment keys.
+   - The directory server and the web portal server are treated as **untrusted transport infrastructure**.
+   - Neither server possesses private decryption keys or access to unencrypted message bodies.
+   - All message encryption occurs client-side in the native provider (`qumail-m5-provider.exe`); decryption occurs either in the desktop client or in client-side browser WebCrypto via URL fragment keys.
 3. **Local Vault Protection Preserved:**
    - Existing M3 vault structures, DPAPI boundaries, M4 outbox semantics, and M5 MIME parsers remain untouched.
    - Endpoint private keys, master secrets, and OAuth credentials never reach any server.
@@ -59,16 +60,25 @@ The project owner approved investigation of the **Two-Pillar Product Model** (si
 
 Detailed specification: [`docs/operations/public-key-directory-protocol-specification.md`](file:///C:/Users/uzx/Desktop/Aavishkar-26/QuMail/docs/operations/public-key-directory-protocol-specification.md)
 
-1. **Transferable Public Key (TPK) Format:** Standard OpenPGP packet sequence containing primary key, user ID, self-signatures, and post-quantum subkeys.
-2. **Authenticated Registration & Proof of Possession (PoP):**
-   - Registration requires cryptographic Proof of Key Possession (PoP) by signing a server-generated nonce using the primary private key.
-   - Email identity ownership is established via Google OAuth OIDC ID token or an email-based confirmation challenge.
-3. **Replacement & Key Rotation Protection:**
-   - Directory maintains an append-only, versioned record log (`generation`).
-   - Updating a public key requires a signature from the *previous* active primary key OR an administrative enterprise recovery ceremony. Rogue key substitution is blocked.
-4. **Directory Authenticity:** Lookups return a signed Directory Claim verified against a pinned `QuMailDirectoryAuthorityKey`.
-5. **Privacy & Abuse Safeguards:** Lookups use blinded/hashed identifiers (HMAC-SHA256) to prevent bulk directory scraping. Strict token-bucket rate limiting is enforced per IP and per account.
-6. **Trust Indicators (WS-02 Contract):** Directory-retrieved keys without corporate CA certification display the amber **`CAUTION: Identity Unverified`** badge. Keys provisioned via corporate Group Policy (WS-07) display the emerald green **`SECURE`** badge.
+1. **Transferable Public Key (TPK) Format:** Standard OpenPGP packet sequences strictly adhering to `QM-OPENPGP-PQ-v1`.
+2. **Independent Account Ownership & Proof of Key Possession (PoP):**
+   - **Account Ownership:** Verified independently via OAuth OIDC ID token validation (`email_verified=true`, unexpired, matching audience) or a single-use 256-bit activation challenge sent via email.
+   - **Cryptographic PoP:** The client signs a single-use server challenge bound to normalized email, primary fingerprint, profile version (`QM-OPENPGP-PQ-v1`), protocol audience (`urn:qumail:directory:pop:v1`), and expiry.
+   - **No Cryptographic Downgrade:** When enrolling a composite `ML-DSA-65` + `Ed25519` identity, the PoP signature MUST use the composite signing profile.
+3. **Lookup Privacy & Directory Enumeration Protection:**
+   - Evaluated OPRF-based lookup (RFC 9497 / VOPRF) and Private Information Retrieval (PIR) for future roadmap integration.
+   - Selected for initial pilot: **Authenticated Query Model** over TLS 1.3 with strict per-account (60 queries/min) and per-IP subnet (120 queries/min) token-bucket rate limits.
+   - **Explicit Limitation:** Shared HMAC keys do not prevent enumeration by authenticated clients; the directory operator observes which authenticated accounts query which email addresses. Plaintext query targets are not persisted in access logs.
+4. **Merkle Tree Cryptographic Transparency:**
+   - Directory replaces simple append-only tables with a binary Merkle tree (RFC 6962 / RFC 9162).
+   - Issues Signed Tree Heads (STH) signed by `DirectoryAuthorityKey`.
+   - Returns $O(\log N)$ inclusion proofs for registered keys; clients verify consistency proofs between cached checkpoints.
+   - Independent monitors crawl the tree to detect split-view equivocation.
+5. **Key Replacement & Trust Indicator Rules:**
+   - **TOFU Limitation:** Trust-On-First-Use detects changes after first contact, but does NOT authenticate first contact or prevent first-contact equivocation.
+   - Keys fetched from the directory without corporate CA certification display the amber **`CAUTION: Identity Unverified`** badge.
+   - Only keys certified via corporate Group Policy (WS-07) or enterprise CA display the emerald green **`SECURE`** badge.
+   - Unexplained primary key replacement triggers a hard, non-dismissible **`SECURITY ALERT: Key Substitution Detected`** dialog requiring out-of-band verification.
 
 ---
 
@@ -76,38 +86,49 @@ Detailed specification: [`docs/operations/public-key-directory-protocol-specific
 
 Detailed specification: [`docs/operations/secure-web-link-threat-model-and-protocol.md`](file:///C:/Users/uzx/Desktop/Aavishkar-26/QuMail/docs/operations/secure-web-link-threat-model-and-protocol.md)
 
-1. **Client-Side Key Generation at Sender:**
-   - Sender generates ephemeral symmetric key $K_{\text{msg}} \leftarrow \text{CSPRNG}(256)$.
-   - Encrypts body and attachments with AES-256-GCM. Signs ciphertext digest with sender's Ed25519 key.
-2. **Zero-Knowledge Key Delivery (URL Hash Fragment):**
-   - Ciphertext blob is uploaded to ephemeral portal storage.
-   - $K_{\text{msg}}$ is embedded **exclusively in the URL fragment identifier (`#key`)**:
-     `https://portal.qumail.invalid/view/<MessageID>#<KeyFragment>`
-   - RFC 3986 mandates that URL fragments are never sent to the web server in HTTP requests. The server remains blind to the decryption key.
-3. **OTP Identity Verification:**
-   - Recipient proves inbox ownership by submitting a time-limited 6-digit OTP sent to their email before receiving the encrypted ciphertext.
-4. **Browser-Side Sandboxed Decryption:**
-   - Client-side WebAssembly / Web Cryptography API (`crypto.subtle`) extracts $K_{\text{msg}}$ from `window.location.hash`, decrypts the ciphertext, and renders plain text inside a sandboxed `<iframe>` with scripts and remote asset loading disabled.
-5. **Secure Replies:** Recipient replies are encrypted client-side in the browser before transmission back to the sender.
-6. **Strict Lifecycle:** Ephemeral retention (default 7 days), sender revocation support, and immediate tombstoning after expiration.
+1. **Client-Side Key Generation & Symmetrical Sealing:**
+   - Sender generates ephemeral symmetric key $K_{\text{msg}} \leftarrow \text{CSPRNG}(256)$ and nonce $IV \leftarrow \text{CSPRNG}(96)$.
+   - Encrypts payload with `AES-256-GCM`.
+2. **Composite Post-Quantum Sender Authentication:**
+   - Sender signs message envelope metadata using composite `ML-DSA-65` + `Ed25519` signing keys.
+   - Recipient decryptor validates composite signatures against sender's certificate before presenting the message.
+3. **Zero-Knowledge Key Delivery via URL Hash Fragment:**
+   - Ciphertext blob uploaded to ephemeral portal storage; $K_{\text{msg}}$ is omitted from the server payload.
+   - Access URL: `https://portal-app.qumail.invalid/view/<MessageID>#<KeyFragment>`
+   - RFC 3986 mandates user agents never send `#fragment` in HTTP requests.
+   - **Threat Analysis of Fragment Exposure:** Documented exposure vectors including browser extensions, browser history persistence, clipboard copying, and corporate URL scanners (Proofpoint/Mimecast).
+4. **Untrusted Portal & Decryptor Delivery Integrity:**
+   - Explains why SRI and CSP alone cannot protect against a compromised origin (an attacker modifying the HTML root strips SRI and CSP).
+   - Solution: Decryptor SPA served from an immutable, separately authenticated static origin (e.g., Cloudflare Pages / signed static origin) isolated from dynamic API/storage servers.
+5. **Server-Keyed OTP Mailbox Verification:**
+   - OTP proves mailbox access, NOT legal identity.
+   - Verified via server-secret keyed HMAC: $\text{HMAC-SHA256}(K_{\text{server\_otp\_secret}}, \text{OTP} \parallel M_{\text{id}} \parallel \text{Salt})$ to defeat offline brute-force attacks on leaked databases.
+   - 10-minute validity, maximum 3 attempts before permanent lockout.
+   - **Inherent Limitation:** Mailbox compromise exposes both the invitation link and OTP.
+6. **Complete Cryptographic Reply Protocol:**
+   - Recipient browser encapsulates a fresh symmetric key $K_{\text{reply}}$ to Alice's composite `ML-KEM-768` + `X25519` public subkey.
+   - If Alice's public key certificate is unavailable, reply creation is **blocked** (no unauthenticated fallback permitted).
+7. **Realistic Retention & Deletion Contract:**
+   - Specifies primary database hard deletion, replica lifecycle policies, backup retention windows, access log rotation (30 days), and cryptographic erasure limitations.
 
 ---
 
 ## 6. Implementation Boundaries & Pilot Strategy
 
-1. **No Production Deployment Without Separate Authorization:**
-   - The directory and web portal will **NOT** be deployed to public production environments or registered with live user keys until this architecture review is formally accepted.
-2. **Zero-Cost Pilot Architecture:**
-   - For initial controlled evaluation (10–50 clients), the directory and portal backends can be hosted on zero-cost tiers (Render.com, Cloudflare Workers) using SQLite storage and automated HTTPS certificates.
-3. **Release Gates:**
-   - Commercial Authenticode Code-Signing certificate required for Windows installer distribution.
-   - Google OAuth CASA Tier 2 verification required before public production Gmail release.
-   - Third-party cryptographic audit required before enterprise security claims.
+1. **No Implementation Without Review:**
+   - Implementation of M8 services remains strictly stopped pending formal Technical Lead sign-off.
+2. **Implementation Sequence & Approval Gate:**
+   - Sequential execution: Directory backend $\rightarrow$ Desktop directory integration $\rightarrow$ Multi-device QuMail-to-QuMail acceptance $\rightarrow$ Secure Web Link protocol redesign $\rightarrow$ Portal implementation & pilot.
+   - Secure Web Link implementation is gated behind a separate security-design approval gate.
+3. **External Release Gates:**
+   - Commercial Authenticode EV Code-Signing certificate for Windows installers.
+   - Google CASA Tier 2 verification for production Gmail OAuth scopes.
+   - Independent third-party cryptographic review before enterprise production release.
 
 ---
 
 ## 7. Status and Governance
 
 - **Decision Status:** **PROPOSED** — Awaiting formal Technical Lead review.
-- **Implementation Status:** No code modifications permitted until architecture review sign-off.
+- **Implementation Status:** Gated. No code modifications permitted until architecture review sign-off.
 - **Preserved History:** Baseline `d3b2078` and all M1–M7 invariants preserved intact.

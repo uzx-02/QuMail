@@ -11,19 +11,18 @@
 
 ---
 
-## 1. Problem Statement & Motivation
+## 1. Problem Statement & Operational Context
 
-QuMail's primary wire format (`QM-OPENPGP-PQ-v1`) delivers end-to-end post-quantum security between QuMail endpoints. However, in enterprise and commercial workflows, employees frequently need to communicate confidential materials (contracts, payroll, audit reports) to external recipients (clients, partners, accountants) who do not have QuMail installed.
+QuMail's primary wire format (`QM-OPENPGP-PQ-v1`) provides end-to-end post-quantum encryption between QuMail desktop endpoints. However, in enterprise and commercial workflows, employees must frequently communicate confidential materials to external recipients (clients, outside counsel, auditors) who do not run QuMail.
 
-Forcing an external partner to install a desktop Windows client simply to read a single email causes extreme friction and workflow abandonment.
+Forcing an external correspondent to install desktop software simply to read a single communication causes severe friction and workflow abandonment.
 
-The **Secure Web Link Portal** solves this problem by enabling a **Zero-Install Recipient Experience** while strictly preserving client-side encryption and zero-server-plaintext visibility.
+The **Secure Web Link Portal** provides a zero-install recipient experience while enforcing client-side symmetrical sealing, zero-server-plaintext visibility, and composite post-quantum sender authentication.
 
 ---
 
 ## 2. Threat Model & Security Boundaries
 
-### 2.1 Threat Model Entities
 ```
 +-------------------+           +-------------------------+           +-------------------+
 | Alice (Sender)    |           | QuMail Web Portal       |           | Bob (Recipient)   |
@@ -32,6 +31,7 @@ The **Secure Web Link Portal** solves this problem by enabling a **Zero-Install 
         │                                    │                                    │
         │ 1. Upload Encrypted Blob           │                                    │
         ├───────────────────────────────────►│                                    │
+        │    (POST /api/v1/portal/stage)     │                                    │
         │                                    │                                    │
         │ 2. Email Link with #KeyFragment    │                                    │
         ├────────────────────────────────────┼───────────────────────────────────►│
@@ -39,7 +39,7 @@ The **Secure Web Link Portal** solves this problem by enabling a **Zero-Install 
         │                                    │ 3. HTTP GET /view/UUID (NO #key!)  │
         │                                    │◄───────────────────────────────────┤
         │                                    │                                    │
-        │                                    │ 4. Issue & Verify OTP              │
+        │                                    │ 4. Issue & Keyed-HMAC Verify OTP   │
         │                                    │◄──────────────────────────────────►│
         │                                    │                                    │
         │                                    │ 5. Release Encrypted Blob          │
@@ -49,54 +49,57 @@ The **Secure Web Link Portal** solves this problem by enabling a **Zero-Install 
         │                                    │                                    │  using #key locally]
 ```
 
-1. **Alice (Sender):** Uses the trusted QuMail desktop client on Windows. Generates encryption keys locally.
-2. **Bob (Recipient):** Uses an ordinary web browser on desktop or mobile (Chrome, Safari, Edge, Firefox). Does not possess a local vault.
-3. **QuMail Web Portal Server:** Untrusted cloud or on-premise infrastructure. Hosts the web application and stores ephemeral encrypted blobs. **Treated as an untrusted adversary.**
-4. **Mail Transport Agents (MTAs):** Intermediary mail servers (Google, Microsoft, recipient MTA) transmitting the invitation link and OTP.
-5. **Adversaries:**
-   - *Passive Eavesdropper on Network / SMTP:* Captures emails traversing transit.
-   - *Compromised Web Portal Server:* Attacker with root/database access to the portal storage.
-   - *Malicious Third Party:* Attempts to guess OTPs, intercept links, or access expired messages.
+### 2.1 Threat Model Entities
+1. **Alice (Sender):** Uses the trusted QuMail desktop client on Windows. Executes local key generation, encryption, and composite post-quantum signing.
+2. **Bob (Recipient):** Uses an ordinary web browser on desktop or mobile. Does not possess a local QuMail installation or native post-quantum key vault.
+3. **QuMail Web Portal Server:** Untrusted cloud infrastructure hosting the storage backend. **Treated as an adversary / untrusted host.**
+4. **Mail Transport Agents (MTAs):** Intermediary mail servers (Google, Microsoft, recipient mail server) transmitting the link and OTP.
 
-### 2.2 Security Assets & Required Invariants
+---
 
-| Asset | Protection Required | Mechanism |
-|---|---|---|
-| **Message Body & Attachments** | Confidentiality & Integrity | Encrypted client-side with AES-256-GCM. Portal server **never** sees plaintext. |
-| **Decryption Key ($K_{\text{msg}}$)** | Confidentiality from Server | Delivered via URL Fragment (`#key`). Fragments are **never** transmitted to the server. |
-| **Sender Identity & Authenticity** | Integrity & Non-Repudiation | Digital signature by Alice's Ed25519 signing key over ciphertext digest. |
-| **Recipient Identity Verification** | Authorization | Time-limited One-Time Passcode (OTP) sent to Bob's registered email address. |
-| **Forward Secrecy & Expiration** | Freshness & Replay Prevention | Unique key per message, strict Time-to-Live (TTL), immediate deletion upon expiry. |
+### 2.2 Trusted Decryptor Delivery Analysis
+
+#### 2.2.1 The Untrusted Origin Conundrum
+A critical security challenge in browser-delivered cryptography is that the server serving the client application code is itself treated as untrusted:
+- **SRI and CSP Limitations:** Subresource Integrity (SRI) and Content Security Policy (CSP) headers are delivered *by the server itself*. If the portal origin is compromised, the attacker can modify `index.html`, strip the CSP header, remove SRI tags, and inject JavaScript that reads `window.location.hash` and exfiltrates $K_{\text{msg}}$.
+- **Architectural Safeguards:**
+  1. **Origin Separation (Static vs. Dynamic):** The decryptor Single-Page Application (SPA) is hosted on an immutable, static, signed origin (e.g., Cloudflare Pages / AWS S3 static hosting / GitHub Pages with commit pinning) completely separated from the dynamic API and blob storage origin (`portal-api.qumail.invalid`).
+  2. **Independent Pinned Verification / Web Extension (Enterprise Mode):** Enterprise recipients can install a lightweight browser extension or verify the decryptor SHA-256 hash before execution.
+  3. **Explicit Residual Risk Acknowledgment:** For standard consumer browser sessions without pre-installed extensions, web-delivered cryptography fundamentally depends on the integrity of the web delivery origin at runtime. This is an unavoidable property of zero-install web portals.
+
+#### 2.2.2 Threat Analysis of URL Fragment (`#`) Exposure
+While RFC 3986 §3.5 guarantees that fragment identifiers are not transmitted in HTTP request lines, fragments can still be exposed via side channels:
+1. **Malicious Browser Extensions:** Extensions with `<all_urls>` or `tabs` permissions can read the full URL including the fragment via `chrome.tabs.get()`.
+2. **Browser History Persistence:** Browsers can persist URLs in local history files unless sanitized. Mitigation: The decryptor application calls `window.history.replaceState(null, "", window.location.pathname)` immediately upon extracting the key.
+3. **Enterprise Email Security Scanners (SafeLinks / Mimecast / Proofpoint):** Security appliances rewrite URLs. While the fragment is preserved client-side, dynamic sandbox scanners clicking through the link could execute the decryptor in a remote crawler environment.
+4. **User Clipboard & Chat Sharing:** Users copying the link from the email and pasting it into corporate Slack, Microsoft Teams, or ticketing systems leak the decryption key to those third-party platforms.
 
 ---
 
 ## 3. Cryptographic Protocol Specification
 
-### 3.1 Step 1: Client-Side Key Generation & Encryption (Alice's QuMail Desktop)
+### 3.1 Step 1: Client-Side Symmetrical Sealing & Composite PQ Signing (Alice)
 
-When Alice drafts an email to an external recipient:
-1. **Key Generation:**
-   - Generates ephemeral 256-bit symmetric message key:
-     $$K_{\text{msg}} \leftarrow \text{CSPRNG}(32\text{ bytes})$$
-   - Generates 96-bit random nonce:
-     $$\text{IV} \leftarrow \text{CSPRNG}(12\text{ bytes})$$
-   - Generates UUIDv4 Message Identifier:
-     $$M_{\text{id}} \leftarrow \text{UUIDv4}()$$
-2. **Associated Authenticated Data (AAD):**
-   $$\text{AAD} = \text{UTF8}(M_{\text{id}} \parallel \text{AliceEmail} \parallel \text{BobEmail} \parallel \text{TimestampISO})$$
-3. **Payload Encryption (AES-256-GCM):**
+When Alice composes an email to an external non-QuMail recipient:
+1. **Ephemeral Symmetric Key Generation:**
+   $$K_{\text{msg}} \leftarrow \text{CSPRNG}(256\text{ bits})$$
+   $$\text{IV} \leftarrow \text{CSPRNG}(96\text{ bits})$$
+   $$M_{\text{id}} \leftarrow \text{UUIDv4}()$$
+2. **Payload Encryption (AES-256-GCM):**
    $$(C_{\text{body}}, T_{\text{tag}}) = \text{AES-256-GCM-Encrypt}(K_{\text{msg}}, \text{IV}, \text{PlaintextMessage}, \text{AAD})$$
-4. **Sender Signature:**
-   Alice signs the binding tuple using her local Ed25519 signing key:
-   $$\sigma_{\text{sender}} = \text{Ed25519-Sign}(SK_{\text{Alice}}, \text{SHA256}(M_{\text{id}} \parallel C_{\text{body}} \parallel T_{\text{tag}} \parallel \text{AAD}))$$
-5. **Ciphertext Blob Assembly:**
-   $$\text{Blob} = \{\text{version}: 1, M_{\text{id}}, \text{IV}, C_{\text{body}}, T_{\text{tag}}, \text{AAD}, \sigma_{\text{sender}}, \text{AliceFingerprint}, \text{ExpiresUTC}\}$$
+   Where $\text{AAD} = \text{UTF8}(M_{\text{id}} \parallel \text{AliceEmail} \parallel \text{BobEmail} \parallel T_{\text{timestamp}} \parallel T_{\text{expiry}})$.
+3. **Composite Post-Quantum Sender Authentication:**
+   To maintain cryptographic consistency with `QM-OPENPGP-PQ-v1`, Alice authenticates the message using her composite `ML-DSA-65` + `Ed25519` signing keys:
+   $$\text{MetadataTuple} = \text{"QM-WEBLINK-v1"} \parallel M_{\text{id}} \parallel \text{AliceEmail} \parallel \text{BobEmail} \parallel T_{\text{timestamp}} \parallel T_{\text{expiry}} \parallel \text{SHA256}(C_{\text{body}} \parallel T_{\text{tag}})$$
+   $$\sigma_{\text{composite}} = (\text{ML-DSA-65-Sign}(SK_{\text{mldsa}}, \text{MetadataTuple}), \text{Ed25519-Sign}(SK_{\text{ed25519}}, \text{MetadataTuple}))$$
+4. **Ciphertext Blob Assembly:**
+   $$\text{Blob} = \{M_{\text{id}}, \text{IV}, C_{\text{body}}, T_{\text{tag}}, \text{AAD}, \sigma_{\text{composite}}, \text{AliceCertificateArmor}, T_{\text{expiry}}\}$$
 
 ---
 
-### 3.2 Step 2: Storage Staging & URL Fragment Assembly
+### 3.2 Step 2: Blob Staging & Fragment URL Construction
 
-1. **Blob Upload:** Alice's client uploads $\text{Blob}$ to the portal storage over TLS:
+1. **Blob Upload:** Alice's client uploads $\text{Blob}$ to the portal storage over TLS 1.3:
    ```http
    POST /api/v1/portal/stage
    Content-Type: application/json
@@ -108,100 +111,78 @@ When Alice drafts an email to an external recipient:
      "payload_blob": "<Base64_Blob>"
    }
    ```
-2. **Critical Security Invariant — Key Omission:**
-   $K_{\text{msg}}$ is **NOT** included in the upload payload. The portal receives **only** ciphertext.
-3. **URL Generation (RFC 3986 Fragment Delivery):**
-   Alice's client constructs the access link:
-   $$\text{AccessURL} = \texttt{https://portal.qumail.invalid/view/}M_{\text{id}}\texttt{\#}K_{\text{msg\_hex}}$$
-   - **Why URL Fragment (`#`)?** RFC 3986 Section 3.5 mandates that the fragment identifier is processed purely client-side by user agents. Web browsers **NEVER transmit fragment identifiers in HTTP request headers (`GET /view/UUID HTTP/1.1`)**.
-   - Therefore, the portal web server, intermediate proxies, and access logs **CANNOT observe $K_{\text{msg}}$**.
+2. **Key Omission Invariant:** $K_{\text{msg}}$ is **NOT** included in the upload payload. The portal receives **only** ciphertext and public metadata.
+3. **Access URL Generation:**
+   $$\text{AccessURL} = \texttt{https://portal-app.qumail.invalid/view/}M_{\text{id}}\texttt{\#}K_{\text{msg\_hex}}$$
+4. **Email Invitation:** Alice's client sends the invitation email via her normal mail transport containing $\text{AccessURL}$.
 
 ---
 
-### 3.3 Step 3: Invitation Delivery & Recipient Access
+### 3.3 Step 3: Mailbox Verification via Keyed-HMAC OTP
 
-1. **Invitation Email:** Alice's client transmits a standard email to Bob via her normal SMTP/Gmail transport:
-   > **Subject:** Encrypted message from Alice Smith  
-   > **Body:**  
-   > Alice Smith has sent you a secure encrypted communication via QuMail.  
-   > 🔒 **[View Secure Message](AccessURL)**  
-   > *This message will expire on November 17, 2026.*
-2. **Recipient Clicks Link:** Bob's browser navigates to `https://portal.qumail.invalid/view/<UUID>#<KeyFragment>`.
-   - Browser sends: `GET /view/<UUID>` (no key).
-   - Server responds with the lightweight static WebAssembly/JS decryptor application.
-
----
-
-### 3.4 Step 4: OTP Authentication Challenge
-
-Before releasing the encrypted blob, the portal verifies that the user accessing the link controls `bob@externalcorp.invalid`:
-1. Server generates cryptographically random 6-digit numeric OTP:
+Before releasing the encrypted blob, the portal verifies mailbox access (proving inbox control, not legal identity):
+1. **Challenge Generation:** Portal generates a 6-digit numeric OTP:
    $$\text{OTP} \leftarrow \text{CSPRNG}(6\text{ digits})$$
-2. Server hashes OTP with SHA-256 and stores with a strict **10-minute expiry**:
-   $$\text{OTP\_Hash} = \text{SHA256}(\text{OTP} \parallel M_{\text{id}} \parallel \text{Salt})$$
-3. Server transmits an email to Bob:
-   > **Subject:** Your QuMail verification code  
-   > **Body:** Your one-time access code is: **482 915**. It expires in 10 minutes.
-4. Bob enters the code on the web page.
-5. **Brute Force Defense:** Maximum **3 attempts allowed**. Exceeding 3 failed attempts permanently invalidates the current OTP and initiates a 15-minute cooldown.
-6. Upon successful verification, the portal issues an ephemeral session token and releases the encrypted $\text{Blob}$.
+2. **Keyed Verification Storage:**
+   To prevent offline dictionary brute-forcing ($10^6$ combinations) if the portal database is dumped, the OTP is stored using a server-secret keyed HMAC:
+   $$\text{OTP\_Verifier} = \text{HMAC-SHA256}(K_{\text{server\_otp\_secret}}, \text{OTP} \parallel M_{\text{id}} \parallel \text{Salt})$$
+3. **Delivery & Rate Limiting:**
+   - OTP transmitted via SMTP to `bob@externalcorp.invalid`.
+   - Validity: Strict 10-minute expiry.
+   - Attempt Limit: Maximum 3 failed attempts. Upon the 3rd failure, the message enters permanent lockout.
+4. **Mailbox Compromise Inherent Limitation:** If an attacker compromises Bob's email account, they obtain both the link (with `#key`) and the OTP email, allowing complete message decryption.
 
 ---
 
-### 3.5 Step 5: Browser-Side Sandboxed Decryption
+### 3.4 Step 4: Browser Decryption & Sandboxed Rendering
 
-Once the browser receives $\text{Blob}$:
-1. **Key Extraction:** Client-side JavaScript extracts $K_{\text{msg}}$ from `window.location.hash`.
-2. **Decryption via Web Cryptography API:**
-   - Browser calls `crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData }, key, ciphertext)`.
-   - The browser verifies the GCM authentication tag $T_{\text{tag}}$ and AAD bindings. If altered, decryption fails closed.
-3. **Signature Verification:**
-   - Browser verifies $\sigma_{\text{sender}}$ against Alice's public key (fetched from directory).
+1. **Key Extraction & Sanitization:**
+   - Browser script reads $K_{\text{msg}}$ from `window.location.hash`.
+   - Immediately invokes `window.history.replaceState(null, "", window.location.pathname)` to erase the fragment from URL history.
+2. **WebCrypto Decryption:**
+   - Browser calls `crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: AAD }, key, ciphertext)`.
+   - If authentication tag verification fails, execution halts closed.
+3. **Composite Sender Signature Validation:**
+   - Browser parses `AliceCertificateArmor`, validates Alice's composite `ML-DSA-65` and `Ed25519` public keys against the user ID.
+   - Verifies $\sigma_{\text{composite}}$ over $\text{MetadataTuple}$.
+   - Displays sender verification badge: Green **`VERIFIED POST-QUANTUM SENDER`** or Amber **`SIGNATURE UNVERIFIED`**.
 4. **Sandboxed Plain-Text Rendering:**
-   - Message contents and attachments render inside an isolated, sandboxed `<iframe>`:
+   - Decrypted message is rendered inside an isolated `<iframe>`:
      ```html
-     <iframe sandbox="allow-same-origin" srcdoc="<pre>Safe plain text</pre>"></iframe>
+     <iframe sandbox="allow-same-origin" srcdoc="..."></iframe>
      ```
-   - **Content Security Policy (CSP):**
+   - Enforces strict Content Security Policy:
      `default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'self';`
-   - External network connections, tracking pixels, scripts, and remote stylesheets are strictly prohibited.
-5. **Attachments:** Attachments can be downloaded directly from browser memory via `Blob` object URLs (`URL.createObjectURL()`). Direct execution of `.exe`, `.bat`, etc. is blocked.
 
 ---
 
-### 3.6 Step 6: Secure Browser Reply Flow
+### 3.5 Step 5: Cryptographic Reply Protocol (No Insecure Fallback)
 
-Bob can reply securely without software installation:
-1. Bob drafts his response in the browser interface.
-2. The browser generates a fresh symmetric key $K_{\text{reply}} \leftarrow \text{CSPRNG}(32)$.
-3. If Alice's public key is known, the browser optionally encrypts to Alice's post-quantum public key using compiled WebAssembly ML-KEM-768; otherwise, encrypts with $K_{\text{reply}}$ under AES-256-GCM.
-4. The encrypted reply is submitted to the portal.
-5. Alice's QuMail desktop client receives notification and downloads/decrypts the reply.
-
----
-
-## 4. Lifecycle, Replay & Revocation Safeguards
-
-1. **Strict Time-to-Live (TTL):**
-   - Default expiration: 7 days. Configurable by sender: 1 to 30 days.
-   - Upon reaching `ExpiresUTC`, the portal server's background sweeper permanently zeroizes and deletes $\text{Blob}$ from disk and database.
-2. **Sender Revocation Action:**
-   - Alice's QuMail client maintains a reference to $M_{\text{id}}$ in her local Outbox/Sent records.
-   - If Alice sent an email by mistake, she clicks **Revoke Access** in QuMail.
-   - QuMail sends an authenticated revocation instruction signed with Alice's private key.
-   - The portal immediately marks $M_{\text{id}}$ as revoked and purges the blob. Future access attempts fail with *"This message was revoked by the sender."*
-3. **Replay & Forwarding Protection:**
-   - Forwarding the email to a third party does not grant access unless the third party also has access to Bob's inbox to receive the OTP.
-   - The link cannot be reused once revoked or expired.
+To ensure confidential bidirectional replies without requiring software installation:
+1. **Public Key Retrieval:**
+   The decryptor extracts Alice's composite `ML-KEM-768` + `X25519` public subkey from `AliceCertificateArmor` (or queries the Directory).
+2. **Key Encapsulation & Sealing:**
+   - Browser generates a fresh symmetric key $K_{\text{reply}} \leftarrow \text{CSPRNG}(256)$.
+   - Browser encrypts the reply body and attachments with `AES-256-GCM` using $K_{\text{reply}}$.
+   - Browser encapsulates $K_{\text{reply}}$ to Alice's composite public subkey using WebAssembly:
+     $$(C_{\text{kem}}, SS_{\text{kem}}) = \text{ML-KEM-768-Encaps}(PK_{\text{Alice\_kem}})$$
+     $$(C_{\text{x25519}}, SS_{\text{x25519}}) = \text{X25519-Encaps}(PK_{\text{Alice\_x25519}})$$
+     $$K_{\text{wrap}} = \text{HKDF-SHA256}(SS_{\text{kem}} \parallel SS_{\text{x25519}}, \text{info}=\text{"QM-REPLY-WRAP-v1"})$$
+     $$C_{\text{key}} = \text{AES-KeyWrap}(K_{\text{wrap}}, K_{\text{reply}})$$
+3. **Replay & Thread Binding:**
+   - The reply payload binds original $M_{\text{id}}$, thread ID, monotonic reply sequence number, and timestamp in its authenticated data.
+4. **Mandatory Failure Behavior:**
+   - If Alice's public key certificate is missing, malformed, or fails signature validation, reply creation is **BLOCKED**.
+   - **No Unencrypted Fallback:** The web portal refuses to accept an unencrypted or improperly encapsulated reply.
 
 ---
 
-## 5. Security Evaluation & Residual Risks
+## 4. Retention, Deletion & Cryptographic Erasure Contract
 
-| Threat Scenario | Impact | Mitigation / Residual Risk |
+| Layer | Deletion Contract | Retention Window |
 |---|---|---|
-| **Portal Database Breach / Compromise** | Attacker dumps all database records. | **ZERO Plaintext Leak:** The database contains only AES-256-GCM ciphertext. The keys ($K_{\text{msg}}$) are never stored on the server. |
-| **Mail Server Eavesdropper (Passive MITM)** | Attacker reads emails between Alice and Bob. | The email contains the link with `#key`, but **does NOT contain the OTP**. To decrypt, the attacker must simultaneously compromise the mail transit to intercept the OTP during its 10-minute window. |
-| **Compromised Recipient Mailbox** | Attacker has full access to Bob's Gmail. | If Bob's mailbox is compromised, attacker receives both the link and the OTP. *(This is an unavoidable property of any email-based recovery or zero-install system).* |
-| **Malicious Portal Code Injection (Active MITM)** | Compromised server modifies JS to exfiltrate `window.location.hash`. | **Residual Risk:** An attacker modifying the portal's served JavaScript could exfiltrate the fragment key. **Mitigation:** Subresource Integrity (SRI), static code signing of web assets, Content Security Policy, and optional passphrase protection supplied by Alice out-of-band. |
-| **Post-Quantum Security Status** | Classical AES-256 is quantum-resistant against Grover's algorithm ($2^{128}$ complexity). | The symmetric link encryption is quantum-safe. The transit channel (OTP over standard email/TLS) is classical. |
+| **Primary Storage (DB/Blobs)** | Hard record deletion upon expiry (`ExpiresUTC`) or sender revocation. | Max 30 days (default 7 days). |
+| **Object Storage Replicas** | Automated bucket lifecycle expiration rules purge all blob fragments. | Purged within 24 hours of primary deletion. |
+| **Database Backups** | Point-in-time recovery backups overwrite expired records cyclically. | Retained 14 to 30 days. |
+| **Server Access Logs** | RFC-compliant servers log request paths (`/api/v1/portal/stage`) without `#fragments`. | Retained 30 days for abuse detection, then purged. |
+| **Cryptographic Erasure Limitations** | If ciphertext survives in a database backup, an adversary who captured the URL link from email transit could decrypt the backup blob until the backup expires. | Permanent confidentiality relies on backup lifecycle purging. |
