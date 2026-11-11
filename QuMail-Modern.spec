@@ -14,10 +14,6 @@ added_files = [
     (str(REPO_ROOT / 'frontend' / 'dist'), 'frontend/dist'),
 ]
 
-# Add secret credentials if present
-if (REPO_ROOT / 'secrets' / 'gmail_client_secret.json').is_file():
-    added_files.append((str(REPO_ROOT / 'secrets' / 'gmail_client_secret.json'), 'secrets'))
-
 # Add native provider binaries and manifest if present
 if (REPO_ROOT / 'bin' / 'manifest.json').is_file():
     added_files.append((str(REPO_ROOT / 'bin' / 'manifest.json'), 'bin'))
@@ -109,12 +105,12 @@ coll = COLLECT(
     name='QuMail-App',
 )
 
-# Post-build: Ensure secrets directory is present directly next to QuMail.exe
+# Post-build: Ensure native providers and manifest are present in bin/ adjacent to QuMail.exe
 import shutil
-secrets_src = REPO_ROOT / 'secrets'
-if secrets_src.is_dir():
-    secrets_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'secrets'
-    secrets_dst.mkdir(parents=True, exist_ok=True)
-    for f in secrets_src.glob('*'):
-        if f.is_file():
-            shutil.copy2(f, secrets_dst / f.name)
+bin_src = REPO_ROOT / 'bin'
+if bin_src.is_dir():
+    bin_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'bin'
+    bin_dst.mkdir(parents=True, exist_ok=True)
+    for f in bin_src.glob('*'):
+        if f.is_file() and not f.name.endswith('.gitkeep'):
+            shutil.copy2(f, bin_dst / f.name)

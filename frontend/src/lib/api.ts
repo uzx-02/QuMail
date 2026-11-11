@@ -1,14 +1,15 @@
 import { EmailMessage, HSMStatus, AccountSession } from '../types';
-import { MOCK_MESSAGES, INITIAL_ACCOUNT, INITIAL_HSM } from '../mockData';
+import { INITIAL_ACCOUNT, INITIAL_HSM } from '../mockData';
 
 // Extend Window interface for pywebview
 declare global {
   interface Window {
     pywebview?: {
       api: {
+        ping: () => Promise<{ pong: boolean; version: string; timestamp: number; authenticated: boolean }>;
         getMessages: () => Promise<EmailMessage[]>;
         fetchInbox: () => Promise<EmailMessage[]>;
-        sendMessage: (msg: Partial<EmailMessage>) => Promise<{ success: boolean; id: string }>;
+        sendMessage: (msg: Partial<EmailMessage>) => Promise<{ success: boolean; id?: string; message?: string }>;
         deleteMessage: (id: string) => Promise<boolean>;
         markRead: (id: string, seen: boolean) => Promise<boolean>;
         toggleStar: (id: string) => Promise<boolean>;
@@ -19,9 +20,16 @@ declare global {
         logoutAccount: () => Promise<boolean>;
         lockVault: () => Promise<boolean>;
         googleAuth: () => Promise<any>;
-        checkGoogleConfigured: () => Promise<{ configured: boolean; tokenExists: boolean }>;
-        selectGoogleClientSecret: () => Promise<{ success: boolean; message: string }>;
-        saveGoogleCredentials: (clientId: string, clientSecret: string) => Promise<{ success: boolean; message: string }>;
+        checkGoogleConfigured: () => Promise<{
+          configured: boolean;
+          valid?: boolean;
+          clientId?: string;
+          source?: string;
+          tokenExists: boolean;
+          authRequired?: boolean;
+        }>;
+        selectGoogleClientSecret: () => Promise<{ success: boolean; message: string; clientId?: string }>;
+        saveGoogleCredentials: (clientId: string, clientSecret: string) => Promise<{ success: boolean; message: string; clientId?: string }>;
         authenticateCustomMailbox: (config: {
           email: string;
           password?: string;
@@ -38,27 +46,65 @@ declare global {
 }
 
 class ApiService {
-  private messages: EmailMessage[] = [...MOCK_MESSAGES];
+  private messages: EmailMessage[] = [];
   private account: AccountSession = { ...INITIAL_ACCOUNT };
   private hsm: HSMStatus = { ...INITIAL_HSM };
 
-  constructor() {
-    // Check localStorage for saved user account
-    try {
-      const saved = localStorage.getItem('qumail-account');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.email) {
-          this.account = {
-            ...INITIAL_ACCOUNT,
-            ...parsed,
-            isUnlocked: true,
-          };
-        }
+  /**
+   * Deterministic readiness probe ensuring Edge WebView2 Python bridge is active
+   * before any cryptographic, account, or mailbox requests fire.
+   */
+  async waitForBackend(timeoutMs: number = 6000): Promise<boolean> {
+    if (window.pywebview?.api?.ping) {
+      try {
+        const res = await window.pywebview.api.ping();
+        return Boolean(res?.pong);
+      } catch {
+        // Fall through to poll/listener
       }
-    } catch {
-      // Ignore storage errors
     }
+
+    const start = Date.now();
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const finish = (val: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          window.removeEventListener('pywebviewready', onReady);
+          clearInterval(interval);
+          resolve(val);
+        }
+      };
+
+      const onReady = async () => {
+        try {
+          if (window.pywebview?.api?.ping) {
+            const res = await window.pywebview.api.ping();
+            finish(Boolean(res?.pong));
+            return;
+          }
+        } catch {}
+        finish(Boolean(window.pywebview?.api));
+      };
+
+      window.addEventListener('pywebviewready', onReady);
+
+      const interval = setInterval(async () => {
+        if (window.pywebview?.api?.ping) {
+          try {
+            const res = await window.pywebview.api.ping();
+            if (res?.pong) {
+              finish(true);
+              return;
+            }
+          } catch {}
+        }
+        if (Date.now() - start >= timeoutMs) {
+          finish(false);
+        }
+      }, 50);
+    });
   }
 
   async getMessages(): Promise<EmailMessage[]> {
@@ -68,7 +114,7 @@ class ApiService {
         this.messages = res || [];
         return this.messages;
       } catch (e) {
-        console.warn('Pywebview API getMessages failed, falling back to local memory:', e);
+        console.warn('Pywebview API getMessages failed:', e);
       }
     }
     return [...this.messages];
@@ -87,42 +133,20 @@ class ApiService {
     return [...this.messages];
   }
 
-  async sendMessage(draft: Partial<EmailMessage>): Promise<{ success: boolean; id: string }> {
+  async sendMessage(draft: Partial<EmailMessage>): Promise<{ success: boolean; id?: string; message?: string }> {
     if (window.pywebview?.api?.sendMessage) {
       try {
         const res = await window.pywebview.api.sendMessage(draft);
-        await this.getMessages();
+        if (res.success) {
+          await this.getMessages();
+        }
         return res;
-      } catch (e) {
-        console.warn('Pywebview API sendMessage failed, fallback:', e);
+      } catch (e: any) {
+        console.error('Pywebview API sendMessage exception:', e);
+        return { success: false, message: e?.message || 'Failed to dispatch email.' };
       }
     }
-    const senderEmail = this.account.email || 'guest@qumail.local';
-    const newMsg: EmailMessage = {
-      id: `msg-${Date.now()}`,
-      sender: this.account.email ? this.account.email.split('@')[0] : 'Guest User',
-      senderEmail,
-      recipients: draft.recipients || ['recipient@example.com'],
-      subject: draft.subject || '(No Subject)',
-      snippet: (draft.body || '').slice(0, 80),
-      body: draft.body || '',
-      date: 'Just now',
-      timestamp: Date.now(),
-      seen: true,
-      starred: false,
-      folder: 'sent',
-      category: 'primary',
-      hasAttachments: !!draft.attachments && draft.attachments.length > 0,
-      attachments: draft.attachments,
-      indicator: {
-        badgeLevel: 'SECURE',
-        headline: 'Post-Quantum Sealed',
-        description: 'Sealed with NIST FIPS 203 (ML-KEM-768) and signed locally with ML-DSA-65.',
-        actionAdvice: 'Message stored in outbox.',
-      },
-    };
-    this.messages.unshift(newMsg);
-    return { success: true, id: newMsg.id };
+    return { success: false, message: 'QuMail desktop bridge is not connected.' };
   }
 
   async markRead(id: string, seen: boolean): Promise<boolean> {
@@ -188,9 +212,9 @@ class ApiService {
       }
     }
     return {
-      success: true,
-      hex: '9F82A4C1B3E0D85517283940428B7A1C',
-      rate: 115200,
+      success: false,
+      hex: '',
+      rate: 0,
     };
   }
 
@@ -201,40 +225,53 @@ class ApiService {
         if (acc && acc.email) {
           this.account = {
             email: acc.email,
+            displayName: acc.displayName || acc.email.split('@')[0],
             provider: acc.organization || 'Google Workspace / Gmail',
             pqcAlgorithm: acc.kemAlgorithm || 'ML-KEM-768 (NIST FIPS 203)',
             pqcIdentity: `0x${acc.email.slice(0, 4)}...PQ`,
             isUnlocked: true,
           };
           return { ...this.account };
+        } else {
+          this.account = { ...INITIAL_ACCOUNT, isUnlocked: false };
+          return { ...this.account };
         }
       } catch (e) {
         console.warn('Pywebview API getAccount failed:', e);
       }
     }
+    this.account = { ...INITIAL_ACCOUNT, isUnlocked: false };
     return { ...this.account };
   }
 
   async loginAccount(email: string, displayName?: string, organization?: string): Promise<AccountSession> {
     const trimmed = email.trim();
+    if (window.pywebview?.api?.loginAccount) {
+      try {
+        const acc = await window.pywebview.api.loginAccount(trimmed, displayName, organization);
+        if (acc && acc.email) {
+          this.account = {
+            email: acc.email,
+            displayName: acc.displayName || trimmed.split('@')[0],
+            provider: acc.organization || 'QuMail Secure Corporate',
+            pqcAlgorithm: acc.kemAlgorithm || 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
+            pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
+            isUnlocked: true,
+          };
+          return { ...this.account };
+        }
+      } catch (e) {
+        console.warn('Pywebview loginAccount failed:', e);
+      }
+    }
     this.account = {
       email: trimmed,
+      displayName: displayName || trimmed.split('@')[0],
       provider: organization || 'QuMail Secure Corporate',
       pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
       pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
       isUnlocked: true,
     };
-    try {
-      localStorage.setItem('qumail-account', JSON.stringify(this.account));
-    } catch {}
-
-    if (window.pywebview?.api?.loginAccount) {
-      try {
-        await window.pywebview.api.loginAccount(trimmed, displayName, organization);
-      } catch (e) {
-        console.warn('Pywebview loginAccount failed:', e);
-      }
-    }
     return { ...this.account };
   }
 
@@ -255,14 +292,12 @@ class ApiService {
           const domain = config.email.split('@')[1] || 'Custom';
           this.account = {
             email: res.account.email,
+            displayName: res.account.displayName || config.displayName || res.account.email.split('@')[0],
             provider: `${domain.charAt(0).toUpperCase() + domain.slice(1)} (IMAP/TLS)`,
             pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
             pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,
             isUnlocked: true,
           };
-          try {
-            localStorage.setItem('qumail-account', JSON.stringify(this.account));
-          } catch {}
           if (res.messages) {
             this.messages = res.messages;
           }
@@ -270,32 +305,15 @@ class ApiService {
         }
         return { success: false, message: res.message || 'Custom mailbox authentication failed.' };
       } catch (e: any) {
-        return { success: false, message: e?.message || 'Authentication error.' };
+        return { success: false, message: e?.message || 'Authentication check error.' };
       }
     }
-
-    // Fallback when outside desktop wrapper
-    const trimmed = config.email.trim();
-    const domain = trimmed.split('@')[1] || 'Corporate';
-    this.account = {
-      email: trimmed,
-      provider: `${domain.charAt(0).toUpperCase() + domain.slice(1)} (IMAP/TLS)`,
-      pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
-      pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
-      isUnlocked: true,
-    };
-    try {
-      localStorage.setItem('qumail-account', JSON.stringify(this.account));
-    } catch {}
-    return { success: true, account: this.account };
+    return { success: false, message: 'Custom mailbox verification requires the QuMail desktop environment.' };
   }
 
   async logoutAccount(): Promise<boolean> {
-    this.account = { ...INITIAL_ACCOUNT };
+    this.account = { ...INITIAL_ACCOUNT, isUnlocked: false };
     this.messages = [];
-    try {
-      localStorage.removeItem('qumail-account');
-    } catch {}
 
     if (window.pywebview?.api?.logoutAccount) {
       try {
@@ -314,14 +332,12 @@ class ApiService {
         if (res.success && res.account) {
           this.account = {
             email: res.account.email,
+            displayName: res.account.displayName || res.account.email.split('@')[0],
             provider: 'Google Workspace / Gmail',
             pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
             pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,
             isUnlocked: true,
           };
-          try {
-            localStorage.setItem('qumail-account', JSON.stringify(this.account));
-          } catch {}
           if (res.messages) {
             this.messages = res.messages;
           }
@@ -332,10 +348,17 @@ class ApiService {
         return { success: false, message: e?.message || 'Google OAuth failed' };
       }
     }
-    return { success: false, message: 'Google Auth requires desktop environment.' };
+    return { success: false, message: 'Google Auth requires the QuMail desktop environment.' };
   }
 
-  async checkGoogleConfigured(): Promise<{ configured: boolean; tokenExists: boolean }> {
+  async checkGoogleConfigured(): Promise<{
+    configured: boolean;
+    valid?: boolean;
+    clientId?: string;
+    source?: string;
+    tokenExists: boolean;
+    authRequired?: boolean;
+  }> {
     if (window.pywebview?.api?.checkGoogleConfigured) {
       try {
         return await window.pywebview.api.checkGoogleConfigured();
@@ -346,7 +369,7 @@ class ApiService {
     return { configured: false, tokenExists: false };
   }
 
-  async selectGoogleClientSecret(): Promise<{ success: boolean; message: string }> {
+  async selectGoogleClientSecret(): Promise<{ success: boolean; message: string; clientId?: string }> {
     if (window.pywebview?.api?.selectGoogleClientSecret) {
       try {
         return await window.pywebview.api.selectGoogleClientSecret();
@@ -354,10 +377,10 @@ class ApiService {
         return { success: false, message: e?.message || 'Failed to select client secret' };
       }
     }
-    return { success: false, message: 'File picker not available in browser mode' };
+    return { success: false, message: 'File picker is not available outside desktop environment.' };
   }
 
-  async saveGoogleCredentials(clientId: string, clientSecret: string): Promise<{ success: boolean; message: string }> {
+  async saveGoogleCredentials(clientId: string, clientSecret: string): Promise<{ success: boolean; message: string; clientId?: string }> {
     if (window.pywebview?.api?.saveGoogleCredentials) {
       try {
         return await window.pywebview.api.saveGoogleCredentials(clientId, clientSecret);
@@ -365,7 +388,7 @@ class ApiService {
         return { success: false, message: e?.message || 'Failed to save credentials' };
       }
     }
-    return { success: false, message: 'Not available in browser mode' };
+    return { success: false, message: 'Not available outside desktop environment.' };
   }
 
   async updateAccountEmail(email: string): Promise<boolean> {

@@ -14,6 +14,7 @@ import stat
 import sys
 import time
 import webbrowser
+import secrets
 from urllib.parse import urlparse, parse_qs
 
 from google.oauth2.credentials        import Credentials
@@ -27,8 +28,13 @@ from core.config  import (
     GMAIL_TOKEN_PATH,
     OAUTH_MASTER_KEY_PATH,
     BUILTIN_GMAIL_CLIENT_CONFIG,
+    load_google_client_config,
+    validate_google_client_config,
+    get_google_client_secrets_path,
+    get_gmail_token_path,
+    get_oauth_master_key_path,
 )
-_OAUTH_MASTER_KEY_PATH = OAUTH_MASTER_KEY_PATH
+_OAUTH_MASTER_KEY_PATH = str(get_oauth_master_key_path())
 logger = logging.getLogger("transport.oauth2_gmail")
 
 # -------------------------------------------------------------------------
@@ -379,6 +385,8 @@ class _OAuthLoopbackServer(http.server.HTTPServer):
         self.oauth_code: str | None = None
         self.oauth_error: str | None = None
         self.oauth_state: str | None = None
+        self.expected_state: str | None = None
+        self.nonce: str | None = None
 
 
 def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credentials:
@@ -392,10 +400,14 @@ def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credential
     redirect_uri = f"http://127.0.0.1:{port}/"
     flow.redirect_uri = redirect_uri
 
+    nonce = secrets.token_urlsafe(32)
     auth_url, state = flow.authorization_url(
         prompt="select_account consent",
         access_type="offline",
+        nonce=nonce,
     )
+    server.expected_state = state
+    server.nonce = nonce
     logger.info("Opening system browser for Google OAuth: redirect=%s", redirect_uri)
     webbrowser.open(auth_url, new=1, autoraise=True)
 
@@ -412,6 +424,10 @@ def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credential
         raise GmailAuthError(f"Google sign-in was declined: {server.oauth_error}")
     if not server.oauth_code:
         raise GmailAuthError("Google sign-in timed out waiting for browser consent.")
+
+    # Constant-time state parameter verification
+    if not server.oauth_state or not secrets.compare_digest(server.expected_state or "", server.oauth_state or ""):
+        raise GmailAuthError("OAuth state parameter mismatch (possible CSRF or replay attempt).")
 
     # Exchange authorization code for tokens with retry logic for transient TLS interruptions
     last_exc = None
@@ -467,22 +483,18 @@ def get_access_token() -> str:
                 creds = None
 
         # --- No credentials or refresh failed: run browser consent flow ---
-        if os.path.exists(GMAIL_CLIENT_SECRETS_PATH):
-            flow = InstalledAppFlow.from_client_secrets_file(
-                GMAIL_CLIENT_SECRETS_PATH,
-                scopes=GMAIL_SCOPES,
-            )
-        elif BUILTIN_GMAIL_CLIENT_CONFIG["installed"].get("client_id"):
-            flow = InstalledAppFlow.from_client_config(
-                BUILTIN_GMAIL_CLIENT_CONFIG,
-                scopes=GMAIL_SCOPES,
-            )
-        else:
+        client_config, source_desc, err = load_google_client_config()
+        if not client_config:
             raise GmailAuthError(
-                "Google OAuth Client ID is not configured. "
-                "Please select your client_secret.json or connect your Gmail account "
-                "using an App Password under Custom Mailbox."
+                f"Google OAuth client configuration not found: {err or 'Missing client_secret.json'}. "
+                "Please select your client_secret.json or configure your Gmail account "
+                "under Custom Mailbox."
             )
+        logger.info("Initializing Google OAuth flow using %s", source_desc)
+        flow = InstalledAppFlow.from_client_config(
+            client_config,
+            scopes=GMAIL_SCOPES,
+        )
         creds = _run_loopback_flow(flow)
         _save_credentials(creds)
         return creds.token
@@ -498,50 +510,62 @@ def get_access_token() -> str:
 def authorize_google_account() -> dict:
     """
     Run browser Google OAuth 2.0 PKCE consent flow and return verified user profile and tokens.
-    Uses custom client_secret.json if present, or seamless preconfigured desktop credentials.
+    Uses canonical or auto-discovered client_secret.json, or preconfigured credentials.
     Presents an informative confirmation card in the browser instructing the user to close the tab.
     """
     sanitize_ssl_environment()
 
-    # Initialize flow: custom secrets file takes precedence; otherwise builtin desktop config
-    if os.path.exists(GMAIL_CLIENT_SECRETS_PATH):
-        logger.info("Initializing Google OAuth flow using %s", GMAIL_CLIENT_SECRETS_PATH)
-        flow = InstalledAppFlow.from_client_secrets_file(
-            GMAIL_CLIENT_SECRETS_PATH,
-            scopes=GMAIL_SCOPES,
-        )
-    elif BUILTIN_GMAIL_CLIENT_CONFIG["installed"].get("client_id"):
-        logger.info("Initializing Google OAuth flow using built-in desktop client configuration")
-        flow = InstalledAppFlow.from_client_config(
-            BUILTIN_GMAIL_CLIENT_CONFIG,
-            scopes=GMAIL_SCOPES,
-        )
-    else:
+    client_config, source_desc, err = load_google_client_config()
+    if not client_config:
         raise GmailAuthError(
-            "Google OAuth Client ID is not configured. "
-            "Please select your client_secret.json or connect your Gmail account "
-            "using an App Password under Custom Mailbox."
+            f"Google OAuth client configuration not found: {err or 'Missing client_secret.json'}. "
+            "Please select your client_secret_*.json via 'Select client_secret.json' or configure your credentials."
         )
+
+    logger.info("Initializing Google OAuth flow using %s", source_desc)
+    flow = InstalledAppFlow.from_client_config(
+        client_config,
+        scopes=GMAIL_SCOPES,
+    )
 
     creds = _run_loopback_flow(flow)
     _save_credentials(creds)
 
     user_email = ""
     display_name = ""
+    sub = ""
 
-    # Strategy 1: Decode JWT id_token (100% offline, zero network requests, avoids all connection errors)
+    # Strategy 1: Cryptographically verify ID token JWT with audience matching client_id
     id_token = getattr(creds, "id_token", None)
+    installed_or_web = client_config.get("installed") or client_config.get("web") or client_config
+    client_id = installed_or_web.get("client_id", "")
+
     if id_token and isinstance(id_token, str):
         try:
-            parts = id_token.split(".")
-            if len(parts) >= 2:
-                payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
-                claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
-                user_email = claims.get("email", "")
-                display_name = claims.get("name", "")
-                logger.info("Extracted user profile from id_token: email=%s, name=%s", user_email, display_name)
-        except Exception as jwt_err:
-            logger.warning("Could not decode id_token JWT: %s", jwt_err)
+            from google.oauth2 import id_token as google_id_token
+            from google.auth.transport.requests import Request as GoogleRequest
+            verified_claims = google_id_token.verify_oauth2_token(
+                id_token,
+                GoogleRequest(),
+                audience=client_id,
+            )
+            user_email = verified_claims.get("email", "")
+            display_name = verified_claims.get("name", "")
+            sub = verified_claims.get("sub", "")
+            logger.info("Cryptographically verified Google ID token: email=%s, sub=%s", user_email, sub)
+        except Exception as ver_err:
+            logger.warning("Google ID token signature verification note: %s; decoding payload claims", ver_err)
+            try:
+                parts = id_token.split(".")
+                if len(parts) >= 2:
+                    payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+                    claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
+                    user_email = claims.get("email", "")
+                    display_name = claims.get("name", "")
+                    sub = claims.get("sub", "")
+                    logger.info("Extracted user profile from id_token claims: email=%s, name=%s", user_email, display_name)
+            except Exception as jwt_err:
+                logger.warning("Could not decode id_token JWT: %s", jwt_err)
 
     # Strategy 2: If id_token didn't provide email, query userinfo endpoint
     if not user_email:
@@ -556,12 +580,14 @@ def authorize_google_account() -> dict:
                 data = resp.json()
                 user_email = data.get("email", "")
                 display_name = data.get("name", "")
+                sub = data.get("sub", "")
         except Exception as net_err:
             logger.warning("Userinfo network query note: %s", net_err)
 
     return {
         "email": user_email,
         "displayName": display_name or (user_email.split("@")[0] if user_email else ""),
+        "subject": sub,
         "token": creds.token,
     }
 

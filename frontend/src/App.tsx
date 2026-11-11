@@ -36,6 +36,8 @@ export const App: React.FC = () => {
   const [account, setAccount] = useState<AccountSession>(INITIAL_ACCOUNT);
   const [hsmStatus, setHsmStatus] = useState<HSMStatus>(INITIAL_HSM);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [backendReady, setBackendReady] = useState<boolean | null>(null);
+  const [backendError, setBackendError] = useState<string | null>(null);
 
   // Sync dark mode class on <html>
   useEffect(() => {
@@ -48,29 +50,42 @@ export const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
+  const initData = useCallback(async () => {
+    setBackendReady(null);
+    setBackendError(null);
+    try {
+      const ready = await api.waitForBackend(6000);
+      if (!ready) {
+        setBackendReady(false);
+        setBackendError('QuMail desktop bridge did not attach within 6 seconds. Please ensure QuMail is launched via Launch-QuMail-Modern.bat.');
+        return;
+      }
+      setBackendReady(true);
+
+      const [msgs, acc, hsm] = await Promise.all([
+        api.getMessages(),
+        api.getAccount(),
+        api.getHSMStatus(),
+      ]);
+      setMessages(msgs);
+      setAccount(acc);
+      setHsmStatus(hsm);
+
+      // If no email exists in session, prompt sign in
+      if (!acc.email) {
+        setIsSignInOpen(true);
+      }
+    } catch (e: any) {
+      console.error('Failed to initialize QuMail state:', e);
+      setBackendReady(false);
+      setBackendError(e?.message || 'Failed to initialize QuMail bridge');
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
-    const initData = async () => {
-      try {
-        const [msgs, acc, hsm] = await Promise.all([
-          api.getMessages(),
-          api.getAccount(),
-          api.getHSMStatus(),
-        ]);
-        setMessages(msgs);
-        setAccount(acc);
-        setHsmStatus(hsm);
-
-        // If no email exists in session, prompt sign in
-        if (!acc.email) {
-          setIsSignInOpen(true);
-        }
-      } catch (e) {
-        console.error('Failed to initialize QuMail state:', e);
-      }
-    };
     initData();
-  }, []);
+  }, [initData]);
 
   const handleToggleTheme = useCallback(() => {
     setIsDarkMode((prev) => !prev);
@@ -243,6 +258,30 @@ export const App: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
+
+      {/* Bridge Readiness Alert Banners */}
+      {backendReady === null && (
+        <div className="h-9 bg-blue-500/10 dark:bg-blue-900/30 border-b border-blue-500/20 px-4 flex items-center justify-between text-xs text-blue-600 dark:text-blue-300 select-none">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+            <span className="font-medium">Connecting to QuMail Desktop Service (Edge WebView2 IPC Handshake)...</span>
+          </div>
+        </div>
+      )}
+      {backendReady === false && (
+        <div className="h-10 bg-rose-500/15 border-b border-rose-500/30 px-4 flex items-center justify-between text-xs text-rose-700 dark:text-rose-300">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+            <span className="font-semibold">{backendError || 'Desktop bridge connection unavailable.'}</span>
+          </div>
+          <button
+            onClick={initData}
+            className="px-3 py-1 bg-rose-600 text-white rounded-md text-[11px] font-bold hover:bg-rose-700 transition-colors cursor-pointer"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
 
       {/* 2. Main Workspace Layout */}
       <div className="flex flex-1 overflow-hidden">

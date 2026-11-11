@@ -104,13 +104,19 @@ def resolve_provider(name: str = "qumail-m5-provider") -> Path:
         if candidate.is_file():
             return candidate.resolve()
 
-    # 3. Application-owned bin/ directory (standard distribution layout)
+    # 3. PyInstaller onedir _internal directory
+    candidate = app_root / "_internal" / "bin" / exe_name
+    searched.append(candidate)
+    if candidate.is_file():
+        return candidate.resolve()
+
+    # 4. Application-owned bin/ directory (standard distribution layout)
     candidate = app_root / "bin" / exe_name
     searched.append(candidate)
     if candidate.is_file():
         return candidate.resolve()
 
-    # 4. Adjacent to current python executable (installed layout)
+    # 5. Adjacent to current python executable (installed layout)
     candidate = Path(sys.executable).parent / "bin" / exe_name
     searched.append(candidate)
     if candidate.is_file():

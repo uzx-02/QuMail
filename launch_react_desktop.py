@@ -34,6 +34,17 @@ import uuid
 import webview
 
 # Core backend imports
+from core.config import (
+    get_user_data_dir,
+    get_user_config_dir,
+    get_google_client_secrets_path,
+    get_gmail_token_path,
+    get_oauth_master_key_path,
+    get_custom_account_path,
+    get_vault_path,
+    load_google_client_config,
+    validate_google_client_config,
+)
 from core.hsm.manager import HSMManager, HSMStatusSnapshot
 from core.hsm.detector import list_com_ports
 from core.logging_config import configure_logging, get_logger
@@ -111,9 +122,8 @@ def _persist_send_key(key_id: str, key_bytes: bytes) -> None:
     """Safely persist ephemeral session key encrypted with master key."""
     try:
         from cryptography.fernet import Fernet
-        from core.config import SEND_KEYS_DIR
-        master_path = Path("secrets/oauth_master.key")
-        send_keys_dir = Path(SEND_KEYS_DIR)
+        master_path = get_oauth_master_key_path()
+        send_keys_dir = get_user_config_dir() / "send_keys"
         send_keys_dir.mkdir(parents=True, exist_ok=True)
         if not master_path.exists():
             master_path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,11 +139,14 @@ def _load_send_key(key_id: str) -> Optional[bytes]:
     """Retrieve decrypted session key from send_keys directory."""
     try:
         from cryptography.fernet import Fernet
-        from core.config import SEND_KEYS_DIR
-        master_path = Path("secrets/oauth_master.key")
-        key_file = Path(SEND_KEYS_DIR) / f"{key_id}.key"
+        master_path = get_oauth_master_key_path()
+        key_file = get_user_config_dir() / "send_keys" / f"{key_id}.key"
         if not master_path.exists() or not key_file.exists():
-            return None
+            # Fallback to legacy secrets dir if present
+            legacy_file = Path("secrets/send_keys") / f"{key_id}.key"
+            if not legacy_file.exists():
+                return None
+            key_file = legacy_file
         fernet = Fernet(master_path.read_bytes())
         return fernet.decrypt(key_file.read_bytes())
     except Exception as exc:
@@ -147,29 +160,90 @@ class QuMailJsApi:
     Handles data queries, real Google OAuth, IMAP retrieval, and post-quantum cryptographic operations.
     """
 
-    def __init__(self, account_email: str = "") -> None:
+    def __init__(self, account_email: str = "", vault_path: str | Path | None = None) -> None:
+        self.vault_path = Path(vault_path) if vault_path else get_vault_path()
         self.account_email = account_email
         self.account_display_name = account_email.split("@")[0] if account_email else ""
         self.account_org = "Google Workspace / Gmail" if "gmail" in account_email else ("Corporate" if account_email else "")
         self.messages: List[Dict[str, Any]] = []
         self.hsm = HSMManager.get()
 
+        # Session discovery on startup: check stored Google token or custom account
+        if not self.account_email:
+            token_path = get_gmail_token_path()
+            if token_path.is_file():
+                try:
+                    from transport.oauth2_gmail import _load_credentials
+                    creds = _load_credentials()
+                    if creds:
+                        id_token_jwt = getattr(creds, "id_token", None)
+                        if id_token_jwt and isinstance(id_token_jwt, str):
+                            parts = id_token_jwt.split(".")
+                            if len(parts) >= 2:
+                                payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+                                claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
+                                self.account_email = claims.get("email", "")
+                                self.account_display_name = claims.get("name", "")
+                                self.account_org = "Google Workspace / Gmail"
+                except Exception as load_err:
+                    logger.debug("Existing Google token load notice: %s", load_err)
+
+            if not self.account_email:
+                try:
+                    from transport.custom_mailbox import load_custom_account
+                    custom_acc = load_custom_account()
+                    if custom_acc and custom_acc.get("email"):
+                        self.account_email = custom_acc.get("email", "")
+                        self.account_display_name = custom_acc.get("displayName", "")
+                        self.account_org = custom_acc.get("organization", "Custom Mailbox")
+                except Exception:
+                    pass
+
         # If an account is already active, sync real mailbox immediately
         if self.account_email:
             self.fetchInbox()
+
+    def ping(self) -> Dict[str, Any]:
+        """Readiness probe / health handshake for frontend bridge."""
+        return {
+            "pong": True,
+            "version": "1.0.0",
+            "timestamp": int(time.time() * 1000),
+            "authenticated": bool(self.account_email),
+        }
+
+    def _ensure_vault_enrolled(self, email: str, auth_result: Optional[Dict[str, Any]] = None) -> None:
+        """Enroll or unlock the authenticated account in the M3 SQLite vault."""
+        try:
+            from core.provider_resolver import resolve_provider
+            from core.identity_service import IdentityService
+            helper = resolve_provider("qumail-m3-provider")
+            service = IdentityService.configured(self.vault_path, helper)
+            create_vault = not self.vault_path.exists()
+            service.unlock(create=create_vault)
+            logger.info("M3 cryptographic vault verified at %s", self.vault_path)
+        except Exception as v_err:
+            logger.debug("M3 vault initialization note: %s", v_err)
 
     def getMessages(self) -> List[Dict[str, Any]]:
         """Return list of email messages."""
         return self.messages
 
     def checkGoogleConfigured(self) -> Dict[str, Any]:
-        """Check if Google client secrets file or built-in desktop configuration is active."""
-        token_path = Path("secrets/gmail_token.json")
-        secrets_path = Path("secrets/gmail_client_secret.json")
+        """Check if Google client secrets file or configuration is active."""
+        cfg, src, err = load_google_client_config()
+        token_exists = get_gmail_token_path().is_file()
+        client_id = ""
+        if cfg:
+            sub = cfg.get("installed") or cfg.get("web") or cfg
+            client_id = sub.get("client_id", "")
         return {
-            "configured": True,  # Built-in desktop client configuration is provided out-of-the-box
-            "hasCustomSecrets": secrets_path.exists(),
-            "tokenExists": token_path.exists(),
+            "configured": bool(cfg and client_id),
+            "valid": bool(client_id),
+            "clientId": client_id,
+            "source": src,
+            "tokenExists": token_exists,
+            "authRequired": not token_exists,
         }
 
     def selectGoogleClientSecret(self) -> Dict[str, Any]:
@@ -193,20 +267,21 @@ class QuMailJsApi:
             with open(selected_path, "r", encoding="utf-8") as f:
                 content = json.load(f)
 
-            if not ("installed" in content or "web" in content or "client_id" in content):
-                return {
-                    "success": False,
-                    "message": "Selected JSON file does not appear to be a valid Google OAuth client secrets file.",
-                }
+            ok, reason_or_id, normalized = validate_google_client_config(content)
+            if not ok or not normalized:
+                return {"success": False, "message": reason_or_id}
 
-            secrets_dir = Path("secrets")
-            secrets_dir.mkdir(parents=True, exist_ok=True)
-            target = secrets_dir / "gmail_client_secret.json"
+            target = get_google_client_secrets_path()
+            target.parent.mkdir(parents=True, exist_ok=True)
             with open(target, "w", encoding="utf-8") as f:
-                json.dump(content, f, indent=2)
+                json.dump(normalized, f, indent=2)
 
-            logger.info("Saved Google client secret from %s to %s", selected_path, target)
-            return {"success": True, "message": "Google Client Secret saved successfully."}
+            logger.info("Saved validated Google client secret from %s to %s", selected_path, target)
+            return {
+                "success": True,
+                "message": f"Google Client Secret verified and saved (Client ID: {reason_or_id[:16]}...).",
+                "clientId": reason_or_id,
+            }
         except Exception as exc:
             logger.error("Failed to select client secret file: %s", exc)
             return {"success": False, "message": str(exc)}
@@ -214,26 +289,30 @@ class QuMailJsApi:
     def saveGoogleCredentials(self, client_id: str, client_secret: str) -> Dict[str, Any]:
         """Save manually entered Google Client ID and Secret."""
         try:
-            if not client_id.strip() or not client_secret.strip():
+            cid = client_id.strip()
+            csec = client_secret.strip()
+            if not cid or not csec:
                 return {"success": False, "message": "Client ID and Client Secret are required."}
-
-            secrets_dir = Path("secrets")
-            secrets_dir.mkdir(parents=True, exist_ok=True)
-            target = secrets_dir / "gmail_client_secret.json"
 
             data = {
                 "installed": {
-                    "client_id": client_id.strip(),
-                    "client_secret": client_secret.strip(),
+                    "client_id": cid,
+                    "client_secret": csec,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://localhost"],
+                    "redirect_uris": ["http://localhost", "http://127.0.0.1"],
                 }
             }
-            with open(target, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            ok, reason_or_id, normalized = validate_google_client_config(data)
+            if not ok or not normalized:
+                return {"success": False, "message": reason_or_id}
 
-            return {"success": True, "message": "Credentials saved successfully."}
+            target = get_google_client_secrets_path()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump(normalized, f, indent=2)
+
+            return {"success": True, "message": "Credentials saved successfully.", "clientId": cid}
         except Exception as exc:
             return {"success": False, "message": str(exc)}
 
@@ -483,100 +562,104 @@ class QuMailJsApi:
         sender_email = self.account_email or "user@qumail.sec"
         sender_name = self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "QuMail User")
 
-        # 1. Attempt live SMTP dispatch if account is connected with Custom Mailbox or Google
+        # 1. Prepare message payload and encrypt if PQ or Weblink
         try:
             from transport.custom_mailbox import load_custom_account
             custom_acc = load_custom_account(sender_email)
-            has_google_token = Path("secrets/gmail_token.json").exists()
+            has_google_token = get_gmail_token_path().is_file()
 
-            if custom_acc or ("gmail" in sender_email and has_google_token) or ("qumail.sec" in sender_email) or ("pytest" in sys.modules):
+            py_msg = None
+            if security_mode == "standard":
+                py_msg = PyEmailMessage()
+                py_msg["From"] = sender_email
+                py_msg["To"] = ", ".join(recipients)
+                py_msg["Subject"] = subject
+                py_msg.set_content(body)
+                for att in attachments:
+                    py_msg.add_attachment(
+                        att.get("data", b""),
+                        maintype="application",
+                        subtype="octet-stream",
+                        filename=att.get("filename", "attachment"),
+                    )
+            elif security_mode == "weblink":
+                # Pillar 2: Ephemeral Secure Web Link with zero-knowledge URL-fragment key delivery
+                from cryptography.hazmat.primitives.asymmetric import ed25519
+                from core.web_link_crypto import create_secure_web_link_package
+
+                signing_key = ed25519.Ed25519PrivateKey.generate()
+                package = create_secure_web_link_package(
+                    plaintext_body=body,
+                    sender_email=sender_email,
+                    recipient_email=recipients[0],
+                    sender_signing_key=signing_key,
+                )
+                py_msg = PyEmailMessage()
+                py_msg["From"] = sender_email
+                py_msg["To"] = ", ".join(recipients)
+                py_msg["Subject"] = f"[QuMail Secure Link] {subject}"
+                invitation_body = (
+                    f"You have received a confidential communication secured by QuMail.\r\n\r\n"
+                    f"Subject: {subject}\r\n\r\n"
+                    f"To decrypt and view this communication client-side in your web browser, open the secure link:\r\n"
+                    f"{package['access_url']}\r\n\r\n"
+                    f"Security Note: The decryption key is contained strictly within the URL fragment (#) "
+                    f"and is never transmitted to any web server."
+                )
+                py_msg.set_content(invitation_body)
+            else:
+                # Maximum Security: Post-Quantum ML-KEM-768 + AES-256-GCM
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                from mime.encapsulator import encapsulate
+
+                k_msg = secrets.token_bytes(32)  # 256-bit symmetric session key
+                iv = secrets.token_bytes(12)      # 96-bit AES-GCM nonce
+                key_id = str(uuid.uuid4())
+
+                payload_dict = {
+                    "body": body,
+                    "attachments": attachments,
+                }
+                payload_bytes = json.dumps(payload_dict).encode("utf-8")
+                aesgcm = AESGCM(k_msg)
+                ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
+
+                # Persist session key locally for instant sender-side decapsulation
+                _persist_send_key(key_id, k_msg)
+
+                metadata = {
+                    "tqr_level": 3,
+                    "algorithm": "ML-KEM-768+AES-256-GCM",
+                    "nonce": iv.hex(),
+                    "tag": "",
+                    "key_id": key_id,
+                }
+
+                py_msg = encapsulate(
+                    sender=sender_email,
+                    recipient=", ".join(recipients),
+                    subject=subject,
+                    ciphertext=ciphertext,
+                    metadata=metadata,
+                )
+
+            # 2. Dispatch via SMTP if an authenticated transport is configured
+            can_send_smtp = bool(
+                custom_acc
+                or ("gmail" in sender_email and has_google_token)
+                or ("qumail.sec" in sender_email and "transport.smtp_sender" in sys.modules)
+            )
+
+            if can_send_smtp and py_msg is not None:
                 from transport.smtp_sender import send_email
-
-                if security_mode == "standard":
-                    # Conventional Unencrypted Email
-                    py_msg = PyEmailMessage()
-                    py_msg["From"] = sender_email
-                    py_msg["To"] = ", ".join(recipients)
-                    py_msg["Subject"] = subject
-                    py_msg.set_content(body)
-                    for att in attachments:
-                        py_msg.add_attachment(
-                            att.get("data", b""),
-                            maintype="application",
-                            subtype="octet-stream",
-                            filename=att.get("filename", "attachment"),
-                        )
-                    send_email(sender_email, recipients[0], py_msg)
-                    logger.info("Dispatched conventional email via SMTP to %s", recipients)
-                elif security_mode == "weblink":
-                    # Pillar 2: Ephemeral Secure Web Link with zero-knowledge URL-fragment key delivery
-                    from cryptography.hazmat.primitives.asymmetric import ed25519
-                    from core.web_link_crypto import create_secure_web_link_package
-
-                    signing_key = ed25519.Ed25519PrivateKey.generate()
-                    package = create_secure_web_link_package(
-                        plaintext_body=body,
-                        sender_email=sender_email,
-                        recipient_email=recipients[0],
-                        sender_signing_key=signing_key,
-                    )
-                    py_msg = PyEmailMessage()
-                    py_msg["From"] = sender_email
-                    py_msg["To"] = ", ".join(recipients)
-                    py_msg["Subject"] = f"[QuMail Secure Link] {subject}"
-                    invitation_body = (
-                        f"You have received a confidential communication secured by QuMail.\r\n\r\n"
-                        f"Subject: {subject}\r\n\r\n"
-                        f"To decrypt and view this communication client-side in your web browser, open the secure link:\r\n"
-                        f"{package['access_url']}\r\n\r\n"
-                        f"Security Note: The decryption key is contained strictly within the URL fragment (#) "
-                        f"and is never transmitted to any web server."
-                    )
-                    py_msg.set_content(invitation_body)
-                    send_email(sender_email, recipients[0], py_msg)
-                    logger.info("Dispatched Secure Web Link email via SMTP to %s", recipients)
-                else:
-                    # Maximum Security (Post-Quantum ML-KEM-768 + AES-256-GCM)
-                    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-                    from mime.encapsulator import encapsulate
-
-                    k_msg = secrets.token_bytes(32)  # 256-bit symmetric session key
-                    iv = secrets.token_bytes(12)      # 96-bit AES-GCM nonce
-                    key_id = str(uuid.uuid4())
-
-                    # Encrypt plaintext body and serialized attachments
-                    payload_dict = {
-                        "body": body,
-                        "attachments": attachments,
-                    }
-                    payload_bytes = json.dumps(payload_dict).encode("utf-8")
-                    aesgcm = AESGCM(k_msg)
-                    ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
-
-                    # Persist session key locally for instant sender-side decapsulation
-                    _persist_send_key(key_id, k_msg)
-
-                    metadata = {
-                        "tqr_level": 3,
-                        "algorithm": "ML-KEM-768+AES-256-GCM",
-                        "nonce": iv.hex(),
-                        "tag": "",
-                        "kem_ciphertext": secrets.token_hex(32),
-                        "key_id": key_id,
-                    }
-
-                    mime_msg = encapsulate(
-                        sender=sender_email,
-                        recipient=", ".join(recipients),
-                        subject=subject,
-                        ciphertext=ciphertext,
-                        metadata=metadata,
-                    )
-                    send_email(sender_email, recipients[0], mime_msg)
-                    logger.info("Dispatched Post-Quantum sealed email via SMTP to %s", recipients)
+                send_email(sender_email, recipients[0], py_msg)
+                logger.info("Dispatched %s email via SMTP to %s", security_mode, recipients)
+            else:
+                logger.info("Message sealed and stored locally in outbox (no remote SMTP transport active): %s", recipients)
 
         except Exception as send_err:
-            logger.warning("Live SMTP dispatch note (stored in outbox): %s", send_err)
+            logger.error("Live SMTP dispatch error: %s", send_err)
+            return {"success": False, "message": f"SMTP dispatch failed: {send_err}"}
 
         # 2. Record new message record in local state
         if security_mode == "standard":
@@ -708,10 +791,21 @@ class QuMailJsApi:
         return self.getAccount()
 
     def logoutAccount(self) -> bool:
-        """Sign out active user session."""
+        """Sign out active user session and purge local token material."""
         self.account_email = ""
         self.account_display_name = ""
         self.account_org = ""
+        self.messages = []
+        try:
+            from transport.oauth2_gmail import revoke_token
+            revoke_token()
+        except Exception as exc:
+            logger.debug("Token revocation notice on logout: %s", exc)
+        try:
+            from transport.custom_mailbox import clear_custom_account
+            clear_custom_account()
+        except Exception:
+            pass
         logger.info("Account signed out.")
         return True
 
@@ -738,7 +832,7 @@ def main() -> int:
     parser.add_argument("--dev", action="store_true", help="Connect to Vite dev server (http://localhost:5173)")
     parser.add_argument("--port", type=int, default=0, help="Local HTTP server port (0 = auto-select)")
     parser.add_argument("--dev-mailbox", action="store_true", help="Launch modern mailbox mode (default)")
-    parser.add_argument("--dev-vault", type=str, default="", help="Path to explicit SQLite vault")
+    parser.add_argument("--vault", "--dev-vault", dest="vault", type=str, default="", help="Path to explicit SQLite vault")
     parser.add_argument("--account", type=str, default="", help="Default user email")
     args = parser.parse_args()
 
@@ -760,7 +854,7 @@ def main() -> int:
         logger.info("Serving modern React frontend at %s", target_url)
 
     # 2. Initialize JS-to-Python bridge
-    js_api = QuMailJsApi(account_email=args.account)
+    js_api = QuMailJsApi(account_email=args.account, vault_path=args.vault)
 
     # 3. Create pywebview window
     window = webview.create_window(

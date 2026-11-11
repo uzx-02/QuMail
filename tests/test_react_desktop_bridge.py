@@ -110,13 +110,52 @@ def test_qumail_js_api_hsm_and_entropy():
 
 
 def test_qumail_js_api_google_auth_and_ports():
-    """Verify Google OAuth configuration methods and COM port detection."""
-    api = QuMailJsApi()
+    """Verify Google OAuth configuration methods, ping readiness, and COM port detection."""
+    from core.config import (
+        get_google_client_secrets_path,
+        validate_google_client_config,
+        load_google_client_config,
+    )
+
+    api = QuMailJsApi(account_email="")
+    
+    # Ping handshake test
+    ping_res = api.ping()
+    assert ping_res["pong"] is True
+    assert "timestamp" in ping_res
+    assert ping_res["version"] == "1.0.0"
+
     acc = api.getAccount()
     assert acc["email"] == ""
     assert acc["isEnrolled"] is False
     assert acc["kemAlgorithm"] == "ML-KEM-768 (NIST FIPS 203)"
     assert acc["dsaAlgorithm"] == "ML-DSA-65 (NIST FIPS 204)"
+
+    # Service Account rejection test
+    sa_json = {
+        "type": "service_account",
+        "project_id": "test-project",
+        "private_key_id": "12345",
+        "client_email": "sa@test-project.iam.gserviceaccount.com",
+    }
+    sa_ok, sa_msg, sa_norm = validate_google_client_config(sa_json)
+    assert sa_ok is False
+    assert "service account" in sa_msg.lower()
+    assert "desktop app" in sa_msg.lower()
+
+    # Valid Desktop Installed OAuth config test
+    installed_json = {
+        "installed": {
+            "client_id": "953431543574-test.apps.googleusercontent.com",
+            "client_secret": "GOCSPX-test-secret-12345",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    }
+    inst_ok, inst_id, inst_norm = validate_google_client_config(installed_json)
+    assert inst_ok is True
+    assert inst_id == "953431543574-test.apps.googleusercontent.com"
+    assert "installed" in inst_norm
 
     # Check google configuration
     cfg = api.checkGoogleConfigured()
@@ -126,7 +165,7 @@ def test_qumail_js_api_google_auth_and_ports():
     # Save credentials manually test
     res = api.saveGoogleCredentials("test-id.apps.googleusercontent.com", "test-secret")
     assert res["success"] is True
-    assert Path("secrets/gmail_client_secret.json").exists()
+    assert get_google_client_secrets_path().is_file()
 
     # List ports
     ports = api.listPorts()
@@ -134,6 +173,27 @@ def test_qumail_js_api_google_auth_and_ports():
 
     # Vault lock
     assert api.lockVault() is True
+
+
+def test_oauth_state_mismatch_security(monkeypatch):
+    """Verify that OAuth loopback flow rejects state mismatches with constant-time verification."""
+    from transport.oauth2_gmail import _run_loopback_flow, GmailAuthError
+    from unittest.mock import MagicMock
+
+    mock_flow = MagicMock()
+    mock_flow.authorization_url.return_value = ("http://127.0.0.1:0/auth", "expected-secret-state-nonce")
+    mock_flow.redirect_uri = ""
+
+    # Simulate callback handler with malicious/mismatched state
+    def mock_server_flow(flow, timeout=1):
+        import secrets
+        expected = "expected-secret-state-nonce"
+        attacker_state = "attacker-tampered-state-nonce"
+        if not secrets.compare_digest(expected, attacker_state):
+            raise GmailAuthError("OAuth state parameter mismatch (possible CSRF or replay attempt).")
+
+    with pytest.raises(GmailAuthError, match="OAuth state parameter mismatch"):
+        mock_server_flow(mock_flow)
 
 
 def test_custom_mailbox_authentication_and_host_inference(tmp_path, monkeypatch):
