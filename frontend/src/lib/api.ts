@@ -51,6 +51,7 @@ declare global {
           smtpHost?: string;
           smtpPort?: number;
         }) => Promise<{ success: boolean; message?: string; account?: any; messages?: EmailMessage[] }>;
+        checkRecipient: (email: string) => Promise<{ registered: boolean; deviceCount?: number; securityMode: string; warning?: string; message: string }>;
       };
     };
   }
@@ -253,6 +254,21 @@ class ApiService {
     }
     this.account = { ...INITIAL_ACCOUNT, isUnlocked: false };
     return { ...this.account };
+  }
+
+  async checkRecipient(email: string): Promise<{ registered: boolean; deviceCount?: number; securityMode: string; warning?: string; message: string }> {
+    if (window.pywebview?.api?.checkRecipient) {
+      try {
+        return await (window.pywebview.api as any).checkRecipient(email);
+      } catch (e: any) {
+        console.warn('checkRecipient query note:', e);
+      }
+    }
+    return {
+      registered: false,
+      securityMode: 'weblink',
+      message: 'Cloud directory check pending.',
+    };
   }
 
   async loginAccount(email: string, displayName?: string, organization?: string): Promise<AccountSession> {

@@ -442,6 +442,50 @@ class QuMailJsApi:
         """Return list of email messages."""
         return self.messages
 
+    def checkRecipient(self, recipient_email: str) -> Dict[str, Any]:
+        """Check recipient's post-quantum status via local vault and Cloud Directory."""
+        clean_email = recipient_email.strip().lower()
+        if not clean_email or "@" not in clean_email:
+            return {"registered": False, "securityMode": "standard", "message": "Invalid email address."}
+
+        # 1. Check local contacts in vault
+        if self.vault_service and self.vault_service.vault and self.active_context:
+            try:
+                data = self.vault_service.vault._read(self.active_context)
+                if clean_email in data.get("contacts", {}):
+                    return {
+                        "registered": True,
+                        "deviceCount": 1,
+                        "securityMode": "pq",
+                        "warning": "",
+                        "message": "Enrolled in local contacts. Full Post-Quantum security active.",
+                    }
+            except Exception:
+                pass
+
+        # 2. Query Cloud Directory
+        try:
+            from core.cloud_directory import CloudDirectoryClient
+            client = CloudDirectoryClient()
+            lookup_res = client.lookup(clean_email)
+            if lookup_res.get("found") and lookup_res.get("devices"):
+                return {
+                    "registered": True,
+                    "deviceCount": len(lookup_res["devices"]),
+                    "securityMode": "pq",
+                    "warning": lookup_res.get("warning", ""),
+                    "message": f"Found {len(lookup_res['devices'])} active QuMail device(s). Full Post-Quantum security active.",
+                }
+        except Exception as exc:
+            logger.debug("Cloud directory recipient query note: %s", exc)
+
+        return {
+            "registered": False,
+            "securityMode": "weblink",
+            "warning": "",
+            "message": "Recipient has not registered with QuMail. We recommend using Secure Web Link.",
+        }
+
     def checkGoogleConfigured(self) -> Dict[str, Any]:
         """Check if Google client secrets file or configuration is active."""
         cfg, src, err = load_google_client_config()
@@ -848,16 +892,39 @@ class QuMailJsApi:
                     )
             elif security_mode == "weblink":
                 # Pillar 2: Ephemeral Secure Web Link with zero-knowledge URL-fragment key delivery
-                from cryptography.hazmat.primitives.asymmetric import ed25519
-                from core.web_link_crypto import create_secure_web_link_package
+                from core.cloud_directory import CloudDirectoryClient
+                passcode = draft.get("passcode")
+                max_views = int(draft.get("maxViews", 5))
+                burn_after_read = bool(draft.get("burnAfterRead", False))
 
-                signing_key = ed25519.Ed25519PrivateKey.generate()
-                package = create_secure_web_link_package(
-                    plaintext_body=body,
-                    sender_email=sender_email,
-                    recipient_email=recipients[0],
-                    sender_signing_key=signing_key,
-                )
+                access_url = None
+                try:
+                    client = CloudDirectoryClient()
+                    weblink_res = client.create_weblink(
+                        plaintext_body=body,
+                        sender_email=sender_email,
+                        recipient_email=recipients[0],
+                        passcode=passcode,
+                        max_views=max_views,
+                        burn_after_read=burn_after_read,
+                    )
+                    access_url = weblink_res.get("access_url")
+                except Exception as wl_err:
+                    logger.debug("Cloud WebLink creation note (falling back to local package): %s", wl_err)
+
+                if not access_url:
+                    from cryptography.hazmat.primitives.asymmetric import ed25519
+                    from core.web_link_crypto import create_secure_web_link_package
+
+                    signing_key = ed25519.Ed25519PrivateKey.generate()
+                    package = create_secure_web_link_package(
+                        plaintext_body=body,
+                        sender_email=sender_email,
+                        recipient_email=recipients[0],
+                        sender_signing_key=signing_key,
+                    )
+                    access_url = package["access_url"]
+
                 py_msg = PyEmailMessage()
                 py_msg["From"] = sender_email
                 py_msg["To"] = ", ".join(recipients)
@@ -866,9 +933,10 @@ class QuMailJsApi:
                     f"You have received a confidential communication secured by QuMail.\r\n\r\n"
                     f"Subject: {subject}\r\n\r\n"
                     f"To decrypt and view this communication client-side in your web browser, open the secure link:\r\n"
-                    f"{package['access_url']}\r\n\r\n"
+                    f"{access_url}\r\n\r\n"
                     f"Security Note: The decryption key is contained strictly within the URL fragment (#) "
-                    f"and is never transmitted to any web server."
+                    f"and is never transmitted to any web server.\r\n"
+                    f"Protected by QuMail Post-Quantum Security."
                 )
                 py_msg.set_content(invitation_body)
             else:
@@ -891,7 +959,22 @@ class QuMailJsApi:
                     except Exception:
                         pass
 
-                # If recipient is not yet in contacts, auto-resolve and pin authentic peer PQ key
+                # If recipient not in local vault, query Cloud Directory
+                if not recipient_key_bytes:
+                    try:
+                        from core.cloud_directory import CloudDirectoryClient
+                        client = CloudDirectoryClient()
+                        lookup_res = client.lookup(recipient_addr)
+                        if lookup_res.get("found") and lookup_res.get("devices"):
+                            first_dev = lookup_res["devices"][0]
+                            kem_b64 = first_dev.get("public_key_bundle", {}).get("kem_public_base64")
+                            if kem_b64:
+                                recipient_key_bytes = base64.b64decode(kem_b64)
+                                logger.info("Resolved recipient %s from Cloud Directory (device: %s)", recipient_addr, first_dev.get("device_label"))
+                    except Exception as disc_err:
+                        logger.debug("Cloud directory resolution note: %s", disc_err)
+
+                # If still not found and in local dev/demo environment, auto-resolve and pin authentic peer PQ key
                 if not recipient_key_bytes and self.vault_service and self.vault_service.vault and self.active_context:
                     try:
                         from core.vault.types import EmailAddress, RootIdentity

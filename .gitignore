@@ -15,6 +15,7 @@ build/
 !frontend/dist/
 .uv-cache/
 .env
+node_modules/
 
 # QuMail local secrets and OAuth artifacts
 secrets/

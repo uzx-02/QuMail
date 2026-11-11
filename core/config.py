@@ -362,3 +362,10 @@ YAHOO_SCOPES        = [
 # --- App Metadata ---
 APP_NAME         = "QuMail"
 APP_VERSION      = "1.0.0"
+
+# --- Cloud Public Key Directory & WebLink Gateway ---
+DEFAULT_DIRECTORY_URL = "https://qumail-directory.workers.dev"
+
+def get_directory_server_url() -> str:
+    """Return configured cloud directory server URL."""
+    return os.environ.get("QUMAIL_DIRECTORY_URL", DEFAULT_DIRECTORY_URL).rstrip("/")

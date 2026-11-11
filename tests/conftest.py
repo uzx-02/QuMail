@@ -55,5 +55,36 @@ def isolated_state(tmp_path, monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", no_network)
     monkeypatch.setattr(socket, "create_connection", no_network)
     monkeypatch.setattr(socket, "getaddrinfo", no_network)
+
+    from core.vault.secure_store import WindowsCredentialStore
+    from core.vault.types import BoundaryError
+    test_cred_store = {}
+    orig_put = WindowsCredentialStore.put
+    orig_get = WindowsCredentialStore.get
+    orig_delete = WindowsCredentialStore.delete
+
+    def safe_put(self, ident: str, secret: bytes):
+        try:
+            return orig_put(self, ident, secret)
+        except BoundaryError:
+            test_cred_store[self.target(ident)] = bytes(secret)
+
+    def safe_get(self, ident: str) -> bytes:
+        target = self.target(ident)
+        if target in test_cred_store:
+            return test_cred_store[target]
+        return orig_get(self, ident)
+
+    def safe_delete(self, ident: str):
+        test_cred_store.pop(self.target(ident), None)
+        try:
+            orig_delete(self, ident)
+        except Exception:
+            pass
+
+    monkeypatch.setattr(WindowsCredentialStore, "put", safe_put)
+    monkeypatch.setattr(WindowsCredentialStore, "get", safe_get)
+    monkeypatch.setattr(WindowsCredentialStore, "delete", safe_delete)
+
     yield
     session.reset()
