@@ -364,7 +364,7 @@ APP_NAME         = "QuMail"
 APP_VERSION      = "1.0.0"
 
 # --- Cloud Public Key Directory & WebLink Gateway ---
-DEFAULT_DIRECTORY_URL = "https://qumail-directory.workers.dev"
+DEFAULT_DIRECTORY_URL = "https://qumail-directory.uzair-shaikh-sec-e24.workers.dev"
 
 def get_directory_server_url() -> str:
     """Return configured cloud directory server URL."""

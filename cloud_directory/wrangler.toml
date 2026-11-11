@@ -2,12 +2,13 @@ name = "qumail-directory"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
 
 # 1. D1 Database Binding
 [[d1_databases]]
 binding = "DB"
-database_name = "qumail-db"
-database_id = "qumail-db"
+database_name = "qumail-directory-db"
+database_id = "1504f965-3bf4-48d1-a771-dd6b3839f06b"
 
 # 2. Hourly Scheduled Purge Trigger
 [triggers]
