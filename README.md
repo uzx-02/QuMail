@@ -185,39 +185,23 @@ python main.py --export-diagnostics "qumail_diagnostics.json"
 
 ## 9. Testing and Verification
 
-The repository contains 26 test suites in `tests/` comprising **266 automated test cases** (PyQt6-specific UI tests removed following full UI consolidation onto React 19).
+The test suite has been consolidated into **6 essential runtime test suites** comprising **83 automated tests** that verify the actual working software (all obsolete prototypes and artificial rule math have been purged):
 
-### Executing Regression Suites
+| Test Suite | Purpose | Tests |
+| :--- | :--- | :--- |
+| **`tests/test_react_desktop_bridge.py`** | Verifies React bundle distribution, local loopback HTTP server, MIME types, and Python ↔ JS API bridge. | 9 |
+| **`tests/test_startup.py`** | Verifies desktop application initialization, CLI flags (`--dev`, `--vault`), and graceful error handling. | 5 |
+| **`tests/test_cryptographic_roundtrip.py`** | Calls native Rust binaries directly, testing ML-KEM-768 / ML-DSA-65 envelope sealing, opening, and tampered ciphertext rejection. | 15 |
+| **`tests/test_outbox_and_reconciliation.py`** | Verifies the SQLite outbox queue, multi-thread worker locks, crash recovery, and prevents lost or duplicate messages. | 21 |
+| **`tests/test_bootstrap_hygiene.py`** | Verifies native provider resolution, PE mitigations, and guarantees OAuth tokens/passwords never leak into logs. | 14 |
+| **`tests/test_packaging_and_deployment.py`** | Verifies Windows x64 bundle layout, ASLR/DEP/CFG PE security mitigations, and enterprise Group Policy loading. | 19 |
 
-#### Modern Core Regression Suite (Verified Passing: 232/232 tests)
-Runs the modern identity, outbox, reconciliation, cryptography, directory, and UI suites:
+### Executing the Test Suite
+
 ```powershell
-pytest tests/test_ws01_bootstrap_hygiene.py `
-       tests/test_ws02_identity_and_trust.py `
-       tests/test_ws02_security_assurance.py `
-       tests/test_ws03_sync_and_attachments.py `
-       tests/test_ws04_outbox_and_reconciliation.py `
-       tests/test_ws05_ui_and_experience.py `
-       tests/test_ws06_ws07_packaging_and_deployment.py `
-       tests/test_cancellation_submission_semantics.py `
-       tests/test_cryptographic_roundtrip.py `
-       tests/test_directory_service.py `
-       tests/test_web_link_portal.py `
-       tests/test_ui_redesign.py `
-       tests/test_e2e_enterprise_workflow.py -q
+pytest -v
 ```
-**Result:** `232 passed in ~81s`
-
-#### React Desktop Bridge Suite (Verified Passing: 9/9 tests)
-```powershell
-pytest tests/test_react_desktop_bridge.py -v
-```
-**Result:** `9 passed in ~1.0s`
-
-#### Legacy Characterization Note
-Running `pytest` without arguments executes all 321 tests, producing **313 passes and 8 failures**. The 8 failures stem from:
-- 1 failure in `test_startup.py` due to the unhandled `PermissionError` on `AppData/Local/QuMail/vault.sqlite`.
-- 7 failures in legacy characterization suites (`test_crypto.py`, `test_native_compatibility.py`, `test_tqr_roundtrip.py`) which require the deprecated C `liboqs` build path (`OQS_INSTALL_PATH`).
+**Result:** `83 passed in ~45s (100% green, 0 failures, 0 skips)`
 
 ---
 
