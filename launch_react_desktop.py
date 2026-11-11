@@ -8,8 +8,21 @@ cryptographic backend, HSMManager physical TRNG coordinator, and durable SQLite 
 from __future__ import annotations
 
 import os
-# Strip any external SSL keylog file variable before any network or SSL modules load
+# Strip external SSL keylog and Conda cert variables before network or SSL modules load
 os.environ.pop("SSLKEYLOGFILE", None)
+os.environ.pop("__CONDA_OPENSLL_CERT_FILE_SET", None)
+for _v in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+    _val = os.environ.get(_v)
+    if _val and ("miniconda" in _val.lower() or "anaconda" in _val.lower() or not os.path.exists(_val)):
+        os.environ.pop(_v, None)
+
+try:
+    import ctypes
+    ctypes.set_errno(0)
+    ctypes.CDLL("ucrtbase.dll")._set_errno(0)
+except Exception:
+    pass
+
 try:
     import ssl
     ssl.SSLContext.keylog_filename = property(lambda self: None, lambda self, val: None)
@@ -469,7 +482,7 @@ class QuMailJsApi:
                     "message": "Authentication completed, but could not determine Google user email.",
                 }
         except Exception as exc:
-            logger.error("Google OAuth failed: %s", exc)
+            logger.error("Google OAuth failed: %s", exc, exc_info=True)
             self.session_state = "ERROR"
             self.last_error = {"code": "OAUTH_FAILED", "message": str(exc), "timestamp": int(time.time())}
             return {"success": False, "message": str(exc), "sessionStatus": self.getSessionStatus()}

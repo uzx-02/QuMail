@@ -1,5 +1,9 @@
 @echo off
 set "SSLKEYLOGFILE="
+set "SSL_CERT_FILE="
+set "REQUESTS_CA_BUNDLE="
+set "CURL_CA_BUNDLE="
+set "__CONDA_OPENSLL_CERT_FILE_SET="
 title QuMail 1.0 — Post-Quantum Secure Desktop (React 19 + Edge WebView2)
 echo =====================================================================
 echo  QuMail 1.0 — Post-Quantum Secure Corporate Email Client

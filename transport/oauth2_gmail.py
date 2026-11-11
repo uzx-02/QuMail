@@ -44,11 +44,23 @@ logger = logging.getLogger("transport.oauth2_gmail")
 def sanitize_ssl_environment() -> None:
     """
     Sanitize SSL/TLS environment variables to eliminate FileNotFoundError connection aborts.
-    Unconditionally removes SSLKEYLOGFILE, ensures valid CA certificates, and patches urllib3/ssl
-    so missing file references in developer/debug environments never crash TLS handshakes.
+    Unconditionally removes SSLKEYLOGFILE, ensures valid CA certificates, clears C-level errno,
+    and strips Conda-inherited or invalid certificate paths.
     """
     # 1. Unconditionally pop SSLKEYLOGFILE
     os.environ.pop("SSLKEYLOGFILE", None)
+
+    # 2. Reset C-level errno in Python and MSVCRT to eliminate OpenSSL 3.0 stale-errno FileNotFoundError bug
+    try:
+        import ctypes
+        ctypes.set_errno(0)
+    except Exception:
+        pass
+    try:
+        import ctypes
+        ctypes.CDLL("ucrtbase.dll")._set_errno(0)
+    except Exception:
+        pass
 
     # Patch SSLContext.keylog_filename descriptor so setting it never triggers FileNotFoundError
     try:
@@ -57,13 +69,13 @@ def sanitize_ssl_environment() -> None:
     except Exception:
         pass
 
-    # 2. CA bundle variables: strip any pointing to non-existent paths
-    for var in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR"):
+    # 3. Strip any external CA bundle variables pointing to Conda or non-existent paths
+    for var in ("REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "SSL_CERT_FILE", "SSL_CERT_DIR", "__CONDA_OPENSLL_CERT_FILE_SET"):
         val = os.environ.get(var)
-        if val and not os.path.exists(val):
+        if val and ("miniconda" in val.lower() or "anaconda" in val.lower() or not os.path.exists(val)):
             os.environ.pop(var, None)
 
-    # 3. Ensure certifi CA bundle is used if available
+    # 4. Point to authoritative certifi CA bundle
     try:
         import certifi
         ca_path = certifi.where()
@@ -419,7 +431,10 @@ def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> tuple[Cred
     # Clean server teardown: Close the loopback socket completely BEFORE calling fetch_token
     # to guarantee zero port collisions or WinSock reset interference with outbound HTTPS.
     server.server_close()
-    time.sleep(0.1)
+    time.sleep(0.25)
+
+    # Sanitize environment and clear C-level errno
+    sanitize_ssl_environment()
 
     if server.oauth_error:
         raise GmailAuthError(f"Google sign-in was declined: {server.oauth_error}")
@@ -430,18 +445,74 @@ def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> tuple[Cred
     if not server.oauth_state or not secrets.compare_digest(server.expected_state or "", server.oauth_state or ""):
         raise GmailAuthError("OAuth state parameter mismatch (possible CSRF or replay attempt).")
 
-    # Exchange authorization code for tokens with retry logic for transient TLS interruptions
+    # Strategy 1: Attempt standard flow.fetch_token()
     last_exc = None
-    for attempt in range(1, 4):
-        try:
-            flow.fetch_token(code=server.oauth_code)
-            return flow.credentials, nonce
-        except Exception as exc:
-            last_exc = exc
-            logger.warning("OAuth token exchange attempt %d encountered %s; retrying...", attempt, exc)
-            time.sleep(0.5 * attempt)
+    try:
+        flow.fetch_token(code=server.oauth_code)
+        return flow.credentials, nonce
+    except Exception as exc:
+        last_exc = exc
+        logger.warning(
+            "flow.fetch_token() note: %s; falling back to direct secure HTTPS token exchange...",
+            exc,
+        )
 
-    raise GmailAuthError(f"OAuth token exchange failed after retries: {last_exc}") from last_exc
+    # Strategy 2: Direct secure HTTPS token exchange via urllib.request
+    # Immune to requests connection pool resets, stale C errno, and urllib3 protocol aborts
+    try:
+        import urllib.request
+        import urllib.parse
+        import ssl
+        import certifi
+
+        cfg_dict = getattr(flow, "client_config", {})
+        inst = cfg_dict.get("installed") or cfg_dict.get("web") or cfg_dict
+        client_id = inst.get("client_id", "")
+        client_secret = inst.get("client_secret", "")
+        token_endpoint = inst.get("token_uri", "https://oauth2.googleapis.com/token")
+
+        data_dict = {
+            "grant_type": "authorization_code",
+            "code": server.oauth_code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": flow.redirect_uri,
+        }
+        if hasattr(flow, "code_verifier") and flow.code_verifier:
+            data_dict["code_verifier"] = flow.code_verifier
+
+        encoded_data = urllib.parse.urlencode(data_dict).encode("utf-8")
+        req = urllib.request.Request(
+            token_endpoint,
+            data=encoded_data,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+                "User-Agent": "QuMail/1.0",
+                "Connection": "close",
+            },
+        )
+
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(req, context=ssl_ctx, timeout=15) as resp:
+            resp_body = resp.read().decode("utf-8")
+            token_json = json.loads(resp_body)
+
+        from google.oauth2.credentials import Credentials
+        creds = Credentials(
+            token=token_json.get("access_token"),
+            refresh_token=token_json.get("refresh_token"),
+            id_token=token_json.get("id_token"),
+            token_uri=token_endpoint,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=GMAIL_SCOPES,
+        )
+        logger.info("Direct secure token exchange via urllib succeeded.")
+        return creds, nonce
+    except Exception as direct_exc:
+        logger.error("Direct secure token exchange failed: %s", direct_exc, exc_info=True)
+        raise GmailAuthError(f"OAuth token exchange failed after retries: {last_exc or direct_exc}") from direct_exc
 
 
 # -------------------------------------------------------------------------
