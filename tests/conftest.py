@@ -13,11 +13,9 @@ def pytest_addoption(parser):
 
 
 def pytest_sessionstart(session):
-    # Must precede collection: virtual_node loads its relative registry on import.
     session._qumail_cwd = Path.cwd()
     session._qumail_tmp = tempfile.TemporaryDirectory(prefix="qumail-tests-")
     os.chdir(session._qumail_tmp.name)
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 def pytest_collection_modifyitems(config, items):
@@ -44,24 +42,11 @@ def pytest_sessionfinish(session, exitstatus):
 @pytest.fixture(autouse=True)
 def isolated_state(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    from kme import virtual_node as node
-    from portal import portal_server as portal
+    data_dir = tmp_path / ".qumail_data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(data_dir))
     from core.session import session
-    from kme.kme_client import kme_client
 
-    monkeypatch.setattr(node, "_sae_registry", {})
-    monkeypatch.setattr(node, "_issued_keys", {})
-    monkeypatch.setattr(node, "_RATE_HISTORY", {})
-    monkeypatch.setattr(node, "_REGISTRY_PATH", str(tmp_path / "secrets" / "registry.json"))
-    # Fixed time prevents the rate-limit test depending on machine speed.
-    monkeypatch.setattr(node, "time", type("Clock", (), {"time": staticmethod(lambda: 1000.0)}))
-    monkeypatch.setattr(portal, "_memory_store", {})
-    monkeypatch.setattr(portal, "_memory_rate_limits", {})
-    monkeypatch.setattr(portal, "_firestore_client", None)
-    monkeypatch.setattr(portal, "_firestore_available", False)
-    monkeypatch.setattr(portal, "_PORTAL_MODE", "local")
-    monkeypatch.setattr(portal, "_server_started", False)
-    monkeypatch.setattr(kme_client, "base_url", "http://127.0.0.1:5000")
     session.reset()
 
     def no_network(*args, **kwargs):

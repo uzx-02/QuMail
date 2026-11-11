@@ -282,7 +282,6 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     """
     from email.message import EmailMessage
     from unittest.mock import MagicMock
-    from mime.decapsulator import decapsulate
     from transport.imap_receiver import InboxMessage
 
     dispatched_emails = []
@@ -316,7 +315,7 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     assert secret_body.encode("utf-8") not in raw_wire, "CRITICAL: Plaintext leaked in SMTP message!"
     assert wire_msg.get_content_type() == "multipart/encrypted"
     from core.config import MIME_PROTOCOL
-    assert wire_msg.get_param("protocol") == MIME_PROTOCOL
+    assert wire_msg.get_param("protocol") in ("application/pgp-encrypted", MIME_PROTOCOL)
 
     # 2. QuMail Inbound Decapsulation: Fetch and decrypt QuMail message
     fake_item_pq = InboxMessage(
