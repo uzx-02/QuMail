@@ -109,8 +109,9 @@ def test_qumail_js_api_hsm_and_entropy():
     assert sample["rate"] == 115200
 
 
-def test_qumail_js_api_google_auth_and_ports():
+def test_qumail_js_api_google_auth_and_ports(tmp_path, monkeypatch):
     """Verify Google OAuth configuration methods, ping readiness, and COM port detection."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
     from core.config import (
         get_google_client_secrets_path,
         validate_google_client_config,
@@ -156,6 +157,12 @@ def test_qumail_js_api_google_auth_and_ports():
     assert inst_ok is True
     assert inst_id == "953431543574-test.apps.googleusercontent.com"
     assert "installed" in inst_norm
+
+    # Valid Desktop Installed OAuth config as a list of dicts
+    list_json = [installed_json]
+    list_ok, list_id, list_norm = validate_google_client_config(list_json)
+    assert list_ok is True
+    assert list_id == "953431543574-test.apps.googleusercontent.com"
 
     # Check google configuration
     cfg = api.checkGoogleConfigured()
