@@ -908,6 +908,17 @@ function serveWebLinkViewer(linkId: string): Response {
       const contentBox = document.getElementById("contentBox");
       const errorAlert = document.getElementById("errorAlert");
 
+      let cachedKeyHex = "";
+      try {
+        const hash = window.location.hash.slice(1);
+        if (hash) {
+          const params = new URLSearchParams(hash);
+          cachedKeyHex = params.get("key") || hash;
+          // Security Upgrade: Immediately scrub #key from active URL bar and history
+          history.replaceState(null, "", window.location.pathname);
+        }
+      } catch (e) {}
+
       function showError(msg) {
         errorAlert.textContent = msg;
         errorAlert.style.display = "block";
@@ -924,9 +935,10 @@ function serveWebLinkViewer(linkId: string): Response {
         revealBtn.textContent = "Decrypting locally...";
 
         try {
-          const hash = window.location.hash.slice(1);
-          const params = new URLSearchParams(hash);
-          const rawKeyHex = params.get("key") || hash;
+          const rawKeyHex = cachedKeyHex || (window.location.hash.slice(1) ? (new URLSearchParams(window.location.hash.slice(1)).get("key") || window.location.hash.slice(1)) : "");
+          if (cachedKeyHex && window.location.hash) {
+            try { history.replaceState(null, "", window.location.pathname); } catch(e) {}
+          }
 
           if (!rawKeyHex) {
             showError("Missing decryption key fragment in URL. Ensure you opened the complete link.");
