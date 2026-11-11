@@ -11,7 +11,7 @@ fn info(c: &Cert) -> Result<Value> {
     check_certificate(c)?;
     let p = StandardPolicy::new();
     let vc = c.with_policy(&p,None)?;
-    let signing = vc.keys().subkeys().alive().revoked(false).for_signing().next().context("signer")?;
+    let signing = vc.keys().alive().revoked(false).for_signing().next().context("signer")?;
     let encryption = vc.keys().subkeys().alive().revoked(false).for_transport_encryption().next().context("recipient")?;
     Ok(json!({"fingerprint": c.fingerprint().to_hex(),
         "signing": signing.key().fingerprint().to_hex(), "encryption": encryption.key().fingerprint().to_hex(),

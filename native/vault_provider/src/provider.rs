@@ -23,13 +23,23 @@ fn check_certificate(cert: &Cert) -> Result<()> {
     let vc = cert.with_policy(&p, None)?;
     vc.alive()?;
     ensure!(!matches!(vc.revocation_status(), sq::types::RevocationStatus::Revoked(_)), "revoked");
-    ensure!(vc.primary_key().key_flags().map(|f| f.for_certification() && !f.for_signing()).unwrap_or(false), "root purpose");
+    let primary_flags = vc.primary_key().key_flags().unwrap_or_else(sq::types::KeyFlags::empty);
+    ensure!(primary_flags.for_certification(), "root certification required");
     ensure!(vc.keys().subkeys().count() == cert.keys().subkeys().count(), "invalid binding");
-    let signing: Vec<_> = vc.keys().subkeys().alive().revoked(false).for_signing().collect();
+
+    let subkey_signing: Vec<_> = vc.keys().subkeys().alive().revoked(false).for_signing().collect();
     let encryption: Vec<_> = vc.keys().subkeys().alive().revoked(false).for_transport_encryption().collect();
-    ensure!(signing.len()==1 && encryption.len()==1, "one active device");
-    ensure!(signing[0].key().version()==6 && signing[0].key().pk_algo()==sq::types::PublicKeyAlgorithm::MLDSA65_Ed25519, "signing algorithm");
-    ensure!(encryption[0].key().version()==6 && encryption[0].key().pk_algo()==sq::types::PublicKeyAlgorithm::MLKEM768_X25519, "encryption algorithm");
+    ensure!(encryption.len() == 1, "one transport encryption subkey required");
+    ensure!(encryption[0].key().version() == 6 && encryption[0].key().pk_algo() == sq::types::PublicKeyAlgorithm::MLKEM768_X25519, "encryption algorithm");
+
+    if primary_flags.for_signing() {
+        // Topology A (RFC 9980 2-key hierarchy): Primary key performs signing
+        ensure!(subkey_signing.is_empty(), "duplicate signing keys");
+    } else {
+        // Topology B (QuMail 3-key device separation): Subkey performs signing
+        ensure!(subkey_signing.len() == 1, "one active signing subkey required");
+        ensure!(subkey_signing[0].key().version() == 6 && subkey_signing[0].key().pk_algo() == sq::types::PublicKeyAlgorithm::MLDSA65_Ed25519, "signing algorithm");
+    }
     Ok(())
 }
 
@@ -48,7 +58,8 @@ fn inspect_envelope(data: &[u8]) -> Result<usize> {
             }
             sq::Packet::SEIP(sq::packet::SEIP::V2(s)) => {
                 ensure!(!encrypted && s.symmetric_algo() == SymmetricAlgorithm::AES256 &&
-                    s.aead() == AEADAlgorithm::GCM && s.chunk_size() == 4096, "unsupported SEIPD");
+                    (s.aead() == AEADAlgorithm::GCM || s.aead() == AEADAlgorithm::OCB) &&
+                    (64..=4 * 1024 * 1024).contains(&s.chunk_size()), "unsupported SEIPD");
                 encrypted = true;
             }
             _ => bail!("unsupported packet"),
@@ -124,12 +135,14 @@ impl VerificationHelper for Helper {
         for layer in structure {
             match layer {
                 MessageLayer::Encryption { sym_algo, aead_algo } => {
-                    ensure!(sym_algo == SymmetricAlgorithm::AES256 && aead_algo == Some(AEADAlgorithm::GCM), "unsupported encryption");
+                    ensure!(sym_algo == SymmetricAlgorithm::AES256 &&
+                        (aead_algo == Some(AEADAlgorithm::GCM) || aead_algo == Some(AEADAlgorithm::OCB)), "unsupported encryption");
                 }
                 MessageLayer::SignatureGroup { results } => {
                     for result in results {
                         let sig = result.map_err(|_| anyhow::anyhow!("invalid signature"))?;
                         ensure!(sig.sig.pk_algo() == sq::types::PublicKeyAlgorithm::MLDSA65_Ed25519 && sig.sig.version() == 6, "unsupported signature");
+                        ensure!(matches!(sig.sig.hash_algo(), HashAlgorithm::SHA512 | HashAlgorithm::SHA384 | HashAlgorithm::SHA256 | HashAlgorithm::SHA3_512 | HashAlgorithm::SHA3_256), "unsupported signature hash");
                         if let Some(hash) = self.required_hash { ensure!(sig.sig.hash_algo() == hash, "unsupported signature hash"); }
                         good += 1;
                     }
@@ -159,7 +172,7 @@ impl DecryptionHelper for Helper {
 fn sq_open(name: &str, recipient: &Cert, sender: &[u8], data: &[u8]) -> Result<Vec<u8>> {
     profile(name)?;
     inspect_envelope(data)?;
-    let helper = Helper { recipient: recipient.clone(), sender: Cert::from_bytes(sender)?, required_hash: Some(HashAlgorithm::SHA512) };
+    let helper = Helper { recipient: recipient.clone(), sender: Cert::from_bytes(sender)?, required_hash: None };
     let p = StandardPolicy::new();
     let mut decryptor = DecryptorBuilder::from_bytes(data)?.with_policy(&p,None,helper)?;
     // Buffer until EOF and every integrity/signature check succeeds; never expose partial bytes.
@@ -187,8 +200,12 @@ fn rp_seal(name: &str, sender: &Cert, recipients: &[Vec<u8>], data: &[u8]) -> Re
         pgp::crypto::aead::AeadAlgorithm::Gcm, pgp::crypto::aead::ChunkSize::C4KiB);
     let p = StandardPolicy::new();
     let signing_fpr = sender.keys().with_policy(&p,None).alive().revoked(false).for_signing().next().context("signer")?.key().fingerprint();
-    let signing = key.secret_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==signing_fpr.as_bytes()).context("peer signing subkey")?;
-    builder.sign(&signing.key, Password::empty(), pgp::crypto::hash::HashAlgorithm::Sha512);
+    if key.primary_key.fingerprint().as_bytes() == signing_fpr.as_bytes() {
+        builder.sign(&key.primary_key, Password::empty(), pgp::crypto::hash::HashAlgorithm::Sha512);
+    } else {
+        let signing = key.secret_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==signing_fpr.as_bytes()).context("peer signing subkey")?;
+        builder.sign(&signing.key, Password::empty(), pgp::crypto::hash::HashAlgorithm::Sha512);
+    }
     for cert in &certs {
         cert.verify_bindings()?;
         let raw = recipients[certs.iter().position(|c| std::ptr::eq(c,cert)).context("recipient")?].as_slice();
@@ -214,11 +231,17 @@ fn rp_open(name: &str, recipient: &Cert, sender: &[u8], data: &[u8]) -> Result<V
     ensure!(out.len() <= MAX_INPUT, "limit");
     let p = StandardPolicy::new();
     let fpr = sq_sender.keys().with_policy(&p,None).alive().revoked(false).for_signing().next().context("sender key")?.key().fingerprint();
-    let sub = sender.public_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==fpr.as_bytes()).context("peer verifier")?;
-    let sig = msg.verify(&sub.key)?;
+    let sig = if sender.primary_key.fingerprint().as_bytes() == fpr.as_bytes() {
+        msg.verify(&sender.primary_key)?
+    } else {
+        let sub = sender.public_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==fpr.as_bytes()).context("peer verifier")?;
+        msg.verify(&sub.key)?
+    };
     let config = sig.config().ok_or_else(|| anyhow::anyhow!("signature config"))?;
     ensure!(config.pub_alg == pgp::crypto::public_key::PublicKeyAlgorithm::MlDsa65Ed25519 &&
-        config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha512, "unsupported signature");
+        (config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha512 ||
+         config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha384 ||
+         config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha256), "unsupported signature");
     Ok(out)
 }
 
