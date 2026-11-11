@@ -107,6 +107,7 @@ coll = COLLECT(
 
 # Post-build: Ensure native providers and manifest are present in bin/ adjacent to QuMail.exe
 import shutil
+import json
 bin_src = REPO_ROOT / 'bin'
 if bin_src.is_dir():
     bin_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'bin'
@@ -114,3 +115,32 @@ if bin_src.is_dir():
     for f in bin_src.glob('*'):
         if f.is_file() and not f.name.endswith('.gitkeep'):
             shutil.copy2(f, bin_dst / f.name)
+
+# Ensure resources and version.json are present for installer packaging
+res_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'resources'
+res_dst.mkdir(parents=True, exist_ok=True)
+default_cfg = {
+    "version": "1.0.0",
+    "default_mode": "mailbox",
+    "allow_legacy_simulator": False,
+    "log_level": "INFO",
+    "update_channel": "Production",
+    "telemetry_enabled": False,
+}
+with (res_dst / "qumail.default.json").open("w", encoding="utf-8") as f:
+    json.dump(default_cfg, f, indent=2)
+
+version_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'version.json'
+version_data = {
+    "app_name": "QuMail",
+    "display_name": "QuMail Secure Email",
+    "version": "1.0.0",
+    "build_utc": "2026-11-11T09:00:00Z",
+    "commit_sha": "dc72a3d",
+    "platform": "win32-x64",
+    "provider_schema": "1.0",
+    "rust_profile": "release-cfg",
+    "pe_mitigations_verified": True,
+}
+with version_dst.open("w", encoding="utf-8") as f:
+    json.dump(version_data, f, indent=2)

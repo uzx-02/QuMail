@@ -20,6 +20,17 @@ declare global {
         logoutAccount: () => Promise<boolean>;
         lockVault: () => Promise<boolean>;
         googleAuth: () => Promise<any>;
+        connectGoogle: () => Promise<any>;
+        getSessionStatus: () => Promise<{
+          sessionState: string;
+          vaultState: string;
+          account: any;
+          lastError: any;
+          kemAlgorithm: string;
+          dsaAlgorithm: string;
+        }>;
+        unlockVault: (passphrase?: string) => Promise<any>;
+        logout: () => Promise<any>;
         checkGoogleConfigured: () => Promise<{
           configured: boolean;
           valid?: boolean;
@@ -389,6 +400,61 @@ class ApiService {
       }
     }
     return { success: false, message: 'Not available outside desktop environment.' };
+  }
+
+  async getSessionStatus(): Promise<any> {
+    if (window.pywebview?.api?.getSessionStatus) {
+      try {
+        return await window.pywebview.api.getSessionStatus();
+      } catch (e) {
+        console.warn('Pywebview getSessionStatus failed:', e);
+      }
+    }
+    return {
+      sessionState: this.account.isUnlocked ? 'MAILBOX_READY' : 'SIGNED_OUT',
+      vaultState: this.account.isUnlocked ? 'UNLOCKED' : 'LOCKED',
+      account: this.account.email ? this.account : null,
+      lastError: null,
+      kemAlgorithm: 'ML-KEM-768 (NIST FIPS 203)',
+      dsaAlgorithm: 'ML-DSA-65 (NIST FIPS 204)',
+    };
+  }
+
+  async connectGoogle(): Promise<{ success: boolean; account?: AccountSession; message?: string }> {
+    return this.signInWithGoogle();
+  }
+
+  async lockVault(): Promise<boolean> {
+    if (window.pywebview?.api?.lockVault) {
+      try {
+        await window.pywebview.api.lockVault();
+      } catch (e) {
+        console.warn('Pywebview lockVault failed:', e);
+      }
+    }
+    this.account = { ...this.account, isUnlocked: false };
+    return true;
+  }
+
+  async unlockVault(passphrase: string = ''): Promise<{ success: boolean; sessionStatus?: any; message?: string }> {
+    if (window.pywebview?.api?.unlockVault) {
+      try {
+        const res = await window.pywebview.api.unlockVault(passphrase);
+        if (res.success) {
+          this.account = { ...this.account, isUnlocked: true };
+          return res;
+        }
+        return res;
+      } catch (e: any) {
+        return { success: false, message: e?.message || 'Failed to unlock vault' };
+      }
+    }
+    this.account = { ...this.account, isUnlocked: true };
+    return { success: true };
+  }
+
+  async logout(): Promise<boolean> {
+    return this.logoutAccount();
   }
 
   async updateAccountEmail(email: string): Promise<boolean> {

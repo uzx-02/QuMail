@@ -9,7 +9,7 @@
 #define MyAppPublisher "QuMail Project"
 #define MyAppURL "https://github.com/uzx-02/QuMail"
 #define MyAppExeName "QuMail.exe"
-#define SourceDistDir "..\dist\QuMail"
+#define SourceDistDir "..\dist\QuMail-App"
 
 [Setup]
 AppId={{9F27C72B-4E7B-4B3A-8F12-7B38A3F49A62}

@@ -292,7 +292,7 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
                 return []
 
             query_uids = ",".join(selected_uids)
-            status, fetch_data = imap.uid("FETCH", query_uids, "(BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE)])")
+            status, fetch_data = imap.uid("FETCH", query_uids, "(BODY.PEEK[])")
 
             if status != "OK" or not fetch_data:
                 return []
@@ -370,7 +370,7 @@ def fetch_message(account_email: str, uid: str) -> InboxMessage:
         with imap:
             imap.select(_INBOX_FOLDER, readonly=True)
 
-            status, msg_data = imap.uid("FETCH", uid, "(RFC822)")
+            status, msg_data = imap.uid("FETCH", uid, "(BODY.PEEK[])")
             if status != "OK" or not msg_data or msg_data[0] is None:
                 raise MessageNotFoundError(
                     f"No message with UID '{uid}' found in INBOX for '{account_email}'. "

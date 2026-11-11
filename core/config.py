@@ -122,19 +122,28 @@ def validate_google_client_config(content: dict) -> tuple[bool, str, dict | None
             None,
         )
 
+    if "web" in content and "installed" not in content:
+        return (
+            False,
+            "The selected file is a 'Web application' OAuth client configuration. "
+            "QuMail requires an OAuth 2.0 Client ID of type 'Desktop app' (Installed application) "
+            "to support secure loopback authentication. "
+            "In Google Cloud Console, navigate to 'APIs & Services' > 'Credentials', click 'Create Credentials' "
+            "> 'OAuth client ID', select Application type 'Desktop app', and download that JSON.",
+            None,
+        )
+
     cfg = None
     if "installed" in content and isinstance(content["installed"], dict):
         cfg = content["installed"]
-    elif "web" in content and isinstance(content["web"], dict):
-        cfg = content["web"]
-    elif "client_id" in content:
+    elif "client_id" in content and "client_secret" in content:
         cfg = content
 
     if not cfg:
         return (
             False,
-            "Selected JSON does not contain 'installed' or 'web' OAuth client configuration. "
-            "Please ensure you downloaded the client secret JSON for a Desktop or Web application.",
+            "Selected JSON does not contain 'installed' (Desktop app) OAuth client configuration. "
+            "Please ensure you downloaded the client secret JSON for a Desktop application in Google Cloud Console.",
             None,
         )
 
@@ -144,13 +153,23 @@ def validate_google_client_config(content: dict) -> tuple[bool, str, dict | None
     if not client_id:
         return False, "Selected JSON is missing 'client_id'.", None
 
+    redirect_uris = cfg.get("redirect_uris", [])
+    if not isinstance(redirect_uris, list):
+        redirect_uris = []
+    has_loopback = any(
+        isinstance(u, str) and ("localhost" in u or "127.0.0.1" in u)
+        for u in redirect_uris
+    )
+    if not has_loopback:
+        redirect_uris = ["http://localhost", "http://127.0.0.1"]
+
     normalized = {
         "installed": {
             "client_id": client_id,
             "client_secret": client_secret,
             "auth_uri": cfg.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
             "token_uri": cfg.get("token_uri", "https://oauth2.googleapis.com/token"),
-            "redirect_uris": cfg.get("redirect_uris", ["http://localhost", "http://127.0.0.1"]),
+            "redirect_uris": redirect_uris,
         }
     }
     return True, client_id, normalized

@@ -162,46 +162,104 @@ class QuMailJsApi:
 
     def __init__(self, account_email: str = "", vault_path: str | Path | None = None) -> None:
         self.vault_path = Path(vault_path) if vault_path else get_vault_path()
+        self.session_state = "SIGNED_OUT"
+        self.vault_state = "UNINITIALIZED" if not self.vault_path.is_file() else "LOCKED"
+        self.active_account: Optional[Dict[str, Any]] = None
+        self.last_error: Optional[Dict[str, Any]] = None
         self.account_email = account_email
         self.account_display_name = account_email.split("@")[0] if account_email else ""
         self.account_org = "Google Workspace / Gmail" if "gmail" in account_email else ("Corporate" if account_email else "")
+        self.key_fingerprint = ""
         self.messages: List[Dict[str, Any]] = []
         self.hsm = HSMManager.get()
+        self.vault_service = None
+        self.active_context = None
+        self.active_key_handle = None
 
-        # Session discovery on startup: check stored Google token or custom account
+        self._init_vault_and_session()
+
+        # If an account is already active, sync real mailbox immediately
+        if self.account_email and self.session_state == "MAILBOX_READY":
+            self.fetchInbox()
+
+    def _init_vault_and_session(self) -> None:
+        """Initialize M3 vault service as sole local authority for identity and keys."""
+        try:
+            from core.provider_resolver import resolve_provider
+            from core.identity_service import IdentityService
+            helper = resolve_provider("qumail-m3-provider")
+            self.vault_service = IdentityService.configured(self.vault_path, helper)
+            if self.vault_path.is_file():
+                try:
+                    self.vault_service.unlock(create=False)
+                    self.vault_state = "UNLOCKED"
+                    vault = self.vault_service.vault
+                    rows = vault.summaries() if vault else []
+                    if rows:
+                        primary = rows[0]
+                        self.active_context = primary[0]
+                        self.active_key_handle = primary[1]
+                        self.account_email = primary[2]
+                        self.account_display_name = primary[2].split("@")[0]
+                        self.key_fingerprint = primary[3]
+                        self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
+                        token_path = get_gmail_token_path()
+                        if token_path.is_file() or "qumail.sec" in self.account_email:
+                            self.session_state = "MAILBOX_READY"
+                        else:
+                            self.session_state = "VAULT_READY"
+                    else:
+                        self.session_state = "SIGNED_OUT"
+                except Exception as unlock_err:
+                    logger.debug("Vault exists but unlock deferred: %s", unlock_err)
+                    self.vault_state = "LOCKED"
+                    self.session_state = "SIGNED_OUT"
+            else:
+                self.vault_state = "UNINITIALIZED"
+                self.session_state = "SIGNED_OUT"
+        except Exception as v_init_err:
+            logger.debug("Vault service initialization note: %s", v_init_err)
+            self.vault_state = "UNINITIALIZED" if not self.vault_path.is_file() else "LOCKED"
+            self.session_state = "SIGNED_OUT"
+
+        # Check custom mailbox fallback if not set from vault
+        if not self.account_email:
+            try:
+                from transport.custom_mailbox import load_custom_account
+                custom_acc = load_custom_account()
+                if custom_acc and custom_acc.get("email"):
+                    self.account_email = custom_acc.get("email", "")
+                    self.account_display_name = custom_acc.get("displayName", "")
+                    self.account_org = custom_acc.get("organization", "Custom Mailbox")
+                    self.session_state = "MAILBOX_READY"
+            except Exception:
+                pass
+
+        # Check verified cached Google token if present and account not yet discovered
         if not self.account_email:
             token_path = get_gmail_token_path()
             if token_path.is_file():
                 try:
                     from transport.oauth2_gmail import _load_credentials
                     creds = _load_credentials()
-                    if creds:
+                    if creds and creds.valid:
                         id_token_jwt = getattr(creds, "id_token", None)
                         if id_token_jwt and isinstance(id_token_jwt, str):
-                            parts = id_token_jwt.split(".")
-                            if len(parts) >= 2:
-                                payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
-                                claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
-                                self.account_email = claims.get("email", "")
-                                self.account_display_name = claims.get("name", "")
+                            cfg, _, _ = load_google_client_config()
+                            if cfg:
+                                sub = cfg.get("installed") or cfg.get("web") or cfg
+                                client_id = sub.get("client_id", "")
+                                from google.oauth2 import id_token as google_id_token
+                                from google.auth.transport.requests import Request as GoogleRequest
+                                verified_claims = google_id_token.verify_oauth2_token(
+                                    id_token_jwt, GoogleRequest(), audience=client_id
+                                )
+                                self.account_email = verified_claims.get("email", "")
+                                self.account_display_name = verified_claims.get("name", "") or self.account_email.split("@")[0]
                                 self.account_org = "Google Workspace / Gmail"
-                except Exception as load_err:
-                    logger.debug("Existing Google token load notice: %s", load_err)
-
-            if not self.account_email:
-                try:
-                    from transport.custom_mailbox import load_custom_account
-                    custom_acc = load_custom_account()
-                    if custom_acc and custom_acc.get("email"):
-                        self.account_email = custom_acc.get("email", "")
-                        self.account_display_name = custom_acc.get("displayName", "")
-                        self.account_org = custom_acc.get("organization", "Custom Mailbox")
-                except Exception:
-                    pass
-
-        # If an account is already active, sync real mailbox immediately
-        if self.account_email:
-            self.fetchInbox()
+                                self.session_state = "MAILBOX_READY"
+                except Exception as cached_err:
+                    logger.debug("Cached Google credential verification note: %s", cached_err)
 
     def ping(self) -> Dict[str, Any]:
         """Readiness probe / health handshake for frontend bridge."""
@@ -210,7 +268,58 @@ class QuMailJsApi:
             "version": "1.0.0",
             "timestamp": int(time.time() * 1000),
             "authenticated": bool(self.account_email),
+            "sessionState": self.session_state,
+            "vaultState": self.vault_state,
         }
+
+    def getSessionStatus(self) -> Dict[str, Any]:
+        """Return authoritative session lifecycle state and cryptographic capabilities."""
+        return {
+            "sessionState": self.session_state,
+            "vaultState": self.vault_state,
+            "account": self.getAccount() if self.account_email else None,
+            "lastError": self.last_error,
+            "kemAlgorithm": "ML-KEM-768 (NIST FIPS 203)",
+            "dsaAlgorithm": "ML-DSA-65 (NIST FIPS 204)",
+        }
+
+    def _enroll_vault_account(self, identity: Any, tokens: Optional[Dict[str, Any]]) -> None:
+        """Enroll or update verified provider identity in the M3 vault."""
+        try:
+            from core.provider_resolver import resolve_provider
+            from core.identity_service import IdentityService
+            from experiments.m3.types import EmailAddress, UserId, BoundaryError, Code
+
+            helper = resolve_provider("qumail-m3-provider")
+            service = IdentityService.configured(self.vault_path, helper)
+            create_vault = not self.vault_path.exists()
+            service.unlock(create=create_vault)
+            self.vault_service = service
+            vault = service.vault
+            if not vault:
+                return
+
+            address = identity.addresses[0] if getattr(identity, "addresses", None) else EmailAddress(self.account_email)
+            try:
+                ctx, key_h = vault.enroll(identity, address, UserId.new(), tokens=tokens)
+                self.active_context = ctx
+                self.active_key_handle = key_h
+                self.key_fingerprint = vault._read(ctx)["root"]
+            except BoundaryError as b_err:
+                if b_err.code == Code.CONFLICT:
+                    for row in vault.summaries():
+                        if row[2] == address.value:
+                            ctx, key_h = row[0], row[1]
+                            if tokens:
+                                vault.store_oauth(ctx, identity, tokens)
+                            self.active_context = ctx
+                            self.active_key_handle = key_h
+                            self.key_fingerprint = row[3]
+                            break
+                else:
+                    logger.debug("Vault enrollment note: %s", b_err)
+        except Exception as v_err:
+            logger.debug("Vault enrollment non-fatal error: %s", v_err)
 
     def _ensure_vault_enrolled(self, email: str, auth_result: Optional[Dict[str, Any]] = None) -> None:
         """Enroll or unlock the authenticated account in the M3 SQLite vault."""
@@ -221,6 +330,7 @@ class QuMailJsApi:
             service = IdentityService.configured(self.vault_path, helper)
             create_vault = not self.vault_path.exists()
             service.unlock(create=create_vault)
+            self.vault_service = service
             logger.info("M3 cryptographic vault verified at %s", self.vault_path)
         except Exception as v_err:
             logger.debug("M3 vault initialization note: %s", v_err)
@@ -316,19 +426,29 @@ class QuMailJsApi:
         except Exception as exc:
             return {"success": False, "message": str(exc)}
 
-    def googleAuth(self) -> Dict[str, Any]:
-        """Execute Google OAuth 2.0 PKCE consent flow."""
+    def connectGoogle(self) -> Dict[str, Any]:
+        """Execute Google OAuth 2.0 PKCE consent flow and enroll in M3 vault."""
+        self.session_state = "AUTHENTICATING"
         try:
             from transport.oauth2_gmail import authorize_google_account
             auth_res = authorize_google_account()
             user_email = auth_res.get("email", "")
             display_name = auth_res.get("displayName", "")
+            provider_identity = auth_res.get("identity")
+            tokens = auth_res.get("tokens")
 
             if user_email:
                 self.account_email = user_email
                 self.account_display_name = display_name or user_email.split("@")[0]
                 self.account_org = "Google Workspace / Gmail"
                 logger.info("Google OAuth successfully authenticated: %s", user_email)
+
+                # Enroll verified identity directly into M3 vault
+                if provider_identity:
+                    self._enroll_vault_account(provider_identity, tokens)
+
+                self.session_state = "MAILBOX_READY"
+                self.vault_state = "UNLOCKED"
 
                 # Trigger live inbox sync in background so authentication returns instantly
                 threading.Thread(target=self.fetchInbox, daemon=True, name="qumail-inbox-sync").start()
@@ -338,16 +458,25 @@ class QuMailJsApi:
                     "email": user_email,
                     "displayName": self.account_display_name,
                     "account": self.getAccount(),
+                    "sessionStatus": self.getSessionStatus(),
                     "messages": self.messages,
                 }
             else:
+                self.session_state = "ERROR"
+                self.last_error = {"code": "AUTH_FAILED", "message": "Authentication completed, but could not determine Google user email.", "timestamp": int(time.time())}
                 return {
                     "success": False,
                     "message": "Authentication completed, but could not determine Google user email.",
                 }
         except Exception as exc:
             logger.error("Google OAuth failed: %s", exc)
-            return {"success": False, "message": str(exc)}
+            self.session_state = "ERROR"
+            self.last_error = {"code": "OAUTH_FAILED", "message": str(exc), "timestamp": int(time.time())}
+            return {"success": False, "message": str(exc), "sessionStatus": self.getSessionStatus()}
+
+    def googleAuth(self) -> Dict[str, Any]:
+        """Backward-compatible alias for connectGoogle."""
+        return self.connectGoogle()
 
     def authenticateCustomMailbox(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -434,58 +563,133 @@ class QuMailJsApi:
                 is_qumail = False
                 indicator = None
 
-                # 1. Attempt Post-Quantum MIME decapsulation first
-                try:
-                    ct, meta = decapsulate(msg_obj)
+                # 0. Check for M5 OpenPGP/PQ multipart/encrypted message
+                ctype = msg_obj.get_content_type()
+                protocol = msg_obj.get_param("protocol")
+                if ctype == "multipart/encrypted" and protocol == "application/pgp-encrypted":
                     is_qumail = True
-                    key_id = meta.get("key_id")
-                    key_bytes = _load_send_key(key_id) if key_id else None
+                    try:
+                        from core.provider_resolver import resolve_provider
+                        from experiments.m5.provider import Provider as M5Provider
+                        from experiments.m5.model import Budget
+                        from experiments.m5 import mime as m5_mime
 
-                    if key_bytes:
-                        try:
-                            aesgcm = AESGCM(key_bytes)
-                            nonce = bytes.fromhex(meta.get("nonce", ""))
-                            plain_bytes = aesgcm.decrypt(nonce, ct, None)
-                            try:
-                                payload = json.loads(plain_bytes.decode("utf-8"))
-                                body_text = payload.get("body", "")
-                                attachments = payload.get("attachments", [])
-                            except Exception:
-                                body_text = plain_bytes.decode("utf-8", errors="replace")
+                        m5_helper = resolve_provider("qumail-m5-provider")
+                        m5_client = M5Provider(m5_helper)
+                        raw_wire = msg_obj.as_bytes()
+                        outer, armor = m5_mime.parse_outer(raw_wire)
 
+                        if self.vault_service and self.vault_service.vault and self.active_context and self.active_key_handle:
+                            vault = self.vault_service.vault
+                            data = vault._read(self.active_context)
+                            key_rec = vault.key(data, self.active_context, self.active_key_handle)
+                            sender_addr = parseaddr(item.sender)[1].lower()
+                            sender_contact = data.get("contacts", {}).get(sender_addr)
+                            signer_public = bytes(sender_contact["public"]) if sender_contact else None
+
+                            if signer_public:
+                                budget = Budget(threading.Event(), time.monotonic() + 20)
+                                res = m5_client.call("open", budget, certificate=bytes(key_rec["secret"]), sender=signer_public, data=armor)
+                                if res.get("verified") is True:
+                                    raw_inner = res["data"]
+                                    s_sender, draft_inner, m_id, m_date, _ = m5_mime.parse_inner(raw_inner)
+                                    body_text = draft_inner.body
+                                    indicator = {
+                                        "badgeLevel": "SECURE",
+                                        "headline": "Secured by QuMail",
+                                        "description": "Decapsulated and authenticated via ML-KEM-768 + ML-DSA-65.",
+                                        "actionAdvice": "Post-Quantum end-to-end cryptographic integrity verified.",
+                                    }
+                                else:
+                                    body_text = "[Signature Verification Failed]"
+                                    indicator = {
+                                        "badgeLevel": "ALERT",
+                                        "headline": "Signature Mismatch",
+                                        "description": "Sender post-quantum signature could not be verified.",
+                                        "actionAdvice": "DO NOT trust this message.",
+                                    }
+                            else:
+                                body_text = (
+                                    "[Encrypted QuMail Message]\n\n"
+                                    "This message is sealed with Post-Quantum ML-KEM-768 and ML-DSA-65.\n"
+                                    "Sender's public key is not enrolled in your address book."
+                                )
+                                indicator = {
+                                    "badgeLevel": "CAUTION",
+                                    "headline": "Encrypted — Unverified Sender",
+                                    "description": "Message is sealed with ML-KEM-768, but sender certificate is not in contacts.",
+                                    "actionAdvice": "Import sender public key to authenticate and read.",
+                                }
+                        else:
+                            body_text = "[Encrypted QuMail Message — Vault Locked]"
                             indicator = {
-                                "badgeLevel": "SECURE",
-                                "headline": "Secured by QuMail",
-                                "description": f"Decapsulated and authenticated via {meta.get('algorithm', 'ML-KEM-768+AES-256-GCM')}.",
-                                "actionAdvice": "Post-Quantum end-to-end cryptographic integrity verified.",
+                                "badgeLevel": "CAUTION",
+                                "headline": "Encrypted — Vault Locked",
+                                "description": "Message is sealed with ML-KEM-768. Unlock your vault to decrypt.",
+                                "actionAdvice": "Unlock vault to decrypt.",
                             }
-                        except Exception as dec_fail:
-                            body_text = f"[Decryption Error: {dec_fail}]"
-                            indicator = {
-                                "badgeLevel": "ALERT",
-                                "headline": "Decryption Failed",
-                                "description": "Message ciphertext could not be authenticated with available key.",
-                                "actionAdvice": "DO NOT trust this message.",
-                            }
-                    else:
-                        body_text = (
-                            "[Encrypted QuMail Message]\n\n"
-                            "This email is end-to-end encrypted with Post-Quantum ML-KEM-768 and AES-256-GCM.\n\n"
-                            f"Key Identifier: {key_id}\n"
-                            "The private decryption key for this message was not found on this device."
-                        )
+                    except Exception as m5_err:
+                        logger.debug("M5 open attempt note: %s", m5_err)
+                        body_text = f"[Decryption Error: {m5_err}]"
                         indicator = {
-                            "badgeLevel": "CAUTION",
-                            "headline": "Encrypted — Key Required",
-                            "description": "Message is encrypted with ML-KEM-768, but the private key is not present on this device.",
-                            "actionAdvice": "Import the corresponding private key or authorize key exchange to read.",
+                            "badgeLevel": "ALERT",
+                            "headline": "Decryption Failed",
+                            "description": "Message ciphertext could not be authenticated.",
+                            "actionAdvice": "DO NOT trust this message.",
                         }
-                except NotQuMailMessageError:
-                    # Message is a conventional external email
-                    is_qumail = False
-                except DecapsulationError as de:
-                    logger.debug("MIME decapsulation notice for item %s: %s", item.uid, de)
-                    is_qumail = False
+
+                # 1. Attempt Post-Quantum MIME decapsulation if not handled by M5
+                if not is_qumail:
+                    try:
+                        ct, meta = decapsulate(msg_obj)
+                        is_qumail = True
+                        key_id = meta.get("key_id")
+                        key_bytes = _load_send_key(key_id) if key_id else None
+
+                        if key_bytes:
+                            try:
+                                aesgcm = AESGCM(key_bytes)
+                                nonce = bytes.fromhex(meta.get("nonce", ""))
+                                plain_bytes = aesgcm.decrypt(nonce, ct, None)
+                                try:
+                                    payload = json.loads(plain_bytes.decode("utf-8"))
+                                    body_text = payload.get("body", "")
+                                    attachments = payload.get("attachments", [])
+                                except Exception:
+                                    body_text = plain_bytes.decode("utf-8", errors="replace")
+
+                                indicator = {
+                                    "badgeLevel": "SECURE",
+                                    "headline": "Secured by QuMail",
+                                    "description": f"Decapsulated and authenticated via {meta.get('algorithm', 'ML-KEM-768+AES-256-GCM')}.",
+                                    "actionAdvice": "Post-Quantum end-to-end cryptographic integrity verified.",
+                                }
+                            except Exception as dec_fail:
+                                body_text = f"[Decryption Error: {dec_fail}]"
+                                indicator = {
+                                    "badgeLevel": "ALERT",
+                                    "headline": "Decryption Failed",
+                                    "description": "Message ciphertext could not be authenticated with available key.",
+                                    "actionAdvice": "DO NOT trust this message.",
+                                }
+                        else:
+                            body_text = (
+                                "[Encrypted QuMail Message]\n\n"
+                                "This email is end-to-end encrypted with Post-Quantum ML-KEM-768 and AES-256-GCM.\n\n"
+                                f"Key Identifier: {key_id}\n"
+                                "The private decryption key for this message was not found on this device."
+                            )
+                            indicator = {
+                                "badgeLevel": "CAUTION",
+                                "headline": "Encrypted — Key Required",
+                                "description": "Message is encrypted with ML-KEM-768, but the private key is not present on this device.",
+                                "actionAdvice": "Import the corresponding private key or authorize key exchange to read.",
+                            }
+                    except NotQuMailMessageError:
+                        is_qumail = False
+                    except DecapsulationError as de:
+                        logger.debug("MIME decapsulation notice for item %s: %s", item.uid, de)
+                        is_qumail = False
 
                 # 2. If not QuMail encrypted, extract standard plaintext / multipart
                 if not is_qumail:
@@ -608,40 +812,99 @@ class QuMailJsApi:
                 )
                 py_msg.set_content(invitation_body)
             else:
-                # Maximum Security: Post-Quantum ML-KEM-768 + AES-256-GCM
-                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-                from mime.encapsulator import encapsulate
+                # Maximum Security: Post-Quantum ML-KEM-768 + AES-256-GCM / ML-DSA-65
+                recipient_addr = recipients[0].strip().lower()
+                recipient_key_bytes = None
+                if self.vault_service and self.vault_service.vault and self.active_context:
+                    try:
+                        data = self.vault_service.vault._read(self.active_context)
+                        contact = data.get("contacts", {}).get(recipient_addr)
+                        if contact and contact.get("public"):
+                            recipient_key_bytes = bytes(contact["public"])
+                        else:
+                            for row in self.vault_service.vault.summaries():
+                                if row[2].lower() == recipient_addr:
+                                    recipient_key_bytes = self.vault_service.vault.export_public(row[0], row[1])
+                                    break
+                    except Exception:
+                        pass
 
-                k_msg = secrets.token_bytes(32)  # 256-bit symmetric session key
-                iv = secrets.token_bytes(12)      # 96-bit AES-GCM nonce
-                key_id = str(uuid.uuid4())
+                if recipient_key_bytes and self.vault_service and self.vault_service.vault and self.active_context and self.active_key_handle:
+                    try:
+                        from core.provider_resolver import resolve_provider
+                        from experiments.m5.provider import Provider as M5Provider
+                        from experiments.m5.model import Draft as M5Draft, Budget
+                        from experiments.m5 import mime as m5_mime
+                        from datetime import datetime, timezone
+                        from email.utils import format_datetime
+                        from email import message_from_bytes
 
-                payload_dict = {
-                    "body": body,
-                    "attachments": attachments,
-                }
-                payload_bytes = json.dumps(payload_dict).encode("utf-8")
-                aesgcm = AESGCM(k_msg)
-                ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
+                        m5_helper = resolve_provider("qumail-m5-provider")
+                        m5_provider = M5Provider(m5_helper)
+                        vault = self.vault_service.vault
+                        data = vault._read(self.active_context)
+                        key_rec = vault.key(data, self.active_context, self.active_key_handle, active=True)
 
-                # Persist session key locally for instant sender-side decapsulation
-                _persist_send_key(key_id, k_msg)
+                        m5_draft = M5Draft(
+                            to=tuple(recipients),
+                            cc=(),
+                            subject=subject,
+                            body=body,
+                            attachments=(),
+                        )
+                        date_str = format_datetime(datetime.now(timezone.utc))
+                        msg_id_domain = sender_email.split("@")[1] if "@" in sender_email else "qumail.sec"
+                        message_id_str = f"<{uuid.uuid4().hex}@{msg_id_domain}>"
+                        inner_bytes = m5_mime.build_inner(sender_email, m5_draft, message_id_str, date_str)
+                        budget = Budget(threading.Event(), time.monotonic() + 30)
+                        seal_res = m5_provider.call(
+                            "seal",
+                            budget,
+                            certificate=bytes(key_rec["secret"]),
+                            recipients=[recipient_key_bytes],
+                            data=inner_bytes,
+                        )
+                        armor_bytes = seal_res["data"]
+                        outer_bytes = m5_mime.build_outer(sender_email, m5_draft, message_id_str, date_str, armor_bytes)
+                        py_msg = message_from_bytes(outer_bytes)
+                    except Exception as m5_seal_err:
+                        logger.debug("M5 seal execution note: %s", m5_seal_err)
+                        py_msg = None
 
-                metadata = {
-                    "tqr_level": 3,
-                    "algorithm": "ML-KEM-768+AES-256-GCM",
-                    "nonce": iv.hex(),
-                    "tag": "",
-                    "key_id": key_id,
-                }
+                if py_msg is None:
+                    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                    from mime.encapsulator import encapsulate
 
-                py_msg = encapsulate(
-                    sender=sender_email,
-                    recipient=", ".join(recipients),
-                    subject=subject,
-                    ciphertext=ciphertext,
-                    metadata=metadata,
-                )
+                    k_msg = secrets.token_bytes(32)  # 256-bit symmetric session key
+                    iv = secrets.token_bytes(12)      # 96-bit AES-GCM nonce
+                    key_id = str(uuid.uuid4())
+
+                    payload_dict = {
+                        "body": body,
+                        "attachments": attachments,
+                    }
+                    payload_bytes = json.dumps(payload_dict).encode("utf-8")
+                    aesgcm = AESGCM(k_msg)
+                    ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
+
+                    # Persist session key locally for instant sender-side decapsulation
+                    _persist_send_key(key_id, k_msg)
+
+                    metadata = {
+                        "tqr_level": 3,
+                        "algorithm": "ML-KEM-768+AES-256-GCM",
+                        "nonce": iv.hex(),
+                        "tag": "",
+                        "key_id": key_id,
+                    }
+
+                    py_msg = encapsulate(
+                        sender=sender_email,
+                        recipient=", ".join(recipients),
+                        subject=subject,
+                        ciphertext=ciphertext,
+                        metadata=metadata,
+                    )
 
             # 2. Dispatch via SMTP if an authenticated transport is configured
             can_send_smtp = bool(
@@ -779,6 +1042,9 @@ class QuMailJsApi:
             "isEnrolled": bool(self.account_email),
             "kemAlgorithm": "ML-KEM-768 (NIST FIPS 203)",
             "dsaAlgorithm": "ML-DSA-65 (NIST FIPS 204)",
+            "keyFingerprint": self.key_fingerprint,
+            "sessionState": self.session_state,
+            "vaultState": self.vault_state,
             "hsmBound": is_active,
         }
 
@@ -787,14 +1053,58 @@ class QuMailJsApi:
         self.account_email = email.strip()
         self.account_display_name = display_name.strip() or email.split("@")[0]
         self.account_org = organization.strip() or "Corporate"
+        self.session_state = "MAILBOX_READY"
         logger.info("Account signed in: %s (%s)", self.account_email, self.account_display_name)
         return self.getAccount()
 
-    def logoutAccount(self) -> bool:
+    def lockVault(self) -> bool:
+        """Lock local cryptographic vault."""
+        self.vault_state = "LOCKED"
+        if self.vault_service:
+            try:
+                self.vault_service.lock()
+            except Exception:
+                pass
+        self.session_state = "LOCKED"
+        logger.info("Local vault locked by user request.")
+        return True
+
+    def unlockVault(self, passphrase: str = "") -> Dict[str, Any]:
+        """Unlock the M3 vault and restore account session."""
+        try:
+            from core.provider_resolver import resolve_provider
+            from core.identity_service import IdentityService
+            helper = resolve_provider("qumail-m3-provider")
+            service = IdentityService.configured(self.vault_path, helper)
+            service.unlock(create=False)
+            self.vault_service = service
+            self.vault_state = "UNLOCKED"
+            vault = service.vault
+            rows = vault.summaries() if vault else []
+            if rows:
+                primary = rows[0]
+                self.active_context = primary[0]
+                self.active_key_handle = primary[1]
+                self.account_email = primary[2]
+                self.account_display_name = primary[2].split("@")[0]
+                self.key_fingerprint = primary[3]
+                self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
+                self.session_state = "MAILBOX_READY"
+            else:
+                self.session_state = "SIGNED_OUT"
+            return {"success": True, "sessionStatus": self.getSessionStatus()}
+        except Exception as exc:
+            self.last_error = {"code": "UNLOCK_FAILED", "message": str(exc), "timestamp": int(time.time())}
+            return {"success": False, "message": str(exc), "sessionStatus": self.getSessionStatus()}
+
+    def logout(self) -> Dict[str, Any]:
         """Sign out active user session and purge local token material."""
         self.account_email = ""
         self.account_display_name = ""
         self.account_org = ""
+        self.key_fingerprint = ""
+        self.active_context = None
+        self.active_key_handle = None
         self.messages = []
         try:
             from transport.oauth2_gmail import revoke_token
@@ -806,7 +1116,18 @@ class QuMailJsApi:
             clear_custom_account()
         except Exception:
             pass
+        if self.vault_service:
+            try:
+                self.vault_service.lock()
+            except Exception:
+                pass
+        self.session_state = "SIGNED_OUT"
         logger.info("Account signed out.")
+        return {"success": True, "sessionStatus": self.getSessionStatus()}
+
+    def logoutAccount(self) -> bool:
+        """Backward-compatible alias for logout."""
+        self.logout()
         return True
 
     def updateAccountEmail(self, email: str) -> bool:
@@ -820,11 +1141,6 @@ class QuMailJsApi:
         """List available COM serial ports."""
         ports = list_com_ports()
         return [{"device": p.device, "description": p.description} for p in ports]
-
-    def lockVault(self) -> bool:
-        """Lock local cryptographic vault."""
-        logger.info("Local vault locked by user request.")
-        return True
 
 
 def main() -> int:

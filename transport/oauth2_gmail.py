@@ -389,11 +389,12 @@ class _OAuthLoopbackServer(http.server.HTTPServer):
         self.nonce: str | None = None
 
 
-def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credentials:
+def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> tuple[Credentials, str]:
     """
     Run a clean, isolated IPv4 loopback HTTP server to receive Google's OAuth callback.
     Avoids wsgiref keep-alive connection drops, IPv6 localhost resolution mismatch,
     and CPython SSL WinSock abort errors (CPython #35324 / #102547).
+    Returns (credentials, nonce).
     """
     server = _OAuthLoopbackServer("127.0.0.1")
     port = server.server_port
@@ -434,7 +435,7 @@ def _run_loopback_flow(flow: InstalledAppFlow, timeout: int = 180) -> Credential
     for attempt in range(1, 4):
         try:
             flow.fetch_token(code=server.oauth_code)
-            return flow.credentials
+            return flow.credentials, nonce
         except Exception as exc:
             last_exc = exc
             logger.warning("OAuth token exchange attempt %d encountered %s; retrying...", attempt, exc)
@@ -495,7 +496,7 @@ def get_access_token() -> str:
             client_config,
             scopes=GMAIL_SCOPES,
         )
-        creds = _run_loopback_flow(flow)
+        creds, _ = _run_loopback_flow(flow)
         _save_credentials(creds)
         return creds.token
 
@@ -509,7 +510,8 @@ def get_access_token() -> str:
 
 def authorize_google_account() -> dict:
     """
-    Run browser Google OAuth 2.0 PKCE consent flow and return verified user profile and tokens.
+    Run browser Google OAuth 2.0 PKCE consent flow and return cryptographically verified
+    user profile, tokens, and M3 VerifiedProviderIdentity.
     Uses canonical or auto-discovered client_secret.json, or preconfigured credentials.
     Presents an informative confirmation card in the browser instructing the user to close the tab.
     """
@@ -528,67 +530,90 @@ def authorize_google_account() -> dict:
         scopes=GMAIL_SCOPES,
     )
 
-    creds = _run_loopback_flow(flow)
+    creds, nonce = _run_loopback_flow(flow)
     _save_credentials(creds)
 
-    user_email = ""
-    display_name = ""
-    sub = ""
-
-    # Strategy 1: Cryptographically verify ID token JWT with audience matching client_id
     id_token = getattr(creds, "id_token", None)
+    if not id_token or not isinstance(id_token, str):
+        raise GmailAuthError("Google OAuth flow completed, but response did not contain an ID token.")
+
     installed_or_web = client_config.get("installed") or client_config.get("web") or client_config
     client_id = installed_or_web.get("client_id", "")
+    if not client_id:
+        raise GmailAuthError("Missing client_id in Google OAuth client configuration.")
 
-    if id_token and isinstance(id_token, str):
-        try:
-            from google.oauth2 import id_token as google_id_token
-            from google.auth.transport.requests import Request as GoogleRequest
-            verified_claims = google_id_token.verify_oauth2_token(
-                id_token,
-                GoogleRequest(),
-                audience=client_id,
-            )
-            user_email = verified_claims.get("email", "")
-            display_name = verified_claims.get("name", "")
-            sub = verified_claims.get("sub", "")
-            logger.info("Cryptographically verified Google ID token: email=%s, sub=%s", user_email, sub)
-        except Exception as ver_err:
-            logger.warning("Google ID token signature verification note: %s; decoding payload claims", ver_err)
-            try:
-                parts = id_token.split(".")
-                if len(parts) >= 2:
-                    payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
-                    claims = json.loads(base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8"))
-                    user_email = claims.get("email", "")
-                    display_name = claims.get("name", "")
-                    sub = claims.get("sub", "")
-                    logger.info("Extracted user profile from id_token claims: email=%s, name=%s", user_email, display_name)
-            except Exception as jwt_err:
-                logger.warning("Could not decode id_token JWT: %s", jwt_err)
+    # Cryptographically verify ID token JWT against Google public keys with audience matching client_id
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport.requests import Request as GoogleRequest
+    try:
+        verified_claims = google_id_token.verify_oauth2_token(
+            id_token,
+            GoogleRequest(),
+            audience=client_id,
+        )
+    except Exception as ver_err:
+        logger.error("Google ID token signature verification failed: %s", ver_err)
+        raise GmailAuthError(f"Google ID token signature verification failed: {ver_err}") from ver_err
 
-    # Strategy 2: If id_token didn't provide email, query userinfo endpoint
-    if not user_email:
-        try:
-            import requests as req
-            resp = req.get(
-                "https://openidconnect.googleapis.com/v1/userinfo",
-                headers={"Authorization": f"Bearer {creds.token}"},
-                timeout=8,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                user_email = data.get("email", "")
-                display_name = data.get("name", "")
-                sub = data.get("sub", "")
-        except Exception as net_err:
-            logger.warning("Userinfo network query note: %s", net_err)
+    # Constant-time nonce validation
+    token_nonce = verified_claims.get("nonce", "")
+    if not token_nonce or not secrets.compare_digest(token_nonce, nonce):
+        logger.error("Google ID token nonce mismatch: expected=%s, got=%s", nonce, token_nonce)
+        raise GmailAuthError("Google ID token nonce mismatch (possible replay attempt).")
+
+    # Strict issuer validation
+    iss = verified_claims.get("iss", "")
+    if iss not in ("accounts.google.com", "https://accounts.google.com"):
+        raise GmailAuthError(f"Google ID token issuer is invalid: {iss}")
+
+    # Strict email verification
+    if verified_claims.get("email_verified") is not True:
+        raise GmailAuthError("Google account email is not verified.")
+
+    # Expiration check
+    if int(verified_claims.get("exp", 0)) <= int(time.time()):
+        raise GmailAuthError("Google ID token has expired.")
+
+    # Audience check
+    if verified_claims.get("aud") != client_id:
+        raise GmailAuthError("Google ID token audience mismatch.")
+
+    user_email = verified_claims.get("email", "")
+    if not user_email or "@" not in user_email:
+        raise GmailAuthError("Google ID token did not contain a valid email address.")
+
+    # Workspace hosted domain verification: Google explicitly warns email_verified alone
+    # is not authoritative for third-party email. Domain aliases fail closed.
+    domain = user_email.rsplit("@", 1)[1].lower()
+    if domain != "gmail.com" and verified_claims.get("hd") != domain:
+        raise GmailAuthError(f"Google Workspace domain mismatch: expected hd={domain}, got {verified_claims.get('hd')}")
+
+    display_name = verified_claims.get("name", "") or user_email.split("@")[0]
+    sub = verified_claims.get("sub", "")
+
+    # Construct authentic M3 VerifiedProviderIdentity
+    from experiments.m3.identity import validated_google_claims
+    try:
+        provider_identity = validated_google_claims(verified_claims, client_id, nonce)
+    except Exception as m3_err:
+        raise GmailAuthError(f"M3 identity claims validation failed: {m3_err}") from m3_err
+
+    logger.info("Cryptographically verified Google ID token: email=%s, sub=%s", user_email, sub)
+
+    expiry_ts = int(creds.expiry.timestamp()) if getattr(creds, "expiry", None) else int(time.time()) + 3600
 
     return {
         "email": user_email,
-        "displayName": display_name or (user_email.split("@")[0] if user_email else ""),
+        "displayName": display_name,
         "subject": sub,
         "token": creds.token,
+        "identity": provider_identity,
+        "tokens": {
+            "access_token": creds.token,
+            "refresh_token": creds.refresh_token or "",
+            "expiry": expiry_ts,
+            "scopes": list(GMAIL_SCOPES),
+        },
     }
 
 
