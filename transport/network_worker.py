@@ -12,7 +12,7 @@ def run(request):
     from dataclasses import asdict
     import threading
     from transport.development_google import GoogleAuthorization
-    from experiments.m3.types import AccountContext,AccountId,DeviceId
+    from core.vault.types import AccountContext,AccountId,DeviceId
     provider=GoogleAuthorization(request['config'],request['scopes'])
     cancel=threading.Event()  # Parent terminates the whole worker on cancellation.
     if request['op']=='authorize':
@@ -31,7 +31,7 @@ if __name__=='__main__':
         if len(raw)>1024*1024: raise ValueError('input limit')
         print(json.dumps(dict(ok=True,value=run(json.loads(raw))),separators=(',',':')))
     except Exception as error:
-        from experiments.m3.types import BoundaryError
+        from core.vault.types import BoundaryError
         # Fixed application enums only; never provider diagnostics/callback URLs.
         code=error.code.value if isinstance(error,BoundaryError) else None
         print(json.dumps(dict(ok=False,code=code),separators=(',',':')))

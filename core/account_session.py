@@ -2,7 +2,7 @@
 from dataclasses import dataclass,field
 import threading
 from PyQt6.QtCore import QObject,pyqtSignal
-from experiments.m3.types import AccountContext,KeyHandle
+from core.vault.types import AccountContext,KeyHandle
 
 
 @dataclass(frozen=True,repr=False)

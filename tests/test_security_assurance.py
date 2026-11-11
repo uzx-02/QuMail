@@ -69,11 +69,11 @@ from core.security_indicators import BadgeLevel, IndicatorCode
 from core.trust_engine import TrustDecision, TrustPolicyEngine, TrustState
 
 # Module 1.5 Cryptographic Fixtures & Services
-from experiments.m3.types import EmailAddress, UserId, KeyHandle
-from experiments.m3.vault import Vault
-from experiments.m4.model import AccountAccess, State
-from experiments.m5 import mime
-from experiments.m5.model import (
+from core.vault.types import EmailAddress, UserId, KeyHandle
+from core.vault.vault import Vault
+from core.outbox.model import AccountAccess, State
+from core.crypto_envelope import mime
+from core.crypto_envelope.model import (
     PROFILE_LEGACY_M5,
     PROFILE_V1,
     SUPPORTED_PROFILES,
@@ -84,8 +84,8 @@ from experiments.m5.model import (
     Failure as M5Failure,
     Replay,
 )
-from experiments.m5.provider import Provider as M5Provider
-from experiments.m5.services import Compose, OpenMessage, encode_draft
+from core.crypto_envelope.provider import Provider as M5Provider
+from core.crypto_envelope.services import Compose, OpenMessage, encode_draft
 from tests.test_cryptographic_roundtrip import crypto_env, IsolatedMemoryStore
 
 

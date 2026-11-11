@@ -3,7 +3,7 @@ from dataclasses import asdict
 import time
 from .development_google import GoogleAuthorization,Authorization
 from .bounded_worker import call
-from experiments.m3.types import BoundaryError,Code,VerifiedProviderIdentity,EmailAddress
+from core.vault.types import BoundaryError,Code,VerifiedProviderIdentity,EmailAddress
 
 
 class BoundedGoogleAuthorization(GoogleAuthorization):

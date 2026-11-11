@@ -45,7 +45,7 @@ def call(request,cancel,deadline,*,command=None):
     if overflow.is_set() or process.returncode: raise OSError('provider worker failed')
     result=json.loads(output)
     if result.get('ok') is not True:
-        from experiments.m3.types import BoundaryError,Code
+        from core.vault.types import BoundaryError,Code
         try: code=Code(result.get('code'))
         except ValueError: raise OSError('provider worker failed') from None
         raise BoundaryError(code)

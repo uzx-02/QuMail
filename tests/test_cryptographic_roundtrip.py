@@ -12,15 +12,15 @@ from pathlib import Path
 from dataclasses import replace
 import pytest
 
-from experiments.m3.vault import Vault
-from experiments.m3.types import EmailAddress, UserId, BoundaryError, Code as M3Code, KeyHandle
-from experiments.m3 import identity
-from experiments.m3.provider import Provider as M3Provider
-from experiments.m4.model import AccountAccess, Failure as M4Failure, Error as M4Error, State
-from experiments.m5.provider import Provider as M5Provider
-from experiments.m5.model import Draft, Attachment, Budget, Replay, MAX_ATTACHMENT_BYTES, Failure as M5Failure, Code as M5Code
-from experiments.m5.services import Compose, OpenMessage
-from experiments.m5 import mime
+from core.vault.vault import Vault
+from core.vault.types import EmailAddress, UserId, BoundaryError, Code as M3Code, KeyHandle
+from core.vault import identity
+from core.vault.provider import Provider as M3Provider
+from core.outbox.model import AccountAccess, Failure as M4Failure, Error as M4Error, State
+from core.crypto_envelope.provider import Provider as M5Provider
+from core.crypto_envelope.model import Draft, Attachment, Budget, Replay, MAX_ATTACHMENT_BYTES, Failure as M5Failure, Code as M5Code
+from core.crypto_envelope.services import Compose, OpenMessage
+from core.crypto_envelope import mime
 from mailbox_client.workflows import Workflows, export_path
 
 # Union of domain failures across M3/M4/M5 boundaries

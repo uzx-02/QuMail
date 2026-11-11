@@ -64,7 +64,7 @@ from core.key_lifecycle import (
     is_signature_historically_valid,
 )
 from core.trust_engine import TrustPolicyEngine, TrustState, TrustDecision
-from experiments.m5.model import (
+from core.crypto_envelope.model import (
     PROFILE,
     PROFILE_V1,
     PROFILE_LEGACY_M5,
@@ -73,7 +73,7 @@ from experiments.m5.model import (
     Failure,
     Draft,
 )
-from experiments.m5 import mime
+from core.crypto_envelope import mime
 
 
 # ==============================================================================

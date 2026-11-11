@@ -16,11 +16,11 @@ import os
 from pathlib import Path
 import pytest
 
-from experiments.m5.model import Draft, Attachment, Code, Failure, Budget
-from experiments.m5.provider import Provider
-from experiments.m5.services import OpenMessage
-from experiments.m5.mime import parse_outer, parse_inner, validate
-from experiments.m5.legacy import classify, Kind
+from core.crypto_envelope.model import Draft, Attachment, Code, Failure, Budget
+from core.crypto_envelope.provider import Provider
+from core.crypto_envelope.services import OpenMessage
+from core.crypto_envelope.mime import parse_outer, parse_inner, validate
+from core.crypto_envelope.legacy import classify, Kind
 from mailbox_client.service import conventional
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,7 +113,7 @@ def test_tampered_armor_raises_parse_error():
 def test_attachment_traversal_path_defense():
     """Verify dangerous filenames in attachments are validated and prevented."""
     from mailbox_client.workflows import export_path
-    from experiments.m4.model import Failure as OutboxFailure
+    from core.outbox.model import Failure as OutboxFailure
 
     # Relative path traversal
     with pytest.raises((Failure, OutboxFailure)):

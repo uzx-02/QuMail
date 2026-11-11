@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from experiments.m3.types import AccountContext
+from core.vault.types import AccountContext
 
 MAX_WIRE = 256 * 1024  # Preserve the M5 qualified message ceiling.
 MAX_HEADER = 8192

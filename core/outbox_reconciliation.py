@@ -24,7 +24,7 @@ import time
 from typing import Any, Callable
 
 from core.logging_config import get_logger
-from experiments.m4.model import (
+from core.outbox.model import (
     DeliveryResult,
     Error,
     Failure,

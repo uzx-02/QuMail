@@ -1,6 +1,6 @@
-"""Internal encrypted-record encoding; not an email wire format."""
-import base64
-
-
-def pack(value): return base64.b64encode(value).decode('ascii')
-def unpack(value): return base64.b64decode(value, validate=True)
+# Compatibility bridge forwarding legacy milestone import to production core domain
+from core.outbox.codec import *
+import core.outbox.codec as _mod
+for _k, _v in _mod.__dict__.items():
+    if not _k.startswith('__'):
+        globals()[_k] = _v

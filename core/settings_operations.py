@@ -16,8 +16,8 @@ import uuid
 
 from core.account_session import AccountView,Ticket
 from core.identity_service import persist_new
-from experiments.m3.types import BoundaryError,Code,EmailAddress,RootIdentity,UserId,AccountId
-from experiments.m3.vault import Vault,LIMIT,BACKUP,protect,encode,safe_path
+from core.vault.types import BoundaryError,Code,EmailAddress,RootIdentity,UserId,AccountId
+from core.vault.vault import Vault,LIMIT,BACKUP,protect,encode,safe_path
 
 
 class Stopped(Exception): pass

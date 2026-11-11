@@ -2,9 +2,9 @@
 import socket
 import ssl
 import time
-from experiments.m5.model import Budget
+from core.crypto_envelope.model import Budget
 from .connection import connect
-from experiments.m4.smtp_transport import SMTPSubmission, BoundedSMTP
+from core.outbox.smtp_transport import SMTPSubmission, BoundedSMTP
 
 
 class GmailConnection(BoundedSMTP):

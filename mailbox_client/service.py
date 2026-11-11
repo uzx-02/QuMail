@@ -3,8 +3,8 @@ from email.parser import BytesParser, BytesHeaderParser
 from email.policy import default
 from email.utils import parseaddr
 import time
-from experiments.m5.legacy import classify, Kind
-from experiments.m5.services import OpenMessage
+from core.crypto_envelope.legacy import classify, Kind
+from core.crypto_envelope.services import OpenMessage
 from .model import *
 from .gmail import MAIL_SCOPE, field
 from transport.bounded_google import BoundedGoogleAuthorization

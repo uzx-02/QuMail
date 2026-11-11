@@ -933,10 +933,10 @@ def test_sync_engine_crash_rollback_safety():
 
 def test_mailbox_service_application_apis():
     from mailbox_client.service import MailboxService
-    from experiments.m4.model import AccountAccess
-    from experiments.m5.model import Budget
+    from core.outbox.model import AccountAccess
+    from core.crypto_envelope.model import Budget
     from mailbox_client.model import MessageKey
-    from experiments.m3.types import AccountContext, AccountId, DeviceId
+    from core.vault.types import AccountContext, AccountId, DeviceId
 
     # Create dummy account context
     ctx = AccountContext(AccountId.new(), DeviceId.new(), "https://accounts.google.com", "user_sub")

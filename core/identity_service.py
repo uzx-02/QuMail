@@ -2,10 +2,10 @@
 import os
 from pathlib import Path
 from core.account_session import AccountView,DevelopmentSession
-from experiments.m3.types import BoundaryError,Code,EmailAddress,RootIdentity,UserId
-from experiments.m3.vault import Vault,safe_path,LIMIT
-from experiments.m3.provider import Provider
-from experiments.m3.secure_store import WindowsCredentialStore
+from core.vault.types import BoundaryError,Code,EmailAddress,RootIdentity,UserId
+from core.vault.vault import Vault,safe_path,LIMIT
+from core.vault.provider import Provider
+from core.vault.secure_store import WindowsCredentialStore
 from transport.development_google import client_configuration
 from transport.bounded_google import BoundedGoogleAuthorization as GoogleAuthorization
 

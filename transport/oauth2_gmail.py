@@ -663,7 +663,7 @@ def authorize_google_account() -> dict:
     sub = verified_claims.get("sub", "")
 
     # Construct authentic M3 VerifiedProviderIdentity
-    from experiments.m3.identity import validated_google_claims
+    from core.vault.identity import validated_google_claims
     try:
         provider_identity = validated_google_claims(verified_claims, client_id, nonce)
     except Exception as m3_err:

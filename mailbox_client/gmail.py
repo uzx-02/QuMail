@@ -12,7 +12,7 @@ import select
 import ssl
 import time
 import threading
-from experiments.m5.model import Budget
+from core.crypto_envelope.model import Budget
 from .connection import connect,secure
 from .model import *
 

@@ -13,8 +13,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
 from google.oauth2 import id_token
 from google.auth.transport.requests import Request
-from experiments.m3.identity import google_identity,verify_google_token
-from experiments.m3.types import BoundaryError, Code, EmailAddress, VerifiedProviderIdentity
+from core.vault.identity import google_identity,verify_google_token
+from core.vault.types import BoundaryError, Code, EmailAddress, VerifiedProviderIdentity
 
 AUTH='https://accounts.google.com/o/oauth2/v2/auth'
 GOOGLE_CLIENT_AUTH_URIS=(AUTH,'https://accounts.google.com/o/oauth2/auth')

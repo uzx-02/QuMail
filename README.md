@@ -58,14 +58,17 @@ The codebase is structured into the following operational modules:
 ```
 QuMail/
 ├── bin/                        # Verified native 64-bit Rust provider binaries & manifest
-│   ├── qumail-m3-provider.exe  # Identity, DPAPI vault, and subkey management
-│   ├── qumail-m5-provider.exe  # RFC 3156 / RFC 9788 OpenPGP-PQ message sealing/opening
+│   ├── qumail-vault-provider.exe  # Identity, DPAPI vault, and subkey management
+│   ├── qumail-crypto-provider.exe # RFC 3156 / RFC 9788 OpenPGP-PQ message sealing/opening
 │   └── manifest.json           # SHA-256 hashes and PE mitigation security metadata
-├── core/                       # Shared application business logic
+├── core/                       # Core application domain packages & business logic
+│   ├── vault/                  # Post-quantum identity, DPAPI vault, and credential store
+│   ├── outbox/                 # Durable SQLite outbox state machine, worker locks, & queue
+│   ├── crypto_envelope/        # Post-quantum MIME packaging, sealing, and opening
 │   ├── enterprise_policy.py    # Windows Registry GPO policy parsing
-│   ├── identity_service.py     # Python bridge to M3 SQLite DPAPI vault
+│   ├── identity_service.py     # High-level bridge to SQLite DPAPI vault
 │   ├── key_discovery.py        # RFC 9580 WKD discovery with anti-SSRF IP filtering
-│   ├── outbox_manager.py       # Durable SQLite outbox state machine
+│   ├── outbox_manager.py       # Outbox queue persistence and lifecycle management
 │   ├── outbox_reconciliation.py# Background Sent-folder IMAP reconciliation
 │   ├── provider_resolver.py    # Binary path resolver and integrity verifier
 │   └── web_link_crypto.py      # Client-side AES-256-GCM sealing for web link delivery
@@ -73,7 +76,7 @@ QuMail/
 ├── mailbox_client/             # Message retrieval and workflow coordination
 │   ├── gmail.py                # Gmail IMAP connection with XOAUTH2 and PEEK flags
 │   ├── smtp.py                 # RFC 5321 SMTP submission transport
-│   └── workflows.py            # M5 transactional compose, prepare, and submit workflows
+│   └── workflows.py            # Transactional compose, prepare, and submit workflows
 ├── transport/                  # Transport adapters and authentication handlers
 │   ├── oauth2_gmail.py         # Google OAuth 2.0 PKCE loopback consent flow
 │   ├── custom_mailbox.py       # Generic IMAP/SMTP host discovery & Fernet credential store
@@ -87,7 +90,7 @@ QuMail/
 ├── services/                   # Standalone microservices (isolated prototypes)
 │   ├── directory/              # RFC 6962 / RFC 9162 Merkle tree transparency directory
 │   ├── portal/                 # Ephemeral zero-knowledge web link staging & OTP verification
-│   └── relay/                  # M7 loopback mTLS ciphertext relay
+│   └── relay/                  # Local mTLS ciphertext relay prototype
 ├── tests/                      # Automated regression, unit, and integration test suites
 ├── packaging/                  # Dependency requirement manifests and lockfiles
 ├── deploy/                     # Inno Setup scripts and enterprise GPO ADMX/ADML templates
@@ -101,8 +104,8 @@ QuMail/
 
 | Subsystem / Feature | Implementation Status | Actual Functional Behavior | Known Limitations |
 |---|---|---|---|
-| **M3 DPAPI Vault** | VERIFIED FUNCTIONAL | Generates post-quantum identities, encrypts database with Windows DPAPI, manages subkeys. | Windows-only DPAPI binding; non-portable across machines. |
-| **M5 OpenPGP-PQ Sealing** | VERIFIED FUNCTIONAL | Seals and opens MIME envelopes with ML-KEM-768 and ML-DSA-65 signatures. | Requires recipient public key pre-enrolled in local vault or WKD. |
+| **Identity & DPAPI Vault** | VERIFIED FUNCTIONAL | Generates post-quantum identities, encrypts database with Windows DPAPI, manages subkeys. | Windows-only DPAPI binding; non-portable across machines. |
+| **OpenPGP-PQ Sealing** | VERIFIED FUNCTIONAL | Seals and opens MIME envelopes with ML-KEM-768 and ML-DSA-65 signatures. | Requires recipient public key pre-enrolled in local vault or WKD. |
 | **Durable Outbox** | VERIFIED FUNCTIONAL | Persists message records in SQLite; reconciles with IMAP Sent folder; halts on UNKNOWN. | Requires active IMAP connection to confirm ambiguous delivery. |
 | **Google OAuth 2.0 PKCE** | VERIFIED FUNCTIONAL | Completes browser consent flow; retrieves access/refresh tokens; auto-refreshes tokens. | Requires user-provided `client_secret.json`; CASA Tier 2 audit pending. |
 | **Custom IMAP/SMTP** | VERIFIED FUNCTIONAL | Connects to external email servers via TLS/STARTTLS; encrypts credentials with Fernet. | Relies on standard username/password or provider App Passwords. |

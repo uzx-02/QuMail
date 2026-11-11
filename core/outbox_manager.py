@@ -20,9 +20,9 @@ import hashlib
 import time
 from typing import Any, Callable, ContextManager
 
-from experiments.m3.types import AccountContext, EmailAddress, KeyHandle
-from experiments.m4.codec import pack, unpack
-from experiments.m4.model import (
+from core.vault.types import AccountContext, EmailAddress, KeyHandle
+from core.outbox.codec import pack, unpack
+from core.outbox.model import (
     Binding,
     CredentialHandle,
     DeliveryResult,
@@ -34,7 +34,7 @@ from experiments.m4.model import (
     PreparedEnvelope,
     State,
 )
-from experiments.m4.ownership import worker_lock
+from core.outbox.ownership import worker_lock
 
 # Configurable capacity constants (resolving M16-OUT-002)
 DEFAULT_MAX_OUTBOX_OPERATIONS = 256

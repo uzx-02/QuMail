@@ -32,10 +32,16 @@ class ProviderIncompatibleError(ProviderError):
 
 
 _VALID_NAMES = {
-    "qumail-m3-provider": "qumail-m3-provider",
-    "qumail-m5-provider": "qumail-m5-provider",
-    "m3": "qumail-m3-provider",
-    "m5": "qumail-m5-provider",
+    # Canonical functional names
+    "qumail-vault-provider": "qumail-vault-provider",
+    "qumail-crypto-provider": "qumail-crypto-provider",
+    "vault": "qumail-vault-provider",
+    "crypto": "qumail-crypto-provider",
+    # Backward-compatible milestone aliases
+    "qumail-m3-provider": "qumail-vault-provider",
+    "qumail-m5-provider": "qumail-crypto-provider",
+    "m3": "qumail-vault-provider",
+    "m5": "qumail-crypto-provider",
 }
 
 
@@ -43,7 +49,9 @@ def _normalize_name(name: str) -> str:
     cleaned = name.lower().removesuffix(".exe")
     canonical = _VALID_NAMES.get(cleaned)
     if not canonical:
-        raise ValueError(f"Unknown provider name: {name!r}. Must be 'qumail-m3-provider' or 'qumail-m5-provider'.")
+        raise ValueError(
+            f"Unknown provider name: {name!r}. Must be 'qumail-vault-provider' or 'qumail-crypto-provider'."
+        )
     return canonical
 
 
@@ -57,14 +65,15 @@ def get_application_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def resolve_provider(name: str = "qumail-m5-provider") -> Path:
+def resolve_provider(name: str = "qumail-crypto-provider") -> Path:
     """
     Resolve the absolute path to a native provider executable.
 
     Search priority order:
       1. Explicit environment variable override:
          - QUMAIL_PROVIDER_PATH (generic override)
-         - QUMAIL_M3_PROVIDER_PATH / QUMAIL_M5_PROVIDER_PATH (specific override)
+         - QUMAIL_VAULT_PROVIDER_PATH / QUMAIL_CRYPTO_PROVIDER_PATH (domain override)
+         - QUMAIL_M3_PROVIDER_PATH / QUMAIL_M5_PROVIDER_PATH (legacy override)
       2. PyInstaller bundle directory: sys._MEIPASS / 'bin' / f'{canonical}.exe'
       3. Application-owned bin/ directory: <app_root> / 'bin' / f'{canonical}.exe'
       4. Application root: <sys.executable parent> / 'bin' / f'{canonical}.exe'
@@ -75,18 +84,21 @@ def resolve_provider(name: str = "qumail-m5-provider") -> Path:
         ProviderNotFoundError: If no valid executable can be located.
     """
     canonical = _normalize_name(name)
-    exe_name = f"{canonical}.exe" if sys.platform == "win32" else canonical
     app_root = get_application_root()
+
+    # Canonical exe names with legacy fallbacks
+    if canonical == "qumail-vault-provider":
+        exe_names = ["qumail-vault-provider.exe", "qumail-m3-provider.exe"] if sys.platform == "win32" else ["qumail-vault-provider", "qumail-m3-provider"]
+        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_VAULT_PROVIDER_PATH", "QUMAIL_M3_PROVIDER_PATH"]
+        env_hint = "QUMAIL_VAULT_PROVIDER_PATH"
+    else:
+        exe_names = ["qumail-crypto-provider.exe", "qumail-m5-provider.exe"] if sys.platform == "win32" else ["qumail-crypto-provider", "qumail-m5-provider"]
+        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_CRYPTO_PROVIDER_PATH", "QUMAIL_M5_PROVIDER_PATH"]
+        env_hint = "QUMAIL_CRYPTO_PROVIDER_PATH"
 
     searched: list[Path] = []
 
     # 1. Environment variable override
-    env_keys = ["QUMAIL_PROVIDER_PATH"]
-    if canonical == "qumail-m3-provider":
-        env_keys.append("QUMAIL_M3_PROVIDER_PATH")
-    elif canonical == "qumail-m5-provider":
-        env_keys.append("QUMAIL_M5_PROVIDER_PATH")
-
     for key in env_keys:
         val = os.environ.get(key)
         if val:
@@ -97,47 +109,52 @@ def resolve_provider(name: str = "qumail-m5-provider") -> Path:
                 f"Environment variable '{key}' was set to '{val}', but no file was found at specified location."
             )
 
-    # 2. PyInstaller bundle
-    if hasattr(sys, "_MEIPASS"):
-        candidate = Path(sys._MEIPASS) / "bin" / exe_name
+    for exe_name in exe_names:
+        # 2. PyInstaller bundle
+        if hasattr(sys, "_MEIPASS"):
+            candidate = Path(sys._MEIPASS) / "bin" / exe_name
+            searched.append(candidate)
+            if candidate.is_file():
+                return candidate.resolve()
+
+        # 3. PyInstaller onedir _internal directory
+        candidate = app_root / "_internal" / "bin" / exe_name
         searched.append(candidate)
         if candidate.is_file():
             return candidate.resolve()
 
-    # 3. PyInstaller onedir _internal directory
-    candidate = app_root / "_internal" / "bin" / exe_name
-    searched.append(candidate)
-    if candidate.is_file():
-        return candidate.resolve()
+        # 4. Application-owned bin/ directory (standard distribution layout)
+        candidate = app_root / "bin" / exe_name
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate.resolve()
 
-    # 4. Application-owned bin/ directory (standard distribution layout)
-    candidate = app_root / "bin" / exe_name
-    searched.append(candidate)
-    if candidate.is_file():
-        return candidate.resolve()
+        # 5. Adjacent to current python executable (installed layout)
+        candidate = Path(sys.executable).parent / "bin" / exe_name
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate.resolve()
 
-    # 5. Adjacent to current python executable (installed layout)
-    candidate = Path(sys.executable).parent / "bin" / exe_name
-    searched.append(candidate)
-    if candidate.is_file():
-        return candidate.resolve()
+        # 6. Cargo Target Release (development release build)
+        candidate = app_root / "tmp/m2/target/release" / exe_name
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate.resolve()
 
-    # 5. Cargo Target Release (development release build)
-    candidate = app_root / "tmp/m2/target/release" / exe_name
-    searched.append(candidate)
-    if candidate.is_file():
-        return candidate.resolve()
-
-    # 6. Cargo Target Debug (development debug build fallback)
-    candidate = app_root / "tmp/m2/target/debug" / exe_name
-    searched.append(candidate)
-    if candidate.is_file():
-        return candidate.resolve()
+        # 7. Cargo Target Debug (development debug build fallback)
+        candidate = app_root / "tmp/m2/target/debug" / exe_name
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate.resolve()
 
     locations = "\n  - ".join(str(p) for p in searched)
-    env_hint = "QUMAIL_M3_PROVIDER_PATH" if canonical == "qumail-m3-provider" else "QUMAIL_M5_PROVIDER_PATH"
+    env_hint = (
+        "QUMAIL_VAULT_PROVIDER_PATH (or QUMAIL_M3_PROVIDER_PATH)"
+        if "vault" in canonical or canonical == "qumail-m3-provider"
+        else "QUMAIL_CRYPTO_PROVIDER_PATH (or QUMAIL_M5_PROVIDER_PATH)"
+    )
     raise ProviderNotFoundError(
-        f"Native cryptographic provider '{canonical}' could not be located.\n"
+        f"Native cryptographic provider '{name}' ({canonical}) could not be located.\n"
         f"Searched candidate locations:\n  - {locations}\n\n"
         f"To compile the native provider locally, run:\n"
         f"  powershell -ExecutionPolicy Bypass -File tools/build_providers.ps1\n\n"
@@ -229,7 +246,11 @@ def verify_provider(name: str = "qumail-m5-provider") -> dict[str, object]:
     manifest_data = load_manifest()
     manifest_match = None
     if manifest_data:
-        entry = manifest_data.get("providers", {}).get(canonical)
+        providers = manifest_data.get("providers", {})
+        entry = providers.get(canonical)
+        if not entry:
+            fallback_key = "qumail-m3-provider" if "vault" in canonical else "qumail-m5-provider"
+            entry = providers.get(fallback_key)
         if entry and "sha256" in entry:
             manifest_match = (entry["sha256"].lower() == digest.lower())
 

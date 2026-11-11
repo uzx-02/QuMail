@@ -43,11 +43,11 @@ from core.outbox_reconciliation import (
     normalize_message_id,
     parse_rfc_date_timestamp,
 )
-from experiments.m3 import identity
-from experiments.m3.types import BoundaryError, Code as M3Code, EmailAddress, KeyHandle, UserId
-from experiments.m3.vault import Vault
-from experiments.m4.codec import pack, unpack
-from experiments.m4.model import (
+from core.vault import identity
+from core.vault.types import BoundaryError, Code as M3Code, EmailAddress, KeyHandle, UserId
+from core.vault.vault import Vault
+from core.outbox.codec import pack, unpack
+from core.outbox.model import (
     AccountAccess,
     Binding,
     CredentialHandle,
@@ -60,10 +60,10 @@ from experiments.m4.model import (
     PreparedEnvelope,
     State,
 )
-from experiments.m4.vault_adapter import VaultOutbox
-from experiments.m5.model import Attachment, Budget, Draft
-from experiments.m5.provider import Provider as M5Provider
-from experiments.m5.services import Compose
+from core.outbox.vault_adapter import VaultOutbox
+from core.crypto_envelope.model import Attachment, Budget, Draft
+from core.crypto_envelope.provider import Provider as M5Provider
+from core.crypto_envelope.services import Compose
 from mailbox_client.workflows import Workflows
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,7 +93,7 @@ class IsolatedMemoryStore:
 @pytest.fixture
 def crypto_env(tmp_path):
     """Sets up Alice and Bob inside an isolated SQLite vault with enrolled identities."""
-    from experiments.m3.provider import Provider as M3Provider
+    from core.vault.provider import Provider as M3Provider
     p_m3 = M3Provider(M3_PROVIDER_BIN)
     p_m5 = M5Provider(M5_PROVIDER_BIN)
     vault_path = tmp_path / "ws04_vault.sqlite"

@@ -21,26 +21,26 @@ import time
 import pytest
 
 from core.provider_resolver import resolve_provider
-from experiments.m3 import identity
-from experiments.m3.provider import Provider as M3Provider
-from experiments.m3.types import (
+from core.vault import identity
+from core.vault.provider import Provider as M3Provider
+from core.vault.types import (
     BoundaryError,
     Code as M3Code,
     EmailAddress,
     UserId,
 )
-from experiments.m3.vault import Vault
-from experiments.m4.model import AccountAccess, Failure as M4Failure
-from experiments.m5 import mime
-from experiments.m5.model import (
+from core.vault.vault import Vault
+from core.outbox.model import AccountAccess, Failure as M4Failure
+from core.crypto_envelope import mime
+from core.crypto_envelope.model import (
     Budget,
     Code as M5Code,
     Draft,
     Failure as M5Failure,
     Replay,
 )
-from experiments.m5.provider import Provider as M5Provider
-from experiments.m5.services import OpenMessage
+from core.crypto_envelope.provider import Provider as M5Provider
+from core.crypto_envelope.services import OpenMessage
 
 SecurityFailure = (M4Failure, M5Failure, BoundaryError)
 

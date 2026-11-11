@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_provider:
         print("QuMail Native Provider Diagnostic Probe:")
         all_ok = True
-        for prov_name in ("qumail-m3-provider", "qumail-m5-provider"):
+        for prov_name in ("qumail-vault-provider", "qumail-crypto-provider"):
             try:
                 info = verify_provider(prov_name)
                 print(f"\n[OK] {prov_name}:")

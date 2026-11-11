@@ -2,15 +2,15 @@
 import os
 from pathlib import Path
 import re
-from experiments.m3.types import EmailAddress
-from experiments.m3.vault import safe_path
-from experiments.m4.codec import pack, unpack
-from experiments.m4.model import OperationId, State, Failure, Error
-from experiments.m4.services import SubmitOutbox, result
-from experiments.m4.smtp_transport import MailCredential
-from experiments.m5 import mime
-from experiments.m5.model import Attachment, Draft, Budget, MAX_ATTACHMENT_BYTES
-from experiments.m5.services import Compose, OpenMessage, encode_draft, decode_draft
+from core.vault.types import EmailAddress
+from core.vault.vault import safe_path
+from core.outbox.codec import pack, unpack
+from core.outbox.model import OperationId, State, Failure, Error
+from core.outbox.services import SubmitOutbox, result
+from core.outbox.smtp_transport import MailCredential
+from core.crypto_envelope import mime
+from core.crypto_envelope.model import Attachment, Draft, Budget, MAX_ATTACHMENT_BYTES
+from core.crypto_envelope.services import Compose, OpenMessage, encode_draft, decode_draft
 from .model import Display
 from .service import Credentials
 from .smtp import GmailSMTP
@@ -117,7 +117,7 @@ class Workflows:
                     if disc.ok and disc.key:
                         account._vault.import_contact(account.context, EmailAddress(address), disc.key.public_key_bytes)
                         if hasattr(self.discovery, "enterprise") and self.discovery.enterprise.is_certified_by_enterprise(address, disc.key.fingerprint):
-                            from experiments.m3.types import RootIdentity
+                            from core.vault.types import RootIdentity
                             account._vault.pin_contact(account.context, EmailAddress(address), RootIdentity(disc.key.fingerprint), "enterprise-directory")
                 account._vault.recipient(account._data, EmailAddress(address))
             self.check(lease, budget)
