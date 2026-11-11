@@ -720,20 +720,25 @@ export default {
         const shouldBurn = link.burn_after_read === 1 || newViewCount >= link.max_views;
 
         if (shouldBurn) {
-          // Immediately purge ciphertext and mark burned
-          await env.DB.prepare(
-            "UPDATE weblinks SET view_count = ?, is_burned = 1, encrypted_payload = '[BURNED]' WHERE link_id = ?"
+          // Point 4: Atomic D1 Burn-After-Read (Strong consistency prevents concurrent double-reads)
+          const burnRes = (await env.DB.prepare(
+            "UPDATE weblinks SET view_count = view_count + 1, is_burned = 1, encrypted_payload = '[BURNED]' WHERE link_id = ? AND is_burned = 0 AND expires_at > ? RETURNING view_count"
           )
-            .bind(newViewCount, linkId)
-            .run();
+            .bind(linkId, now)
+            .first()) as any;
+
+          if (!burnRes) {
+            return errorResponse("This secure link has already been burned by a concurrent viewer.", 410);
+          }
         } else {
-          await env.DB.prepare("UPDATE weblinks SET view_count = ? WHERE link_id = ?").bind(newViewCount, linkId).run();
+          await env.DB.prepare("UPDATE weblinks SET view_count = view_count + 1 WHERE link_id = ? AND is_burned = 0").bind(linkId).run();
         }
 
         return jsonResponse({
           success: true,
           encrypted_payload: link.encrypted_payload,
           iv_hex: link.iv_hex,
+          passcode_salt_hex: link.passcode_salt_hex || "",
           views_remaining: Math.max(0, link.max_views - newViewCount),
           burned: shouldBurn,
         });
@@ -849,16 +854,30 @@ async function enrollAccountAndDevice(
 }
 
 // ============================================================================
-// 5. HTML Viewer (Strict CSP, no-store, client-side decryption)
+// 5. HTML Viewer (Strict CSP with Nonce, no-store, client-side decryption)
 // ============================================================================
 
 function serveWebLinkViewer(linkId: string): Response {
+  const nonce = crypto.randomUUID().replace(/-/g, "");
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QuMail Secure Communication</title>
+  <!-- Point 3: Synchronously scrub URL fragment in <head> before DOM, styles, or extensions run -->
+  <script nonce="${nonce}">
+    window.__QUMAIL_KEY__ = "";
+    try {
+      const hash = window.location.hash.slice(1);
+      if (hash) {
+        const params = new URLSearchParams(hash);
+        window.__QUMAIL_KEY__ = params.get("key") || hash;
+        history.replaceState(null, "", window.location.pathname);
+      }
+    } catch (e) {}
+  </script>
   <style>
     :root { --bg: #090d16; --card: #111827; --text: #f3f4f6; --muted: #9ca3af; --accent: #06b6d4; --border: #1f2937; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -889,7 +908,7 @@ function serveWebLinkViewer(linkId: string): Response {
     <div class="badge">🔒 Zero-Knowledge URL Fragment Key Delivery</div>
     <div id="errorAlert" class="alert alert-error"></div>
     <div id="passcodeSection" style="display: none;">
-      <p class="notice">This message requires a sender-configured passcode to unlock.</p>
+      <p class="notice">This message requires an out-of-band passcode from the sender to unlock.</p>
       <input type="password" id="passcodeInput" class="input" placeholder="Enter confidential passcode" autocomplete="off" />
     </div>
     <button id="revealBtn" class="btn">Reveal Secure Communication</button>
@@ -899,7 +918,8 @@ function serveWebLinkViewer(linkId: string): Response {
     </p>
   </div>
 
-  <script>
+  <!-- Point 2: Strict CSP protected script with cryptographic nonce -->
+  <script nonce="${nonce}">
     (function() {
       const linkId = "${linkId}";
       const revealBtn = document.getElementById("revealBtn");
@@ -908,25 +928,21 @@ function serveWebLinkViewer(linkId: string): Response {
       const contentBox = document.getElementById("contentBox");
       const errorAlert = document.getElementById("errorAlert");
 
-      let cachedKeyHex = "";
-      try {
-        const hash = window.location.hash.slice(1);
-        if (hash) {
-          const params = new URLSearchParams(hash);
-          cachedKeyHex = params.get("key") || hash;
-          // Security Upgrade: Immediately scrub #key from active URL bar and history
-          history.replaceState(null, "", window.location.pathname);
-        }
-      } catch (e) {}
+      let currentSaltHex = "";
 
       function showError(msg) {
         errorAlert.textContent = msg;
         errorAlert.style.display = "block";
       }
 
-      async function sha256(str) {
-        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+      async function computePasscodeTag(passcode, saltHex) {
+        const passBytes = new TextEncoder().encode(passcode);
+        const saltBytes = saltHex ? new Uint8Array(saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16))) : new Uint8Array(0);
+        const combined = new Uint8Array(passBytes.length + saltBytes.length);
+        combined.set(passBytes, 0);
+        combined.set(saltBytes, passBytes.length);
+        const tagBuf = await crypto.subtle.digest("SHA-256", combined);
+        return Array.from(new Uint8Array(tagBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
       }
 
       revealBtn.addEventListener("click", async () => {
@@ -935,10 +951,7 @@ function serveWebLinkViewer(linkId: string): Response {
         revealBtn.textContent = "Decrypting locally...";
 
         try {
-          const rawKeyHex = cachedKeyHex || (window.location.hash.slice(1) ? (new URLSearchParams(window.location.hash.slice(1)).get("key") || window.location.hash.slice(1)) : "");
-          if (cachedKeyHex && window.location.hash) {
-            try { history.replaceState(null, "", window.location.pathname); } catch(e) {}
-          }
+          const rawKeyHex = window.__QUMAIL_KEY__ || (window.location.hash.slice(1) ? (new URLSearchParams(window.location.hash.slice(1)).get("key") || window.location.hash.slice(1)) : "");
 
           if (!rawKeyHex) {
             showError("Missing decryption key fragment in URL. Ensure you opened the complete link.");
@@ -950,7 +963,7 @@ function serveWebLinkViewer(linkId: string): Response {
           let passcodeTag = "";
           const enteredPasscode = passcodeInput.value.trim();
           if (enteredPasscode) {
-            passcodeTag = await sha256(enteredPasscode);
+            passcodeTag = await computePasscodeTag(enteredPasscode, currentSaltHex);
           }
 
           const res = await fetch("/api/v1/weblinks/" + linkId + "/reveal", {
@@ -962,6 +975,7 @@ function serveWebLinkViewer(linkId: string): Response {
           const data = await res.json();
           if (!res.ok) {
             if (data.needs_passcode) {
+              currentSaltHex = data.passcode_salt_hex || "";
               passcodeSection.style.display = "block";
               showError("Passcode is required to unlock this message.");
               revealBtn.disabled = false;
@@ -971,9 +985,28 @@ function serveWebLinkViewer(linkId: string): Response {
             throw new Error(data.error || "Failed to retrieve ciphertext from gateway.");
           }
 
-          // Import 256-bit AES-GCM Key
-          const keyBytes = new Uint8Array(rawKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-          const cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+          // Point 1: Client-Side Key Derivation with Cryptographic Passcode Binding
+          const rawKeyBytes = new Uint8Array(rawKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+          let effectiveKeyBytes = rawKeyBytes;
+
+          if (enteredPasscode) {
+            // K_effective = HMAC-SHA256(raw_key, passcode)
+            const hmacKey = await crypto.subtle.importKey(
+              "raw",
+              rawKeyBytes,
+              { name: "HMAC", hash: "SHA-256" },
+              false,
+              ["sign"]
+            );
+            const derivedSig = await crypto.subtle.sign(
+              "HMAC",
+              hmacKey,
+              new TextEncoder().encode(enteredPasscode)
+            );
+            effectiveKeyBytes = new Uint8Array(derivedSig);
+          }
+
+          const cryptoKey = await crypto.subtle.importKey("raw", effectiveKeyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
 
           // Decode ciphertext & nonce
           const ivBytes = new Uint8Array(data.iv_hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
@@ -989,7 +1022,7 @@ function serveWebLinkViewer(linkId: string): Response {
           revealBtn.style.display = "none";
           passcodeSection.style.display = "none";
         } catch (err) {
-          showError(err.message || "Decryption failed. Invalid key fragment or corrupted payload.");
+          showError(err.message || "Decryption failed. Invalid key fragment, wrong passcode, or corrupted payload.");
           revealBtn.disabled = false;
           revealBtn.textContent = "Retry";
         }
@@ -1004,7 +1037,7 @@ function serveWebLinkViewer(linkId: string): Response {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; object-src 'none'; frame-ancestors 'none';",
+        `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; object-src 'none'; frame-ancestors 'none';`,
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       Pragma: "no-cache",
       "X-Content-Type-Options": "nosniff",
