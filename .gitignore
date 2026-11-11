@@ -20,6 +20,7 @@ build/
 secrets/
 !secrets/.gitkeep
 certs/
+.qumail_data/
 
 liboqs/
 
