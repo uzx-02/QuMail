@@ -26,8 +26,7 @@ An evidence-based forensic audit of the repository establishes that while the co
 |---|---|
 | **Core Post-Quantum Engine** | **Verified Functional:** Native 64-bit Rust binaries (`bin/qumail-m3-provider.exe`, `bin/qumail-m5-provider.exe`) successfully generate keypairs, sign, seal, open, and verify OpenPGP-PQ envelopes. |
 | **Durable Outbox & Reconciliation** | **Verified Functional:** SQLite-backed outbox enforces strict delivery state transitions, prevents duplicate automatic retries on `UNKNOWN`, and reconciles against IMAP Sent folders. |
-| **PyQt6 Desktop Client** | **Partially Functional:** Native 3-pane Qt GUI runs, but exhibits unhandled startup crashes if default AppData paths have access restrictions, and the Compose security mode dropdown is cosmetic. |
-| **React 19 / WebView2 Desktop Client** | **Partially Functional / Simulated:** Modern interface renders via Microsoft Edge WebView2, but falls back to simulated symmetric encryption (no KEM) when sending to un-enrolled recipients. |
+| **Desktop Client (React 19 / WebView2)** | **Functional:** Unified desktop interface renders via Microsoft Edge WebView2 (`pywebview`), backed by native Rust cryptographic providers, Google OAuth 2.0 PKCE, and IMAP/SMTP sync. PyQt6 has been completely purged from the codebase. |
 | **Directory & Merkle Transparency** | **Partially Functional (Isolated):** Merkle tree and challenge-response server exist in Python, but are disconnected from desktop client compose and receive workflows. |
 | **Secure Web Link Portal** | **Partially Functional (Isolated):** Local Flask server exists, but client does not actually upload encrypted payloads to the portal server over HTTP. |
 | **Android Mobile Companion** | **Mocked / Simulated:** Android Kotlin/Compose UI exists with hardcoded mock emails; native Rust JNI returns static hardcoded bytes with no cryptographic operations. |
@@ -44,7 +43,7 @@ An evidence-based forensic audit of the repository establishes that while the co
 - **C# / .NET:** Edge WebView2 WinForms interop via `pythonnet` and `clr_loader`
 
 ### Core Libraries & Frameworks
-- **GUI:** PyQt6 6.10.2 (Native Qt6 binding) and Microsoft Edge WebView2 (`pywebview 5.4+`)
+- **GUI:** Microsoft Edge WebView2 (`pywebview 5.4+`) with React 19, TypeScript 5.7, Tailwind CSS (PyQt6 completely purged)
 - **Cryptography:** `cryptography 50.0.2` (Python), `sequoia-openpgp 2.4.1`, `rpgp 0.21.0`, and OpenSSL 3.5.9 (in Rust providers)
 - **Protocols & Transport:** `google-auth 2.49.1`, `google-auth-oauthlib 1.3.0`, standard library `imaplib`, `smtplib`, `email`
 - **Testing:** `pytest 8.4.2`
@@ -80,16 +79,11 @@ QuMail/
 │   ├── custom_mailbox.py       # Generic IMAP/SMTP host discovery & Fernet credential store
 │   ├── imap_receiver.py        # Generic IMAP inbox fetching and decapsulation
 │   └── smtp_sender.py          # Generic SMTP outgoing message dispatch
-├── ui/                         # Native PyQt6 3-pane desktop application
-│   ├── mailbox_window.py       # Primary 3-pane window (Navigation, Message List, Reading Pane)
-│   ├── compose_dialog.py       # Modal compose dialog with outbox monitoring tab
-│   ├── design_system.py        # Dual-theme palette manager (Dark & Light)
-│   └── settings_dialog.py      # 7-tab enterprise settings dialog
 ├── frontend/                   # Modern React 19 + Tailwind CSS web application
 │   ├── src/                    # React UI components, icons, and theme managers
 │   └── dist/                   # Production Vite bundle served to Edge WebView2
-├── launch_react_desktop.py     # Modern desktop entry point (React 19 + Edge WebView2 bridge)
-├── main.py                     # Canonical desktop entry point (PyQt6 3-pane client)
+├── launch_react_desktop.py     # React desktop launcher helper (Edge WebView2 bridge)
+├── main.py                     # Primary desktop entry point (React 19 + Edge WebView2 launcher)
 ├── services/                   # Standalone microservices (isolated prototypes)
 │   ├── directory/              # RFC 6962 / RFC 9162 Merkle tree transparency directory
 │   ├── portal/                 # Ephemeral zero-knowledge web link staging & OTP verification
@@ -113,8 +107,7 @@ QuMail/
 | **Google OAuth 2.0 PKCE** | VERIFIED FUNCTIONAL | Completes browser consent flow; retrieves access/refresh tokens; auto-refreshes tokens. | Requires user-provided `client_secret.json`; CASA Tier 2 audit pending. |
 | **Custom IMAP/SMTP** | VERIFIED FUNCTIONAL | Connects to external email servers via TLS/STARTTLS; encrypts credentials with Fernet. | Relies on standard username/password or provider App Passwords. |
 | **WKD Key Discovery** | VERIFIED FUNCTIONAL | Derives z-base-32 WKD URLs; queries HTTPS endpoints; enforces anti-SSRF subnet blocks. | Does not upgrade keys to "Verified" without explicit enterprise certification. |
-| **PyQt6 Desktop UI** | PARTIALLY FUNCTIONAL | Full 3-pane navigation, search, attachment viewing, and dark/light themes. | Crash on locked AppData vault path; Compose mode combo is cosmetic. |
-| **React WebView2 UI** | PARTIALLY FUNCTIONAL | Modern interface rendering; Google OAuth login; live IMAP syncing. | Falls back to simulated AES-GCM without KEM for un-enrolled recipients. |
+| **Desktop Client (React 19 / WebView2)** | PARTIALLY FUNCTIONAL | Modern interface rendering; Google OAuth login; live IMAP syncing; Edge WebView2 bridge. | Falls back to simulated AES-GCM without KEM for un-enrolled recipients. |
 | **Public Directory Service** | PARTIALLY FUNCTIONAL | In-memory Merkle tree, Signed Tree Heads, and PoP challenge validation. | Ephemeral in-memory state; completely disconnected from client compose flow. |
 | **Web Link Portal** | PARTIALLY FUNCTIONAL | Staging server with HMAC OTP verification. | Client does not upload encrypted blobs over HTTP; in-memory server state. |
 | **Android Companion** | MOCKED / SIMULATED | Jetpack Compose UI with static mock email items. | Rust JNI returns static string; no cryptographic implementation. |
@@ -144,13 +137,9 @@ The audit identified several areas where simulated behavior or test fixtures exi
 
 1. **Secret Leakage in Build Output (CRITICAL):**  
    PyInstaller and Inno Setup build configurations package private developer client secrets into `dist/QuMail-App/secrets/gmail_client_secret.json` and resulting installer packages.
-2. **Unhandled PermissionError on Startup (HIGH):**  
-   `main.py:268` calls `Path.is_file()` on default AppData vault paths without exception handling, crashing the application when path permissions are restricted.
-3. **Cosmetic Security Mode Selector (MEDIUM):**  
-   `ui/compose_dialog.py` presents a security mode selector that is ignored during send execution, always forcing M5 post-quantum preparation.
-4. **Architecture Duplication (HIGH):**  
-   Maintaining two parallel desktop applications (PyQt6 and React 19 WebView2) creates divergent security policies and doubles maintenance overhead.
-5. **Missing Dependency for USB TRNG (LOW):**  
+2. **Simulated Fallback for Unenrolled Recipients (HIGH):**  
+   React desktop bridge falls back to local AES-GCM without KEM exchange when sending to an un-enrolled contact.
+3. **Missing Dependency for USB TRNG (LOW):**  
    `core/hsm/detector.py` attempts to import `serial`, but `pyserial` is omitted from `packaging/requirements.in`.
 
 ---
@@ -175,10 +164,12 @@ pip install -r requirements.txt
 
 ### Launching the Application
 
-#### Option A: Canonical PyQt6 Client (Verified)
 ```powershell
-# Launch modern 3-pane client with dry-run submission (safe default)
-python main.py --dev-mailbox --dev-vault "qumail_vault.sqlite"
+# 1. Launch unified desktop application (React 19 + Microsoft Edge WebView2)
+python main.py
+
+# Launch connected to live Vite development server (hot reloading)
+python main.py --dev
 
 # Verify native cryptographic engine integrity
 python main.py --check-provider
@@ -187,23 +178,11 @@ python main.py --check-provider
 python main.py --export-diagnostics "qumail_diagnostics.json"
 ```
 
-#### Option B: React 19 + WebView2 Client (Verified)
-```powershell
-# 1. Build frontend bundle
-cd frontend
-npm install
-npm run build
-cd ..
-
-# 2. Launch via Python WebView2 bridge
-python launch_react_desktop.py
-```
-
 ---
 
 ## 9. Testing and Verification
 
-The repository contains 32 test suites in `tests/` comprising **321 automated test cases**.
+The repository contains 26 test suites in `tests/` comprising **266 automated test cases** (PyQt6-specific UI tests removed following full UI consolidation onto React 19).
 
 ### Executing Regression Suites
 

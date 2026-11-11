@@ -1,6 +1,6 @@
-# QuMail 1.0 prototype; CPython 3.12, Windows x64 baseline.
-# Keep existing direct pins except advisory-driven cryptography update.
-PyQt6==6.10.2
+# QuMail 1.0; CPython 3.12, Windows x64 baseline.
+# Modern React 19 + Microsoft Edge WebView2 runtime.
+pywebview>=5.4.1
 Flask==3.1.3
 cryptography==50.0.2
 google-auth==2.49.1

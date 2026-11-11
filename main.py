@@ -1,7 +1,6 @@
-# main.py — QuMail desktop entry point.
-# Single responsibility: parse application configuration and launch the appropriate UI.
-# Modern secure mailbox client is the default entry point.
-# Starts the legacy development key simulator only with explicit --legacy-simulator / --dev-simulator.
+# main.py — QuMail Desktop Entry Point.
+# Single responsibility: parse application configuration and launch the modern React 19 + Microsoft Edge WebView2 client.
+# All legacy PyQt6 code has been completely purged.
 
 from __future__ import annotations
 
@@ -10,7 +9,6 @@ import logging
 import os
 from pathlib import Path
 import sys
-import threading
 
 from core.logging_config import configure_logging, get_logger
 from core.provider_resolver import resolve_provider, verify_provider, ProviderNotFoundError
@@ -28,53 +26,21 @@ def get_default_vault_path() -> Path:
     return Path.home() / ".qumail" / "vault.sqlite"
 
 
-def _start_kme_server() -> None:
-    """
-    Start the virtual KME Flask server in a background daemon thread.
-    Called ONLY when explicit legacy simulator mode is requested.
-    """
-    try:
-        from kme.virtual_node import app
-        from core.config import KME_HOST, KME_PORT
-
-        log = logging.getLogger("werkzeug")
-        log.setLevel(logging.ERROR)
-
-        app.run(host=KME_HOST, port=KME_PORT, debug=False, use_reloader=False)
-    except Exception as exc:
-        logger.warning("Virtual KME node failed to start: %s", exc)
-
-
 def _show_critical_error(title: str, message: str) -> None:
+    """Log and print critical startup errors."""
     logger.critical("%s: %s", title, message)
     print(f"\n[ERROR] {title}\n{message}\n", file=sys.stderr)
+
+
+def _launch_react_desktop(
+    vault: str | Path | None = None,
+    dev_mode: bool = False,
+    port: int = 0,
+    account: str = "",
+) -> int:
+    """Launch the modern React 19 + Microsoft Edge WebView2 desktop client."""
     try:
-        from PyQt6.QtWidgets import QApplication, QMessageBox
-        if QApplication.instance() is not None and "pytest" not in sys.modules:
-            QMessageBox.critical(None, title, message)
-    except Exception:
-        pass
-
-
-def _launch_desktop() -> int:
-    """Launch the legacy research prototype MainWindow with prominent simulation disclaimers."""
-    from PyQt6.QtWidgets import QApplication
-    from ui.main_window import MainWindow
-
-    app = QApplication.instance() or QApplication([sys.argv[0]])
-    window = MainWindow()
-    window.show()
-    return app.exec()
-
-
-def _launch_identity(vault: str | Path, client: str | Path | None = None) -> int:
-    """Launch isolated M3 Identity & Settings window."""
-    from PyQt6.QtWidgets import QApplication
-    from core.identity_service import IdentityService
-    from ui.identity_settings import IdentitySettings
-
-    try:
-        helper = resolve_provider("qumail-m3-provider")
+        resolve_provider("qumail-m3-provider")
     except ProviderNotFoundError as exc:
         _show_critical_error(
             "QuMail — Missing Cryptographic Engine",
@@ -84,67 +50,53 @@ def _launch_identity(vault: str | Path, client: str | Path | None = None) -> int
         )
         return 1
 
-    app = QApplication.instance() or QApplication([sys.argv[0]])
-    service = IdentityService.configured(vault, helper, client)
-    window = IdentitySettings(service)
-    app.aboutToQuit.connect(window.dispose)
-    window.show()
-    return app.exec()
+    import launch_react_desktop
+    import webview
 
+    frontend_dist = launch_react_desktop.FRONTEND_DIST
 
-def _launch_mailbox(vault: str | Path, client: str | Path | None = None, gmail_enabled: bool = False) -> int:
-    """Launch the modern secure QuMail mailbox client."""
-    from PyQt6.QtWidgets import QApplication
-    from core.identity_service import IdentityService
-    from transport.development_google import client_configuration, SCOPES
-    from transport.bounded_google import BoundedGoogleAuthorization as GoogleAuthorization
-    from mailbox_client.gmail import MAIL_SCOPE
-    from ui.mailbox_window import MailboxWindow
+    if dev_mode:
+        target_url = "http://localhost:5173"
+        logger.info("Connecting to Vite development server at %s", target_url)
+    else:
+        index_html = frontend_dist / "index.html"
+        if not index_html.exists():
+            _show_critical_error(
+                "QuMail — Frontend Bundle Missing",
+                f"Production frontend build not found at {frontend_dist}.\n"
+                "Please build the React application first:\n"
+                "  cd frontend\n"
+                "  npm run build\n",
+            )
+            return 1
 
-    try:
-        helper = resolve_provider("qumail-m3-provider")
-    except ProviderNotFoundError as exc:
-        _show_critical_error(
-            "QuMail — Missing Cryptographic Engine",
-            f"The native cryptographic provider is required but was not found.\n\n"
-            f"{exc}\n\n"
-            "Run 'powershell -File tools/build_providers.ps1' to compile it.",
-        )
-        return 1
+        srv_port = port if port > 0 else launch_react_desktop._find_free_port()
+        launch_react_desktop.start_local_server(srv_port)
+        target_url = f"http://127.0.0.1:{srv_port}/index.html"
+        logger.info("Serving modern React frontend at %s", target_url)
 
-    app = QApplication.instance() or QApplication([sys.argv[0]])
-    service = IdentityService.configured(vault, helper)
-    if client:
-        service.google = GoogleAuthorization(client_configuration(client), SCOPES + (MAIL_SCOPE,))
-    window = MailboxWindow(service, gmail_enabled=gmail_enabled)
-    window.show()
-    return app.exec()
+    js_api = launch_react_desktop.QuMailJsApi(account_email=account, vault_path=vault)
+
+    window = webview.create_window(
+        title="QuMail 1.0 — Post-Quantum Secure Corporate Email",
+        url=target_url,
+        js_api=js_api,
+        width=1280,
+        height=840,
+        min_size=(1024, 680),
+        text_select=True,
+    )
+
+    logger.info("Launching Microsoft Edge WebView2 modern desktop shell...")
+    webview.start(debug=False)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     """Primary application entry point."""
     parser = argparse.ArgumentParser(
         prog="qumail",
-        description="QuMail 1.0 — Post-Quantum Secure Corporate Email Client",
-    )
-
-    # Mode selectors
-    parser.add_argument(
-        "--legacy-simulator",
-        "--dev-simulator",
-        action="store_true",
-        dest="legacy_simulator",
-        help="start unauthenticated loopback CSPRNG research simulator (NOT secure; lab research only)",
-    )
-    parser.add_argument(
-        "--dev-identity",
-        action="store_true",
-        help="isolated M3 identity and key management settings; sending disabled",
-    )
-    parser.add_argument(
-        "--dev-mailbox",
-        action="store_true",
-        help="launch modern secure mailbox client (default behavior if no mode specified)",
+        description="QuMail 1.0 — Post-Quantum Secure Corporate Email Client (React 19 + Edge WebView2)",
     )
 
     # Configuration options
@@ -152,25 +104,37 @@ def main(argv: list[str] | None = None) -> int:
         "--vault",
         "--dev-vault",
         dest="vault",
+        default="",
         help="explicit SQLite vault path (defaults to local/user vault)",
     )
     parser.add_argument(
-        "--google-client",
-        help="explicit provisioned Google Desktop client secrets JSON",
+        "--dev",
+        action="store_true",
+        help="connect to live Vite development server (http://localhost:5173)",
     )
     parser.add_argument(
-        "--submit",
-        "--dev-gmail-submit",
-        action="store_true",
-        dest="submit",
-        help="enable live Gmail SMTP transmission (enabled by default in normal desktop launch)",
+        "--port",
+        type=int,
+        default=0,
+        help="local HTTP loopback port for frontend distribution (0 = auto-select)",
     )
     parser.add_argument(
-        "--offline",
-        "--dry-run",
+        "--account",
+        type=str,
+        default="",
+        help="default email address to initialize",
+    )
+    parser.add_argument(
+        "--dev-mailbox",
         action="store_true",
-        dest="offline",
-        help="disable external SMTP transmission (dry-run mode)",
+        help="launch modern mailbox client (default behavior)",
+    )
+    parser.add_argument(
+        "--legacy-simulator",
+        "--dev-simulator",
+        dest="legacy_simulator",
+        action="store_true",
+        help="legacy simulator (purged; blocked by enterprise policy)",
     )
     parser.add_argument(
         "--check-provider",
@@ -195,6 +159,20 @@ def main(argv: list[str] | None = None) -> int:
     from core.enterprise_policy import EnterprisePolicyManager
     policy_mgr = EnterprisePolicyManager()
     active_policy = policy_mgr.policy
+
+    # Legacy simulator block / purge handler
+    if args.legacy_simulator:
+        if active_policy.disable_legacy_simulator:
+            _show_critical_error(
+                "QuMail — Administrative Policy Block",
+                "Launching the legacy prototype simulator is blocked by corporate Group Policy.",
+            )
+            return 1
+        _show_critical_error(
+            "QuMail — Legacy Simulator Removed",
+            "The legacy PyQt6 simulator has been permanently purged from QuMail. Please use the modern React interface.",
+        )
+        return 1
 
     # Initialize centralized logging
     log_level = getattr(logging, args.log_level.upper(), getattr(logging, active_policy.log_level.upper(), logging.INFO))
@@ -230,58 +208,27 @@ def main(argv: list[str] | None = None) -> int:
                 all_ok = False
         return 0 if all_ok else 1
 
-    # Legacy research simulator path (MUST be explicitly requested)
-    if args.legacy_simulator:
-        if active_policy.disable_legacy_simulator and active_policy.is_managed:
-            _show_critical_error(
-                "QuMail — Administrative Policy Block",
-                "Launching the unauthenticated legacy prototype simulator is blocked by corporate Group Policy.",
-            )
-            return 1
-        if args.dev_identity or args.dev_mailbox or args.vault:
-            parser.error("--legacy-simulator is mutually exclusive with modern secure mailbox / vault modes")
-        print("\n" + "=" * 70)
-        print("[WARNING] RUNNING IN LEGACY RESEARCH SIMULATOR MODE")
-        print("This mode uses unauthenticated loopback keys and contains known research limitations.")
-        print("It is NOT the secure QuMail product.")
-        print("=" * 70 + "\n")
-        logger.warning("Launching legacy research simulator; QKD and authentication disabled.")
-        threading.Thread(target=_start_kme_server, daemon=True, name="qumail-dev-simulator").start()
-        return _launch_desktop()
-
-    # Isolated identity / settings mode
-    if args.dev_identity:
-        if not args.vault:
-            parser.error("--dev-identity requires --vault / --dev-vault")
-        if args.submit:
-            parser.error("--submit / --dev-gmail-submit is not supported in identity-only mode")
-        return _launch_identity(args.vault, args.google_client)
-
-    # Default and primary route: Modern Secure Mailbox Client
-    # Discover vault path if not explicitly provided
+    # Safe vault path discovery
     vault_path = args.vault
     if not vault_path:
         local_dev_vault = Path("qumail_vault.sqlite").resolve()
         default_sys_vault = get_default_vault_path()
-        if local_dev_vault.is_file():
+        try:
+            if local_dev_vault.is_file():
+                vault_path = str(local_dev_vault)
+            elif default_sys_vault.is_file():
+                vault_path = str(default_sys_vault)
+            else:
+                vault_path = str(default_sys_vault)
+        except (OSError, PermissionError):
             vault_path = str(local_dev_vault)
-        elif default_sys_vault.is_file():
-            vault_path = str(default_sys_vault)
-        else:
-            vault_path = str(default_sys_vault)
 
-    # Determine live submission status:
-    # If explicitly running in dev-mailbox mode without --submit, preserve dry-run isolation
-    # If running with --offline, disable submission
-    # Otherwise (standard desktop executable launch or explicit --submit), enable live submission
-    if args.offline:
-        submission_enabled = False
-    elif args.dev_mailbox:
-        submission_enabled = args.submit
-    else:
-        submission_enabled = True
-
-    return _launch_mailbox(vault_path, args.google_client, gmail_enabled=submission_enabled)
+    return _launch_react_desktop(
+        vault=vault_path,
+        dev_mode=args.dev,
+        port=args.port,
+        account=args.account,
+    )
 
 
 if __name__ == "__main__":
