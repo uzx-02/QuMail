@@ -1,0 +1,24 @@
+[package]
+name = "qumail-m3-provider"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+backend-probe = []
+
+# Isolated proof only. Never link this crate into QuMail.
+[dependencies]
+anyhow = "=1.0.100"
+sequoia-openpgp = { version = "=2.4.1", default-features = false, features = ["crypto-openssl"] }
+pgp = { version = "=0.21.0", default-features = false, features = ["pqc"] }
+rand = "=0.8.8"
+# OPENSSL_DIR must select the explicitly source-built 3.5.9 in inputs.json.
+# No vendored fallback to Cargo's older OpenSSL source package.
+openssl-sys = "=0.9.117"
+# Match rPGP's published lock: ml-kem 0.2.1 cannot use kem 0.3.0 final.
+kem = "=0.3.0-pre.0"
+mailparse = "=0.17.0"
+
+
+serde_json = "=1.0.151"

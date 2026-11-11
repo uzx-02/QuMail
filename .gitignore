@@ -26,6 +26,7 @@ certs/
 liboqs/
 
 # Internal development documents — not for public repository
+recycle/
 INSTRUCTIONS.md
 audit_report.md
 cloud_run_migration_plan.md

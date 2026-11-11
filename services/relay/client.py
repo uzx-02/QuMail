@@ -6,7 +6,7 @@ import json
 import ssl
 import time
 
-from experiments.m5.mime import parse_outer
+from core.crypto_envelope.mime import parse_outer
 from .http import MAX_BODY
 from .store import Code, Failure, Peer
 

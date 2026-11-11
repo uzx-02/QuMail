@@ -37,11 +37,11 @@ if ($actualOpenSslHash -ne $expectedOpenSslHash) {
 }
 
 Write-Host "Building qumail-m3-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
-& $cargo build --manifest-path (Join-Path $repoRoot 'experiments/m3/provider/Cargo.toml') --locked --offline --release
+& $cargo build --manifest-path (Join-Path $repoRoot 'native/vault_provider/Cargo.toml') --locked --offline --release
 if ($LASTEXITCODE -ne 0) { throw "Build of qumail-m3-provider failed with exit code $LASTEXITCODE" }
 
 Write-Host "Building qumail-m5-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
-& $cargo build --manifest-path (Join-Path $repoRoot 'experiments/m5/provider/Cargo.toml') --locked --offline --release
+& $cargo build --manifest-path (Join-Path $repoRoot 'native/crypto_provider/Cargo.toml') --locked --offline --release
 if ($LASTEXITCODE -ne 0) { throw "Build of qumail-m5-provider failed with exit code $LASTEXITCODE" }
 
 # Destination bin directory
@@ -53,6 +53,8 @@ $m5Src = Join-Path $env:CARGO_TARGET_DIR 'release/qumail-m5-provider.exe'
 
 Copy-Item $m3Src (Join-Path $binDir 'qumail-m3-provider.exe') -Force
 Copy-Item $m5Src (Join-Path $binDir 'qumail-m5-provider.exe') -Force
+Copy-Item $m3Src (Join-Path $binDir 'qumail-vault-provider.exe') -Force
+Copy-Item $m5Src (Join-Path $binDir 'qumail-crypto-provider.exe') -Force
 
 Write-Host "Updating bin/manifest.json with binary digests..." -ForegroundColor Cyan
 & python -c @"
@@ -90,6 +92,22 @@ manifest = {
     'build_profile': 'release',
     'rustflags': '-C control-flow-guard',
     'providers': {
+        'qumail-vault-provider': {
+            'binary': 'qumail-vault-provider.exe',
+            'version': '0.1.0',
+            'purpose': 'Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend',
+            'size_bytes': os.path.getsize('bin/qumail-vault-provider.exe'),
+            'sha256': get_hash('bin/qumail-vault-provider.exe'),
+            'pe_mitigations': inspect_pe('bin/qumail-vault-provider.exe'),
+        },
+        'qumail-crypto-provider': {
+            'binary': 'qumail-crypto-provider.exe',
+            'version': '0.1.0',
+            'purpose': 'RFC 3156 / RFC 9788 OpenPGP-PQ message encryption, composite signing, decryption, verification',
+            'size_bytes': os.path.getsize('bin/qumail-crypto-provider.exe'),
+            'sha256': get_hash('bin/qumail-crypto-provider.exe'),
+            'pe_mitigations': inspect_pe('bin/qumail-crypto-provider.exe'),
+        },
         'qumail-m3-provider': {
             'binary': 'qumail-m3-provider.exe',
             'version': '0.1.0',

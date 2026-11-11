@@ -14,8 +14,8 @@ import sqlite3
 import time
 import uuid
 
-from experiments.m5.mime import parse_outer
-from experiments.m5.model import Failure as MimeFailure, MAX_WIRE
+from core.crypto_envelope.mime import parse_outer
+from core.crypto_envelope.model import Failure as MimeFailure, MAX_WIRE
 
 
 class Code(str, Enum):
