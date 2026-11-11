@@ -74,9 +74,9 @@ fn generate(address: &str) -> Result<Cert> {
         .set_cipher_suite(CipherSuite::MLDSA65_Ed25519)
         .set_primary_key_flags(sq::types::KeyFlags::empty().set_certification())
         .set_validity_period(std::time::Duration::from_secs(3*365*86400))
-        .add_subkey(sq::types::KeyFlags::empty().set_signing(), std::time::Duration::from_secs(365*86400), None)
+        .add_subkey(sq::types::KeyFlags::empty().set_signing(), std::time::Duration::from_secs(365*86400), Some(CipherSuite::MLDSA65_Ed25519))
         .add_userid(address)
-        .add_subkey(sq::types::KeyFlags::empty().set_transport_encryption(), std::time::Duration::from_secs(365*86400), None).generate()?.0)
+        .add_subkey(sq::types::KeyFlags::empty().set_transport_encryption(), std::time::Duration::from_secs(365*86400), Some(CipherSuite::MLDSA65_Ed25519)).generate()?.0)
 }
 
 fn public(cert: &Cert) -> Result<Vec<u8>> {

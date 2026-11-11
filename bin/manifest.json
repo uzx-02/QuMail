@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_utc": "2026-11-11T11:16:08.315642+00:00",
+  "generated_utc": "2026-11-11T11:25:49.338870+00:00",
   "compiler": "rustc 1.99.0 / cargo 1.99.0",
   "toolchain": "nightly-x86_64-pc-windows-msvc",
   "crypto_libraries": {
@@ -16,7 +16,7 @@
       "version": "0.1.0",
       "purpose": "Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend",
       "size_bytes": 8380928,
-      "sha256": "a61b5bb0d5851df65e836e4f5f64ed00050a82cb44b5dbd48ff9ffd7d8f1c503",
+      "sha256": "b94c95b3c84992124ec910b34e5f1860399c9c48302a3a2a7bf1c4a413566f51",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,
@@ -29,9 +29,9 @@
     "qumail-crypto-provider": {
       "binary": "qumail-crypto-provider.exe",
       "version": "0.1.0",
-      "purpose": "RFC 3156 / RFC 9788 OpenPGP-PQ message encryption, composite signing, decryption, verification",
+      "purpose": "RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification",
       "size_bytes": 10682368,
-      "sha256": "3f5eaa3a146f6390c1e39ef4b8c058b36fe30316dbbeed40cd68eb88b6b3f006",
+      "sha256": "62c5344d8a2392e2d8656ea9bdb9704698320efdb936645b743048a46d83d1a0",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,
@@ -46,7 +46,7 @@
       "version": "0.1.0",
       "purpose": "Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend",
       "size_bytes": 8380928,
-      "sha256": "a61b5bb0d5851df65e836e4f5f64ed00050a82cb44b5dbd48ff9ffd7d8f1c503",
+      "sha256": "b94c95b3c84992124ec910b34e5f1860399c9c48302a3a2a7bf1c4a413566f51",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,
@@ -59,9 +59,9 @@
     "qumail-m5-provider": {
       "binary": "qumail-m5-provider.exe",
       "version": "0.1.0",
-      "purpose": "RFC 3156 / RFC 9788 OpenPGP-PQ message encryption, composite signing, decryption, verification",
+      "purpose": "RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification",
       "size_bytes": 10682368,
-      "sha256": "3f5eaa3a146f6390c1e39ef4b8c058b36fe30316dbbeed40cd68eb88b6b3f006",
+      "sha256": "62c5344d8a2392e2d8656ea9bdb9704698320efdb936645b743048a46d83d1a0",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,

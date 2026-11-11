@@ -103,7 +103,7 @@ manifest = {
         'qumail-crypto-provider': {
             'binary': 'qumail-crypto-provider.exe',
             'version': '0.1.0',
-            'purpose': 'RFC 3156 / RFC 9788 OpenPGP-PQ message encryption, composite signing, decryption, verification',
+            'purpose': 'RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification',
             'size_bytes': os.path.getsize('bin/qumail-crypto-provider.exe'),
             'sha256': get_hash('bin/qumail-crypto-provider.exe'),
             'pe_mitigations': inspect_pe('bin/qumail-crypto-provider.exe'),
@@ -119,7 +119,7 @@ manifest = {
         'qumail-m5-provider': {
             'binary': 'qumail-m5-provider.exe',
             'version': '0.1.0',
-            'purpose': 'RFC 3156 / RFC 9788 OpenPGP-PQ message encryption, composite signing, decryption, verification',
+            'purpose': 'RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification',
             'size_bytes': os.path.getsize('bin/qumail-m5-provider.exe'),
             'sha256': get_hash('bin/qumail-m5-provider.exe'),
             'pe_mitigations': inspect_pe('bin/qumail-m5-provider.exe'),

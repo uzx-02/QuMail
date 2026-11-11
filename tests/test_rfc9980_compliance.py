@@ -123,3 +123,47 @@ def test_rfc9980_dual_engine_cross_seal_and_open(rfc9980_keys):
                         data=armored_ciphertext)
     assert opened_rp["verified"] is True
     assert opened_rp["data"] == payload
+
+
+def test_fresh_generated_pqc_keypair_roundtrip():
+    """
+    Generate a brand-new composite PQC keypair via generate() in vault provider:
+    - Primary key: ML-DSA-65 + Ed25519 (certification)
+    - Subkey 0: ML-DSA-65 + Ed25519 (signing)
+    - Subkey 1: ML-KEM-768 + X25519 (transport encryption)
+    Verify that fresh generated keys successfully seal and open messages across both engines.
+    """
+    m3_bin = resolve_provider("qumail-m3-provider")
+    m5_bin = resolve_provider("qumail-crypto-provider")
+    m3 = M3Provider(m3_bin)
+    m5 = M5Provider(m5_bin)
+
+    generated = m3.call("generate", address="pqc-user@test.invalid")
+    pub_bytes = bytes(generated["public"])
+    sec_bytes = bytes(generated["secret"])
+
+    payload = b"Freshly generated ML-KEM-768 + ML-DSA-65 message payload!"
+
+    # 1. Seal with Sequoia
+    sealed = m5.call("seal", make_budget(),
+                     certificate=sec_bytes,
+                     recipients=[pub_bytes],
+                     data=payload)
+    armored_ciphertext = sealed["data"]
+
+    # 2. Open with Sequoia
+    opened_sq = m5.call("open", make_budget(),
+                        certificate=sec_bytes,
+                        sender=pub_bytes,
+                        data=armored_ciphertext)
+    assert opened_sq["verified"] is True
+    assert opened_sq["data"] == payload
+
+    # 3. Open with rPGP
+    opened_rp = m5.call("peer_open", make_budget(),
+                        certificate=sec_bytes,
+                        sender=pub_bytes,
+                        data=armored_ciphertext)
+    assert opened_rp["verified"] is True
+    assert opened_rp["data"] == payload
+
