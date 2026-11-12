@@ -8,10 +8,38 @@ import { ComposeModal } from './components/ComposeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SignInModal } from './components/SignInModal';
 import { api } from './lib/api';
-import { EmailMessage, HSMStatus, AccountSession } from './types';
-import { INITIAL_ACCOUNT, INITIAL_HSM } from './initialState';
+import { EmailMessage, HSMStatus, AccountSession, QuMailSettings } from './types';
+import { INITIAL_ACCOUNT, INITIAL_HSM, DEFAULT_SETTINGS } from './initialState';
 
 export const App: React.FC = () => {
+  // Persisted user settings
+  const [settings, setSettings] = useState<QuMailSettings>(() => {
+    try {
+      const saved = localStorage.getItem('qumail-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          visibleFolders: {
+            ...DEFAULT_SETTINGS.visibleFolders,
+            ...(parsed.visibleFolders || {}),
+          },
+        };
+      }
+    } catch {}
+    return DEFAULT_SETTINGS;
+  });
+
+  const handleUpdateSettings = useCallback((patch: Partial<QuMailSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem('qumail-settings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('qumail-theme');
@@ -93,7 +121,7 @@ export const App: React.FC = () => {
         // Background live inbox synchronization with visual loading state
         setSyncStatus('Checking for new messages in background...');
         setIsRefreshing(true);
-        api.fetchInbox()
+        api.fetchInbox(settings.maxPageSize)
           .then((liveMsgs) => {
             if (liveMsgs && liveMsgs.length > 0) {
               setMessages(liveMsgs);
@@ -129,7 +157,7 @@ export const App: React.FC = () => {
     setIsRefreshing(true);
     setSyncStatus('Synchronizing inbox with mail server...');
     try {
-      const msgs = await api.fetchInbox();
+      const msgs = await api.fetchInbox(settings.maxPageSize);
       const hsm = await api.getHSMStatus();
       setMessages(msgs);
       setHsmStatus(hsm);
@@ -139,7 +167,7 @@ export const App: React.FC = () => {
       setSyncStatus(null);
       setTimeout(() => setIsRefreshing(false), 400);
     }
-  }, []);
+  }, [settings.maxPageSize]);
 
   const handleSelectMessage = useCallback(async (msg: EmailMessage) => {
     if (msg.folder === 'drafts') {
@@ -217,9 +245,9 @@ export const App: React.FC = () => {
       setIsSignInOpen(true);
       return;
     }
-    setComposeDefaults({ to: '', subject: '', body: '' });
+    setComposeDefaults({ to: '', subject: '', body: '', securityMode: settings.defaultSecurityMode });
     setIsComposeOpen(true);
-  }, [account.email]);
+  }, [account.email, settings.defaultSecurityMode]);
 
   const handleReply = useCallback((msg: EmailMessage) => {
     setComposeDefaults({
@@ -497,6 +525,7 @@ export const App: React.FC = () => {
           isCollapsed={isSidebarCollapsed}
           hsmStatus={hsmStatus}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          visibleFolders={settings.visibleFolders}
         />
 
         {/* Center / Right Content Pane */}
@@ -511,6 +540,7 @@ export const App: React.FC = () => {
               onToggleStar={handleToggleStar}
               onClose={() => setSelectedMessageId(null)}
               onShowProtectionNotice={setToastNotice}
+              blockRemoteImages={settings.blockRemoteImages}
             />
           ) : (
             /* Gmail Message List */
@@ -525,6 +555,9 @@ export const App: React.FC = () => {
               isRefreshing={isRefreshing}
               currentFolder={currentFolder}
               onRetrySend={handleRetrySend}
+              filterMode={settings.defaultInboxFilter}
+              maskEncryptedSnippets={settings.maskEncryptedSnippets}
+              listDensity={settings.listDensity}
               onShowProtectionNotice={setToastNotice}
             />
           )}
@@ -556,7 +589,10 @@ export const App: React.FC = () => {
         initialTo={composeDefaults.to}
         initialSubject={composeDefaults.subject}
         initialBody={composeDefaults.body}
-        initialSecurityMode={composeDefaults.securityMode}
+        initialSecurityMode={composeDefaults.securityMode || settings.defaultSecurityMode}
+        defaultRequireEmailOtp={settings.weblinkRequireOtp}
+        defaultBurnAfterRead={settings.weblinkBurnAfterRead}
+        defaultExpiryHours={settings.weblinkExpiryHours}
       />
 
       {/* Two-Column Gmail Settings Modal */}
@@ -570,6 +606,8 @@ export const App: React.FC = () => {
         onUpdateAccountEmail={handleUpdateAccountEmail}
         onLogoutAccount={handleLogout}
         onOpenSignIn={() => setIsSignInOpen(true)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
       />
 
       {/* Welcome / Sign In Modal */}

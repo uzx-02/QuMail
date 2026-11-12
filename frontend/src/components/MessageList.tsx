@@ -17,6 +17,8 @@ interface MessageListProps {
   filterMode?: 'all' | 'secure' | 'unread';
   onFilterChange?: (filter: 'all' | 'secure' | 'unread') => void;
   onShowProtectionNotice?: (msg: string) => void;
+  maskEncryptedSnippets?: boolean;
+  listDensity?: 'comfortable' | 'compact';
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -33,10 +35,16 @@ export const MessageList: React.FC<MessageListProps> = ({
   filterMode = 'all',
   onFilterChange,
   onShowProtectionNotice,
+  maskEncryptedSnippets = false,
+  listDensity = 'comfortable',
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<'all' | 'secure' | 'unread'>(filterMode);
   const [contextMenu, setContextMenu] = useState<{ msg: EmailMessage; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    setActiveFilter(filterMode);
+  }, [filterMode]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -300,7 +308,9 @@ export const MessageList: React.FC<MessageListProps> = ({
                 key={msg.id}
                 onClick={() => onSelectMessage(msg)}
                 onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, msg)}
-                className={`group flex items-center px-4 py-3 cursor-pointer transition-all duration-150 select-none ${
+                className={`group flex items-center px-4 ${
+                  listDensity === 'compact' ? 'py-1.5' : 'py-3'
+                } cursor-pointer transition-all duration-150 select-none ${
                   isSelected
                     ? 'bg-[#D3E3FD]/60 dark:bg-[#2C3D63]/70 font-semibold border-l-4 border-l-[#0B57D0]'
                     : !msg.seen
@@ -350,7 +360,9 @@ export const MessageList: React.FC<MessageListProps> = ({
                   </span>
                   <span className="mx-2 text-gray-400 shrink-0">—</span>
                   <span className="text-sm text-[#5F6368] dark:text-[#94A3B8] truncate font-normal">
-                    {msg.snippet}
+                    {maskEncryptedSnippets && isQuMail
+                      ? '•••••••• (Encrypted snippet hidden)'
+                      : msg.snippet}
                   </span>
                 </div>
 

@@ -1,4 +1,4 @@
-import { EmailMessage, HSMStatus, AccountSession } from './types';
+import { EmailMessage, HSMStatus, AccountSession, QuMailSettings } from './types';
 
 export const INITIAL_ACCOUNT: AccountSession = {
   email: '',
@@ -18,3 +18,22 @@ export const INITIAL_HSM: HSMStatus = {
 
 // Pure live data — zero mock messages
 export const INITIAL_MESSAGES: EmailMessage[] = [];
+
+export const DEFAULT_SETTINGS: QuMailSettings = {
+  maxPageSize: 50,
+  blockRemoteImages: true,
+  maskEncryptedSnippets: false,
+  defaultSecurityMode: 'pq',
+  visibleFolders: {
+    starred: true,
+    sent: true,
+    drafts: true,
+    outbox: true,
+    trash: true,
+  },
+  defaultInboxFilter: 'all',
+  weblinkExpiryHours: 24,
+  weblinkBurnAfterRead: false,
+  weblinkRequireOtp: true,
+  listDensity: 'comfortable',
+};

@@ -14,6 +14,9 @@ interface ComposeModalProps {
   initialSubject?: string;
   initialBody?: string;
   initialSecurityMode?: 'pq' | 'weblink' | 'standard';
+  defaultRequireEmailOtp?: boolean;
+  defaultBurnAfterRead?: boolean;
+  defaultExpiryHours?: 1 | 24 | 168;
 }
 
 export const ComposeModal: React.FC<ComposeModalProps> = ({
@@ -27,13 +30,18 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   initialSubject = '',
   initialBody = '',
   initialSecurityMode = 'pq',
+  defaultRequireEmailOtp = true,
+  defaultBurnAfterRead = false,
+  defaultExpiryHours = 24,
 }) => {
   const [draftId, setDraftId] = useState<string | undefined>(initialDraftId);
   const [to, setTo] = useState(initialTo);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [securityMode, setSecurityMode] = useState<'pq' | 'weblink' | 'standard'>(initialSecurityMode);
-  const [requireEmailOtp, setRequireEmailOtp] = useState(true);
+  const [requireEmailOtp, setRequireEmailOtp] = useState(defaultRequireEmailOtp);
+  const [burnAfterRead, setBurnAfterRead] = useState(defaultBurnAfterRead);
+  const [expiresInHours, setExpiresInHours] = useState<1 | 24 | 168>(defaultExpiryHours);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -53,6 +61,9 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       setSubject(initialSubject);
       setBody(initialBody);
       setSecurityMode(initialSecurityMode);
+      setRequireEmailOtp(defaultRequireEmailOtp);
+      setBurnAfterRead(defaultBurnAfterRead);
+      setExpiresInHours(defaultExpiryHours);
       setAttachments([]);
       setIsMinimized(false);
       setDraftStatus('idle');
@@ -60,7 +71,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       clearTimeout(autoSaveTimerRef.current);
       autoSaveTimerRef.current = null;
     }
-  }, [isOpen, initialDraftId, initialTo, initialSubject, initialBody, initialSecurityMode]);
+  }, [isOpen, initialDraftId, initialTo, initialSubject, initialBody, initialSecurityMode, defaultRequireEmailOtp, defaultBurnAfterRead, defaultExpiryHours]);
 
   // Silent 1.5s debounced auto-save (skips completely blank drafts and cancelled if Send clicked)
   useEffect(() => {
@@ -129,6 +140,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         attachments,
         securityMode,
         requireEmailOtp,
+        burnAfterRead,
+        expiresInHours,
       });
       if (ok !== false) {
         setDraftId(undefined);
@@ -264,22 +277,43 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               </div>
             </div>
 
-            {/* WebLink Email Verification Toggle */}
+            {/* WebLink Security Controls */}
             {securityMode === 'weblink' && (
-              <div className="px-4 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-[#E0E3E7] dark:border-[#1F2C47] flex items-center justify-between text-xs">
+              <div className="px-4 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-[#E0E3E7] dark:border-[#1F2C47] flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-emerald-800 dark:text-emerald-300 font-medium flex items-center space-x-1.5">
                   <Shield className="w-3.5 h-3.5" />
-                  <span>Recipient Email Verification (6-digit OTP)</span>
+                  <span>WebLink Policy:</span>
                 </span>
-                <label className="flex items-center space-x-1.5 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
-                  <input
-                    type="checkbox"
-                    checked={requireEmailOtp}
-                    onChange={(e) => setRequireEmailOtp(e.target.checked)}
-                    className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
-                  />
-                  <span>Required</span>
-                </label>
+                <div className="flex items-center space-x-3">
+                  <select
+                    value={expiresInHours}
+                    onChange={(e) => setExpiresInHours(Number(e.target.value) as 1 | 24 | 168)}
+                    className="text-[11px] font-semibold rounded border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-[#161F33] text-emerald-900 dark:text-emerald-200 px-2 py-0.5 outline-none cursor-pointer"
+                    title="Link expiry"
+                  >
+                    <option value={1}>Expires: 1h</option>
+                    <option value={24}>Expires: 24h</option>
+                    <option value={168}>Expires: 7d</option>
+                  </select>
+                  <label className="flex items-center space-x-1 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
+                    <input
+                      type="checkbox"
+                      checked={burnAfterRead}
+                      onChange={(e) => setBurnAfterRead(e.target.checked)}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>Burn</span>
+                  </label>
+                  <label className="flex items-center space-x-1 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
+                    <input
+                      type="checkbox"
+                      checked={requireEmailOtp}
+                      onChange={(e) => setRequireEmailOtp(e.target.checked)}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>OTP</span>
+                  </label>
+                </div>
               </div>
             )}
 

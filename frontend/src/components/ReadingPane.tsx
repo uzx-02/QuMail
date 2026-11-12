@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Reply,
@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Star,
+  ImageOff,
 } from 'lucide-react';
 import { EmailMessage } from '../types';
 
@@ -28,6 +29,7 @@ interface ReadingPaneProps {
   onToggleStar?: (id: string, e: React.MouseEvent) => void;
   onClose: () => void;
   onShowProtectionNotice?: (msg: string) => void;
+  blockRemoteImages?: boolean;
 }
 
 export const ReadingPane: React.FC<ReadingPaneProps> = ({
@@ -38,8 +40,30 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
   onToggleStar,
   onClose,
   onShowProtectionNotice,
+  blockRemoteImages = true,
 }) => {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+
+  // Reset per-message external image unblock whenever the user opens a different email
+  useEffect(() => {
+    setAllowRemoteImages(false);
+  }, [message?.id]);
+
+  const remoteImageUrls = useMemo(() => {
+    const body = message?.body || '';
+    const urls = new Set<string>();
+    const imgTagRegex = /<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = imgTagRegex.exec(body)) !== null) {
+      urls.add(match[1]);
+    }
+    const directImgUrlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"{}|\\^`[\]]*)?/gi;
+    while ((match = directImgUrlRegex.exec(body)) !== null) {
+      urls.add(match[0]);
+    }
+    return Array.from(urls);
+  }, [message?.body]);
 
   if (!message) {
     return (
@@ -318,10 +342,45 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
           </span>
         </div>
 
+        {/* Remote Image / Tracking Beacon Protection Banner */}
+        {remoteImageUrls.length > 0 && blockRemoteImages && !allowRemoteImages && (
+          <div className="px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs">
+            <div className="flex items-center space-x-2 text-amber-800 dark:text-amber-300">
+              <ImageOff className="w-4 h-4 shrink-0" />
+              <span>
+                {remoteImageUrls.length} remote {remoteImageUrls.length === 1 ? 'image' : 'images'} blocked to prevent tracking beacons.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAllowRemoteImages(true)}
+              className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-colors cursor-pointer shrink-0 ml-3"
+            >
+              Load external images
+            </button>
+          </div>
+        )}
+
         {/* Plain Text Message Body */}
         <div className="text-sm text-[#202124] dark:text-[#F1F5F9] whitespace-pre-wrap leading-relaxed font-sans font-normal py-2 select-text">
-          {message.body}
+          {blockRemoteImages && !allowRemoteImages
+            ? message.body.replace(/<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>/gi, '[Blocked Remote Image]')
+            : message.body}
         </div>
+
+        {/* Loaded External Images (only when allowed by user or Settings) */}
+        {remoteImageUrls.length > 0 && (!blockRemoteImages || allowRemoteImages) && (
+          <div className="pt-2 space-y-2">
+            {remoteImageUrls.map((url, idx) => (
+              <img
+                key={idx}
+                src={url}
+                alt={`External attachment ${idx + 1}`}
+                className="max-w-full max-h-96 rounded-xl border border-[#E0E3E7] dark:border-[#1F2C47]"
+              />
+            ))}
+          </div>
+        )}
 
         {/* Attachments Section */}
         {message.attachments && message.attachments.length > 0 && (

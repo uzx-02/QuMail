@@ -34,6 +34,8 @@ export interface EmailMessage {
   isQuMail?: boolean;
   securityTier?: 'pq_sealed' | 'weblink' | 'standard_tls';
   requireEmailOtp?: boolean;
+  burnAfterRead?: boolean;
+  expiresInHours?: number;
   passcode?: string;
   outboxError?: string;
   indicator?: SecurityIndicator;
@@ -54,4 +56,23 @@ export interface AccountSession {
   pqcAlgorithm: string;
   pqcIdentity: string;
   isUnlocked: boolean;
+}
+
+export interface QuMailSettings {
+  maxPageSize: 25 | 50 | 100;
+  blockRemoteImages: boolean;
+  maskEncryptedSnippets: boolean;
+  defaultSecurityMode: 'pq' | 'weblink';
+  visibleFolders: {
+    starred: boolean;
+    sent: boolean;
+    drafts: boolean;
+    outbox: boolean;
+    trash: boolean;
+  };
+  defaultInboxFilter: 'all' | 'secure';
+  weblinkExpiryHours: 1 | 24 | 168;
+  weblinkBurnAfterRead: boolean;
+  weblinkRequireOtp: boolean;
+  listDensity: 'comfortable' | 'compact';
 }

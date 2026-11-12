@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Cpu, RefreshCw, ShieldCheck, Sun, Moon, Key, Award, CheckCircle2, User, Globe, Sliders } from 'lucide-react';
+import { X, Cpu, RefreshCw, Sun, Moon, Award, User, Globe, Sliders, Copy, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { HSMStatus, AccountSession } from '../types';
+import { HSMStatus, AccountSession, QuMailSettings } from '../types';
 import { api } from '../lib/api';
 
 interface SettingsModalProps {
@@ -14,6 +14,8 @@ interface SettingsModalProps {
   onUpdateAccountEmail: (email: string) => void;
   onLogoutAccount?: () => void;
   onOpenSignIn?: () => void;
+  settings: QuMailSettings;
+  onUpdateSettings: (patch: Partial<QuMailSettings>) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -26,12 +28,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateAccountEmail,
   onLogoutAccount,
   onOpenSignIn,
+  settings,
+  onUpdateSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'labels' | 'accounts' | 'security' | 'appearance' | 'about'>('general');
   const [newEmail, setNewEmail] = useState('');
   const [newPass, setNewPass] = useState('');
   const [isSampling, setIsSampling] = useState(false);
   const [entropyResult, setEntropyResult] = useState<string | null>(null);
+  const [copiedFingerprint, setCopiedFingerprint] = useState(false);
 
   if (!isOpen) return null;
 
@@ -140,28 +145,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-6 divide-y divide-gray-100 dark:divide-gray-800">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Language</h4>
-                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">QuMail display language</p>
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Maximum page size</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Conversations fetched per sync</p>
                 </div>
                 <div className="md:col-span-2">
-                  <select className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-sm text-[#202124] dark:text-white outline-none w-72">
-                    <option>English (United States)</option>
-                    <option>English (India)</option>
-                    <option>Hindi (हिन्दी)</option>
+                  <select
+                    value={settings.maxPageSize}
+                    onChange={(e) => onUpdateSettings({ maxPageSize: Number(e.target.value) as 25 | 50 | 100 })}
+                    className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-sm text-[#202124] dark:text-white outline-none w-72 cursor-pointer"
+                  >
+                    <option value={25}>25 conversations per sync</option>
+                    <option value={50}>50 conversations per sync</option>
+                    <option value={100}>100 conversations per sync</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Maximum page size</h4>
-                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Show conversations per page</p>
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Default Compose Mode</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Initial protection for new emails</p>
                 </div>
                 <div className="md:col-span-2">
-                  <select className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-sm text-[#202124] dark:text-white outline-none w-72">
-                    <option>25 conversations per page</option>
-                    <option>50 conversations per page</option>
-                    <option>100 conversations per page</option>
+                  <select
+                    value={settings.defaultSecurityMode}
+                    onChange={(e) => onUpdateSettings({ defaultSecurityMode: e.target.value as 'pq' | 'weblink' })}
+                    className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-sm text-[#202124] dark:text-white outline-none w-80 cursor-pointer"
+                  >
+                    <option value="pq">Post-Quantum Sealed (ML-KEM-768)</option>
+                    <option value="weblink">Secure Web Link (Zero-Knowledge)</option>
                   </select>
                 </div>
               </div>
@@ -171,14 +183,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Message Privacy</h4>
                   <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Reconnaissance defense</p>
                 </div>
-                <div className="md:col-span-2 space-y-2">
-                  <label className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                    <span>Render plain-text safely (blocks tracking beacons and remote telemetry bugs)</span>
+                <div className="md:col-span-2 space-y-2.5">
+                  <label className="flex items-center space-x-2.5 text-sm text-[#202124] dark:text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.blockRemoteImages}
+                      onChange={(e) => onUpdateSettings({ blockRemoteImages: e.target.checked })}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>Block remote tracking images in Reading Pane (allow manual load per message)</span>
                   </label>
-                  <label className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                    <span>Scrub sensitive snippet text from desktop system notifications</span>
+                  <label className="flex items-center space-x-2.5 text-sm text-[#202124] dark:text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.maskEncryptedSnippets}
+                      onChange={(e) => onUpdateSettings({ maskEncryptedSnippets: e.target.checked })}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>Mask preview snippets in Message List for encrypted / WebLink messages</span>
                   </label>
                 </div>
               </div>
@@ -194,10 +216,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Folders visible in the left rail</p>
                 </div>
                 <div className="md:col-span-2 space-y-2">
-                  {['Inbox', 'Starred', 'Sent Mail', 'Drafts', 'Outbox', 'Trash'].map((name) => (
-                    <label key={name} className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                      <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                      <span>Show in navigation sidebar: <b>{name}</b></span>
+                  <label className="flex items-center space-x-2 text-sm text-[#5F6368] dark:text-[#94A3B8] cursor-not-allowed">
+                    <input type="checkbox" checked disabled className="rounded text-[#0B57D0] opacity-60" />
+                    <span>Show in navigation sidebar: <b>Inbox</b> (Always visible)</span>
+                  </label>
+                  {(
+                    [
+                      { key: 'starred', label: 'Starred' },
+                      { key: 'sent', label: 'Sent' },
+                      { key: 'drafts', label: 'Drafts' },
+                      { key: 'outbox', label: 'Outbox' },
+                      { key: 'trash', label: 'Trash' },
+                    ] as const
+                  ).map((item) => (
+                    <label key={item.key} className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.visibleFolders[item.key]}
+                        onChange={(e) =>
+                          onUpdateSettings({
+                            visibleFolders: {
+                              ...settings.visibleFolders,
+                              [item.key]: e.target.checked,
+                            },
+                          })
+                        }
+                        className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                      />
+                      <span>Show in navigation sidebar: <b>{item.label}</b></span>
                     </label>
                   ))}
                 </div>
@@ -205,22 +251,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Categories</h4>
-                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Inbox segmented views</p>
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Default Inbox Filter</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Initial pill selected in Message List</p>
                 </div>
-                <div className="md:col-span-2 space-y-2">
-                  <label className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                    <span>Primary (Direct personal and corporate communications)</span>
-                  </label>
-                  <label className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                    <span>Updates (Automated telemetry, diagnostics, notifications)</span>
-                  </label>
-                  <label className="flex items-center space-x-2 text-sm text-[#202124] dark:text-white cursor-pointer">
-                    <input type="checkbox" defaultChecked className="rounded text-[#0B57D0]" />
-                    <span>Quantum Secured (Cryptographically verified envelopes)</span>
-                  </label>
+                <div className="md:col-span-2 flex items-center space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ defaultInboxFilter: 'all' })}
+                    className={`px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
+                      settings.defaultInboxFilter === 'all'
+                        ? 'border-[#0B57D0] bg-blue-50/50 dark:bg-blue-950/30 text-[#0B57D0] dark:text-[#818CF8]'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    All Messages
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ defaultInboxFilter: 'secure' })}
+                    className={`px-4 py-2 rounded-xl border-2 text-xs font-bold transition-all cursor-pointer ${
+                      settings.defaultInboxFilter === 'secure'
+                        ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    QuMail Secure Only
+                  </button>
                 </div>
               </div>
             </div>
@@ -431,6 +487,88 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
                 <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">PQC Key Fingerprint</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Active device root identity</p>
+                </div>
+                <div className="md:col-span-2">
+                  {account.email && account.pqcIdentity ? (
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#111726] border border-gray-200 dark:border-gray-800">
+                      <code className="text-xs font-mono text-[#202124] dark:text-emerald-400 truncate pr-3 select-all">
+                        {account.pqcIdentity}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(account.pqcIdentity);
+                            setCopiedFingerprint(true);
+                            setTimeout(() => setCopiedFingerprint(false), 2000);
+                          } catch {}
+                        }}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 text-xs font-semibold text-[#202124] dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0"
+                      >
+                        {copiedFingerprint ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">
+                      Sign in to view your active ML-KEM-768 / ML-DSA-65 public key fingerprint.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">WebLink Security Defaults</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Applied to new WebLink emails</p>
+                </div>
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xs font-semibold text-[#5F6368] dark:text-[#94A3B8]">Default Expiry:</span>
+                    <select
+                      value={settings.weblinkExpiryHours}
+                      onChange={(e) => onUpdateSettings({ weblinkExpiryHours: Number(e.target.value) as 1 | 24 | 168 })}
+                      className="px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#111726] text-xs font-semibold text-[#202124] dark:text-white outline-none cursor-pointer"
+                    >
+                      <option value={1}>1 Hour</option>
+                      <option value={24}>24 Hours</option>
+                      <option value={168}>7 Days</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center space-x-2.5 text-sm text-[#202124] dark:text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.weblinkBurnAfterRead}
+                      onChange={(e) => onUpdateSettings({ weblinkBurnAfterRead: e.target.checked })}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>Default Burn After Read (destroy payload after first view)</span>
+                  </label>
+                  <label className="flex items-center space-x-2.5 text-sm text-[#202124] dark:text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.weblinkRequireOtp}
+                      onChange={(e) => onUpdateSettings({ weblinkRequireOtp: e.target.checked })}
+                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                    />
+                    <span>Require Recipient Email OTP (6-digit verification)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
+                <div className="space-y-1">
                   <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">Cryptographic Suite</h4>
                   <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Approved quantum algorithms</p>
                 </div>
@@ -438,7 +576,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p>• <b>Key Encapsulation (KEM):</b> NIST FIPS 203 (ML-KEM-768) + X25519 Composite</p>
                   <p>• <b>Digital Signatures (DSA):</b> NIST FIPS 204 (ML-DSA-65) + Ed25519 Composite</p>
                   <p>• <b>Symmetric Sealing:</b> AES-256-GCM authenticated cipher</p>
-                  <p>• <b>Hardware Source:</b> Avalanche photodiode & microcontroller TRNG</p>
+                  <p>• <b>Hardware Source:</b> Avalanche photodiode &amp; microcontroller TRNG</p>
                 </div>
               </div>
             </div>
@@ -455,8 +593,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="md:col-span-2 flex items-center space-x-4">
                   <button
                     onClick={() => { if (isDarkMode) onToggleTheme(); }}
-                    className={`flex items-center space-x-3 p-4 rounded-2xl border-2 transition-all ${
-                      !isDarkMode ? 'border-[#0B57D0] bg-blue-50/40 text-[#0B57D0] font-bold' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    className={`flex items-center space-x-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                      !isDarkMode ? 'border-[#0B57D0] bg-blue-50/40 text-[#0B57D0] font-bold' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300'
                     }`}
                   >
                     <Sun className="w-5 h-5 text-amber-500" />
@@ -465,12 +603,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                   <button
                     onClick={() => { if (!isDarkMode) onToggleTheme(); }}
-                    className={`flex items-center space-x-3 p-4 rounded-2xl border-2 transition-all ${
-                      isDarkMode ? 'border-[#818CF8] bg-indigo-950/30 text-[#818CF8] font-bold' : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    className={`flex items-center space-x-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                      isDarkMode ? 'border-[#818CF8] bg-indigo-950/30 text-[#818CF8] font-bold' : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300'
                     }`}
                   >
                     <Moon className="w-5 h-5 text-indigo-400" />
                     <span>Dark Enterprise Slate</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">List Density</h4>
+                  <p className="text-xs text-[#5F6368] dark:text-[#94A3B8]">Row spacing in Message List</p>
+                </div>
+                <div className="md:col-span-2 flex items-center space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ listDensity: 'comfortable' })}
+                    className={`px-5 py-3 rounded-2xl border-2 text-xs transition-all cursor-pointer ${
+                      settings.listDensity === 'comfortable'
+                        ? 'border-[#0B57D0] bg-blue-50/40 dark:bg-blue-950/30 text-[#0B57D0] dark:text-[#818CF8] font-bold'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    Comfortable (Default)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateSettings({ listDensity: 'compact' })}
+                    className={`px-5 py-3 rounded-2xl border-2 text-xs transition-all cursor-pointer ${
+                      settings.listDensity === 'compact'
+                        ? 'border-[#0B57D0] bg-blue-50/40 dark:bg-blue-950/30 text-[#0B57D0] dark:text-[#818CF8] font-bold'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:border-gray-300'
+                    }`}
+                  >
+                    Compact (High Density)
                   </button>
                 </div>
               </div>

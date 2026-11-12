@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pen, Inbox, Star, Send, FileText, Package, Trash2, Cpu, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { HSMStatus } from '../types';
+import { HSMStatus, QuMailSettings } from '../types';
 
 interface SidebarProps {
   currentFolder: string;
@@ -13,6 +13,7 @@ interface SidebarProps {
   isCollapsed: boolean;
   hsmStatus: HSMStatus;
   onOpenSettings: () => void;
+  visibleFolders?: QuMailSettings['visibleFolders'];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,8 +26,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   hsmStatus,
   onOpenSettings,
+  visibleFolders,
 }) => {
-  const folders = [
+  const allFolders = [
     { id: 'inbox', label: 'Inbox', icon: <Inbox className="w-4 h-4" />, count: unreadCount },
     { id: 'starred', label: 'Starred', icon: <Star className="w-4 h-4" />, count: starredCount },
     { id: 'sent', label: 'Sent', icon: <Send className="w-4 h-4" /> },
@@ -34,6 +36,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'outbox', label: 'Outbox', icon: <Package className="w-4 h-4" /> },
     { id: 'trash', label: 'Trash', icon: <Trash2 className="w-4 h-4" /> },
   ];
+
+  const folders = allFolders.filter((f) => {
+    if (f.id === 'inbox' || !visibleFolders) return true;
+    return visibleFolders[f.id as keyof QuMailSettings['visibleFolders']] !== false;
+  });
 
   return (
     <aside

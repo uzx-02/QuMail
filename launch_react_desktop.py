@@ -852,7 +852,7 @@ class QuMailJsApi:
             logger.error("Custom mailbox authentication failed: %s", exc)
             return {"success": False, "message": f"Authentication check error: {exc}"}
 
-    def fetchInbox(self) -> List[Dict[str, Any]]:
+    def fetchInbox(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Fetch real emails from IMAP server and dynamically verify post-quantum security."""
         if not self.account_email:
             return self.messages
@@ -864,7 +864,11 @@ class QuMailJsApi:
         try:
             from transport.imap_receiver import fetch_inbox
 
-            inbox_items = fetch_inbox(self.account_email, max_count=30)
+            try:
+                max_count = max(10, min(int(limit or 50), 100))
+            except (TypeError, ValueError):
+                max_count = 50
+            inbox_items = fetch_inbox(self.account_email, max_count=max_count)
 
             new_msgs = []
             for item in inbox_items:
@@ -1189,6 +1193,8 @@ class QuMailJsApi:
                 max_views = int(draft.get("maxViews", 5))
                 burn_after_read = bool(draft.get("burnAfterRead", False))
                 require_email_otp = bool(draft.get("requireEmailOtp", True))
+                expires_in_hours = int(draft.get("expiresInHours", 24) or 24)
+                ttl_days = max(1, round(expires_in_hours / 24))
 
                 try:
                     client = CloudDirectoryClient()
@@ -1201,6 +1207,7 @@ class QuMailJsApi:
                         require_email_otp=require_email_otp,
                         max_views=max_views,
                         burn_after_read=burn_after_read,
+                        ttl_days=ttl_days,
                     )
                     access_url = weblink_res.get("access_url")
                 except Exception as wl_err:

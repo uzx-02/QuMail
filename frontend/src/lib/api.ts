@@ -8,7 +8,7 @@ declare global {
       api: {
         ping: () => Promise<{ pong: boolean; version: string; timestamp: number; authenticated: boolean }>;
         getMessages: () => Promise<EmailMessage[]>;
-        fetchInbox: () => Promise<EmailMessage[]>;
+        fetchInbox: (limit?: number) => Promise<EmailMessage[]>;
         sendMessage: (msg: Partial<EmailMessage> & { draftId?: string; outboxId?: string }) => Promise<{ success: boolean; id?: string; folder?: string; message?: string }>;
         saveDraft: (draft: Partial<EmailMessage>) => Promise<{ success: boolean; id?: string; draft?: EmailMessage }>;
         deleteMessage: (id: string) => Promise<boolean>;
@@ -133,10 +133,10 @@ class ApiService {
     return [...this.messages];
   }
 
-  async fetchInbox(): Promise<EmailMessage[]> {
+  async fetchInbox(limit: number = 50): Promise<EmailMessage[]> {
     if (window.pywebview?.api?.fetchInbox) {
       try {
-        const res = await window.pywebview.api.fetchInbox();
+        const res = await window.pywebview.api.fetchInbox(limit);
         this.messages = res || [];
         return this.messages;
       } catch (e) {
@@ -253,7 +253,7 @@ class ApiService {
             displayName: acc.displayName || acc.email.split('@')[0],
             provider: acc.organization || 'Google Workspace / Gmail',
             pqcAlgorithm: acc.kemAlgorithm || 'ML-KEM-768 (NIST FIPS 203)',
-            pqcIdentity: `0x${acc.email.slice(0, 4)}...PQ`,
+            pqcIdentity: acc.keyFingerprint || `0x${acc.email.slice(0, 4)}...PQ`,
             isUnlocked: true,
           };
           return { ...this.account };
