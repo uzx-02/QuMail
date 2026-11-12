@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Minus, Maximize2, Minimize2, Paperclip, Shield, Send, Trash2, GripHorizontal } from 'lucide-react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { EmailMessage, Attachment } from '../types';
 
 interface ComposeModalProps {
@@ -48,9 +48,127 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  const dragControls = useDragControls();
+  const MIN_WIDTH = 380;
+  const MIN_HEIGHT = 360;
+
+  const getDefaultRect = () => {
+    const w = Math.min(600, window.innerWidth - 32);
+    const h = Math.min(580, window.innerHeight - 32);
+    return {
+      left: Math.max(16, window.innerWidth - w - 48),
+      top: Math.max(16, window.innerHeight - h),
+      width: w,
+      height: h,
+    };
+  };
+
+  const [windowRect, setWindowRect] = useState(getDefaultRect);
+  const interactionRef = useRef<{
+    type: 'drag' | 'resize';
+    dir?: string;
+    startX: number;
+    startY: number;
+    startRect: { left: number; top: number; width: number; height: number };
+  } | null>(null);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSentRef = useRef(false);
+
+  // Clamp floating window inside viewport if the browser/app window is resized
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowRect((prev) => {
+        const w = Math.min(prev.width, window.innerWidth - 16);
+        const h = Math.min(prev.height, window.innerHeight - 16);
+        return {
+          width: Math.max(MIN_WIDTH, w),
+          height: Math.max(MIN_HEIGHT, h),
+          left: Math.max(8, Math.min(prev.left, window.innerWidth - w - 8)),
+          top: Math.max(8, Math.min(prev.top, window.innerHeight - h - 8)),
+        };
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const startHeaderDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isMaximized || e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    interactionRef.current = {
+      type: 'drag',
+      startX: e.clientX,
+      startY: e.clientY,
+      startRect: { ...windowRect },
+    };
+  };
+
+  const startResize = (dir: string) => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isMaximized || isMinimized || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    interactionRef.current = {
+      type: 'resize',
+      dir,
+      startX: e.clientX,
+      startY: e.clientY,
+      startRect: { ...windowRect },
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const active = interactionRef.current;
+    if (!active) return;
+
+    const dx = e.clientX - active.startX;
+    const dy = e.clientY - active.startY;
+    const s = active.startRect;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    if (active.type === 'drag') {
+      const nextLeft = Math.max(8, Math.min(s.left + dx, vw - s.width - 8));
+      const nextTop = Math.max(8, Math.min(s.top + dy, vh - (isMinimized ? 48 : s.height) - 8));
+      setWindowRect((prev) => ({ ...prev, left: nextLeft, top: nextTop }));
+      return;
+    }
+
+    const dir = active.dir || '';
+    let { left, top, width, height } = s;
+
+    if (dir.includes('e')) {
+      width = Math.max(MIN_WIDTH, Math.min(s.width + dx, vw - s.left - 8));
+    }
+    if (dir.includes('s')) {
+      height = Math.max(MIN_HEIGHT, Math.min(s.height + dy, vh - s.top - 8));
+    }
+    if (dir.includes('w')) {
+      const maxLeft = s.left + s.width - MIN_WIDTH;
+      const clampedLeft = Math.max(8, Math.min(s.left + dx, maxLeft));
+      width = s.width + (s.left - clampedLeft);
+      left = clampedLeft;
+    }
+    if (dir.includes('n')) {
+      const maxTop = s.top + s.height - MIN_HEIGHT;
+      const clampedTop = Math.max(8, Math.min(s.top + dy, maxTop));
+      height = s.height + (s.top - clampedTop);
+      top = clampedTop;
+    }
+
+    setWindowRect({ left, top, width, height });
+  };
+
+  const endPointerInteraction = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (interactionRef.current) {
+      interactionRef.current = null;
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+    }
+  };
 
   // Sync fields whenever modal opens or a different draft/reply is loaded
   useEffect(() => {
@@ -178,29 +296,98 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   return (
     <AnimatePresence>
       <motion.div
-        drag={!isMaximized}
-        dragListener={false}
-        dragControls={dragControls}
-        dragMomentum={false}
-        initial={{ opacity: 0, y: 50, scale: 0.95 }}
+        initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 50, scale: 0.95 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-        className={`fixed z-50 bg-white dark:bg-[#161F33] rounded-2xl shadow-2xl border border-[#E0E3E7] dark:border-[#2A3B5F] flex flex-col overflow-hidden ${
+        exit={{ opacity: 0, y: 24, scale: 0.97 }}
+        transition={{ duration: 0.16 }}
+        style={
           isMaximized
-            ? 'inset-8 w-auto h-auto'
+            ? { top: 24, left: 24, right: 24, bottom: 24, width: 'auto', height: 'auto' }
             : isMinimized
-            ? 'bottom-0 right-12 w-80 h-12'
-            : 'bottom-0 right-12 w-[600px] h-[580px]'
-        }`}
+            ? { bottom: 0, right: 48, width: 320, height: 48 }
+            : {
+                top: windowRect.top,
+                left: windowRect.left,
+                width: windowRect.width,
+                height: windowRect.height,
+              }
+        }
+        className="fixed z-50 bg-white dark:bg-[#161F33] rounded-2xl shadow-2xl border border-[#E0E3E7] dark:border-[#2A3B5F] flex flex-col overflow-hidden"
       >
-        {/* Modal Header (Drag Handle) */}
+        {/* 8-Way Edge & Corner Resize Handles (when floating & expanded) */}
+        {!isMaximized && !isMinimized && (
+          <>
+            <div
+              onPointerDown={startResize('n')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute top-0 left-3 right-3 h-1.5 cursor-ns-resize z-20"
+            />
+            <div
+              onPointerDown={startResize('s')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute bottom-0 left-3 right-3 h-1.5 cursor-ns-resize z-20"
+            />
+            <div
+              onPointerDown={startResize('w')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute top-3 bottom-3 left-0 w-1.5 cursor-ew-resize z-20"
+            />
+            <div
+              onPointerDown={startResize('e')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute top-3 bottom-3 right-0 w-1.5 cursor-ew-resize z-20"
+            />
+            <div
+              onPointerDown={startResize('nw')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute top-0 left-0 w-3 h-3 cursor-nwse-resize z-30"
+            />
+            <div
+              onPointerDown={startResize('ne')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute top-0 right-0 w-3 h-3 cursor-nesw-resize z-30"
+            />
+            <div
+              onPointerDown={startResize('sw')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute bottom-0 left-0 w-3 h-3 cursor-nesw-resize z-30"
+            />
+            <div
+              onPointerDown={startResize('se')}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endPointerInteraction}
+              onPointerCancel={endPointerInteraction}
+              className="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-nwse-resize z-30"
+            />
+          </>
+        )}
+
+        {/* Modal Header (Drag Handle + Double-Click Maximize/Restore) */}
         <div
-          onPointerDown={(e) => {
-            if (!isMaximized) dragControls.start(e);
+          onPointerDown={startHeaderDrag}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endPointerInteraction}
+          onPointerCancel={endPointerInteraction}
+          onDoubleClick={() => {
+            setIsMinimized(false);
+            setIsMaximized((prev) => !prev);
           }}
           className={`h-12 px-4 bg-[#F2F6FC] dark:bg-[#111726] flex items-center justify-between border-b border-[#E0E3E7] dark:border-[#1F2C47] shrink-0 select-none ${
-            !isMaximized ? 'cursor-grab active:cursor-grabbing' : ''
+            !isMaximized ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           }`}
         >
           <span className="font-bold text-sm text-[#202124] dark:text-[#F1F5F9] flex items-center space-x-2">

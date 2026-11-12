@@ -31,15 +31,6 @@ export const App: React.FC = () => {
     return DEFAULT_SETTINGS;
   });
 
-  const handleUpdateSettings = useCallback((patch: Partial<QuMailSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      try {
-        localStorage.setItem('qumail-settings', JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  }, []);
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('qumail-theme');
@@ -69,6 +60,23 @@ export const App: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountSession>(INITIAL_ACCOUNT);
   const [hsmStatus, setHsmStatus] = useState<HSMStatus>(INITIAL_HSM);
+
+  const handleUpdateSettings = useCallback((patch: Partial<QuMailSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem('qumail-settings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    if (patch.maxPageSize && account.email) {
+      api.fetchInbox(patch.maxPageSize)
+        .then((msgs) => {
+          if (msgs && msgs.length > 0) setMessages(msgs);
+        })
+        .catch((err) => console.debug('Page size sync note:', err));
+    }
+  }, [account.email]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [backendReady, setBackendReady] = useState<boolean | null>(null);
@@ -558,6 +566,7 @@ export const App: React.FC = () => {
               filterMode={settings.defaultInboxFilter}
               maskEncryptedSnippets={settings.maskEncryptedSnippets}
               listDensity={settings.listDensity}
+              pageSize={settings.maxPageSize}
               onShowProtectionNotice={setToastNotice}
             />
           )}

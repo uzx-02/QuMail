@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw } from 'lucide-react';
+import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EmailMessage } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 
@@ -19,6 +19,7 @@ interface MessageListProps {
   onShowProtectionNotice?: (msg: string) => void;
   maskEncryptedSnippets?: boolean;
   listDensity?: 'comfortable' | 'compact';
+  pageSize?: number;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -37,14 +38,20 @@ export const MessageList: React.FC<MessageListProps> = ({
   onShowProtectionNotice,
   maskEncryptedSnippets = false,
   listDensity = 'comfortable',
+  pageSize = 50,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<'all' | 'secure' | 'unread'>(filterMode);
+  const [currentPage, setCurrentPage] = useState(1);
   const [contextMenu, setContextMenu] = useState<{ msg: EmailMessage; x: number; y: number } | null>(null);
 
   useEffect(() => {
     setActiveFilter(filterMode);
   }, [filterMode]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [currentFolder, activeFilter, pageSize]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -229,9 +236,43 @@ export const MessageList: React.FC<MessageListProps> = ({
           )}
         </div>
 
-        <div className="text-xs text-[#5F6368] dark:text-[#94A3B8] font-medium">
-          {filteredMessages.length > 0 ? `1–${filteredMessages.length} of ${filteredMessages.length}` : '0 messages'}
-        </div>
+        {(() => {
+          const total = filteredMessages.length;
+          const totalPages = Math.max(1, Math.ceil(total / pageSize));
+          const safePage = Math.min(currentPage, totalPages);
+          const startIdx = (safePage - 1) * pageSize;
+          const endIdx = Math.min(startIdx + pageSize, total);
+
+          return (
+            <div className="flex items-center space-x-2 text-xs text-[#5F6368] dark:text-[#94A3B8] font-medium">
+              <span>
+                {total > 0 ? `${startIdx + 1}–${endIdx} of ${total}` : '0 messages'}
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-0.5">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    title="Previous page"
+                    className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    title="Next page"
+                    className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* 2. Modern Filter Pills (All | QuMail Secure | Unread) */}
@@ -298,7 +339,12 @@ export const MessageList: React.FC<MessageListProps> = ({
             </div>
           )
         ) : (
-          filteredMessages.map((msg) => {
+          filteredMessages
+            .slice(
+              (Math.min(currentPage, Math.max(1, Math.ceil(filteredMessages.length / pageSize))) - 1) * pageSize,
+              Math.min(currentPage, Math.max(1, Math.ceil(filteredMessages.length / pageSize))) * pageSize
+            )
+            .map((msg) => {
             const isSelected = selectedMessageId === msg.id;
             const isChecked = selectedIds.has(msg.id);
             const isQuMail = isMessageQuMail(msg);
