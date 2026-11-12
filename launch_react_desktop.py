@@ -216,6 +216,47 @@ class QuMailJsApi:
         if self.account_email and self.session_state == "MAILBOX_READY":
             threading.Thread(target=self.fetchInbox, daemon=True, name="startup-inbox-sync").start()
 
+    @staticmethod
+    def _hydrate_qumail_metadata(msg: Dict[str, Any]) -> Dict[str, Any]:
+        """Infer and set isQuMail and securityTier if missing on cached or synced messages."""
+        if msg.get("isQuMail") is not None and msg.get("securityTier"):
+            return msg
+
+        subj = msg.get("subject", "") or ""
+        body = msg.get("body", "") or ""
+        sec_mode = msg.get("securityMode")
+        indicator = msg.get("indicator") or {}
+        badge = indicator.get("badgeLevel", "")
+
+        is_weblink = (
+            sec_mode == "weblink"
+            or "[QuMail Secure Link]" in subj
+            or "qumail-directory.uzair-shaikh-sec-e24.workers.dev/v/" in body
+            or "workers.dev/v/" in body
+        )
+        is_pq = (
+            sec_mode == "pq"
+            or badge == "SECURE"
+            or "Post-Quantum ML-KEM-768" in body
+            or "Decapsulated and authenticated via ML-KEM-768" in indicator.get("description", "")
+        )
+        is_sent_qumail = msg.get("folder") == "sent" and (sec_mode in ("pq", "weblink") or is_weblink or is_pq)
+
+        if is_pq:
+            msg["isQuMail"] = True
+            msg["securityTier"] = "pq_sealed"
+        elif is_weblink:
+            msg["isQuMail"] = True
+            msg["securityTier"] = "weblink"
+        elif is_sent_qumail:
+            msg["isQuMail"] = True
+            msg["securityTier"] = "pq_sealed" if sec_mode == "pq" else "weblink"
+        else:
+            msg["isQuMail"] = False
+            msg["securityTier"] = "standard_tls"
+
+        return msg
+
     def _load_persisted_messages(self) -> List[Dict[str, Any]]:
         """Load locally cached messages from durable storage."""
         try:
@@ -224,7 +265,7 @@ class QuMailJsApi:
                 with open(cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if isinstance(data, list):
-                        return data
+                        return [self._hydrate_qumail_metadata(m) for m in data]
         except Exception as exc:
             logger.debug("Could not load message cache: %s", exc)
         return []
@@ -558,8 +599,8 @@ class QuMailJsApi:
             logger.warning("Cloud Directory PQ key registration note: %s", reg_err)
 
     def getMessages(self) -> List[Dict[str, Any]]:
-        """Return list of email messages."""
-        return self.messages
+        """Return list of email messages with guaranteed QuMail security metadata."""
+        return [self._hydrate_qumail_metadata(m) for m in self.messages]
 
     def checkRecipient(self, recipient_email: str) -> Dict[str, Any]:
         """Check recipient's post-quantum status via local vault and Cloud Directory."""
@@ -835,8 +876,25 @@ class QuMailJsApi:
                 # 0. Check for OpenPGP/PQ multipart/encrypted message
                 ctype = msg_obj.get_content_type()
                 protocol = msg_obj.get_param("protocol")
+                raw_subj = item.subject or "(No Subject)"
+
+                # Edge Case 1: Inbound WebLink Detection
+                payload_str = ""
+                try:
+                    payload_bytes = msg_obj.as_bytes()
+                    payload_str = payload_bytes[:4000].decode("utf-8", errors="ignore")
+                except Exception:
+                    pass
+
+                is_inbound_weblink = bool(
+                    "[QuMail Secure Link]" in raw_subj
+                    or "workers.dev/v/" in payload_str
+                    or "qumail-directory" in payload_str
+                )
+
                 if ctype == "multipart/encrypted" and protocol == "application/pgp-encrypted":
                     is_qumail = True
+                    security_tier = "pq_sealed"
                     try:
                         from core.provider_resolver import resolve_provider
                         from core.crypto_envelope.provider import Provider as CryptoProvider
@@ -957,10 +1015,41 @@ class QuMailJsApi:
                             "description": "Message ciphertext could not be authenticated.",
                             "actionAdvice": "DO NOT trust this message.",
                         }
+                elif is_inbound_weblink:
+                    is_qumail = True
+                    security_tier = "weblink"
+                    inv_body = ""
+                    try:
+                        if msg_obj.is_multipart():
+                            for part in msg_obj.walk():
+                                if part.get_content_type() == "text/plain":
+                                    inv_body = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8", errors="ignore")
+                                    break
+                        else:
+                            inv_body = msg_obj.get_payload(decode=True).decode(msg_obj.get_content_charset() or "utf-8", errors="ignore")
+                    except Exception:
+                        pass
+
+                    body_text = inv_body or (
+                        "═══════════════════════════════════════════════════════════════════════════\n"
+                        "🔗  QUMAIL SECURE WEBLINK INVITATION\n"
+                        "═══════════════════════════════════════════════════════════════════════════\n\n"
+                        f"Subject: {raw_subj}\n"
+                        f"Sender:  {item.sender}\n\n"
+                        "You have received a Secure Web Link message encrypted with client-side AES-256-GCM.\n"
+                        "Open the link from this email in your web browser and enter your 6-digit email OTP\n"
+                        "to decrypt and read the message."
+                    )
+                    indicator = {
+                        "badgeLevel": "SECURE",
+                        "headline": "Secure WebLink Invitation",
+                        "description": "Encrypted with client-side AES-256-GCM. Verified via ephemeral Email OTP.",
+                        "actionAdvice": "Open link in your browser to verify email OTP and view.",
+                    }
 
                 # 1. Standard plaintext / multipart inbound message (Shielded by QuMail Privacy Enclave)
                 if not is_qumail:
-                    raw_subj = item.subject or "(No Subject)"
+                    security_tier = "standard_tls"
                     words = raw_subj.split()
                     if len(words) > 3:
                         censored_subject = f"{' '.join(words[:3])} •••••••• [Shielded]"
@@ -1018,6 +1107,8 @@ class QuMailJsApi:
                     "hasAttachments": bool(attachments),
                     "attachments": attachments,
                     "indicator": indicator,
+                    "isQuMail": is_qumail,
+                    "securityTier": security_tier,
                 })
 
             if new_msgs:
@@ -1471,6 +1562,9 @@ class QuMailJsApi:
             "hasAttachments": bool(attachments),
             "attachments": attachments,
             "indicator": indicator,
+            "securityMode": security_mode,
+            "isQuMail": security_mode in ("pq", "weblink"),
+            "securityTier": "pq_sealed" if security_mode == "pq" else ("weblink" if security_mode == "weblink" else "standard_tls"),
         }
 
         self.messages.insert(0, new_msg)
@@ -1485,9 +1579,14 @@ class QuMailJsApi:
         }
 
     def deleteMessage(self, msg_id: str) -> bool:
-        """Move message to trash or permanently delete if already in trash."""
+        """Move message to trash or permanently delete if already in trash.
+        Strictly enforces the Safe Deletion Guard: only QuMail messages (isQuMail=True) can be deleted."""
         for m in self.messages:
             if m["id"] == msg_id:
+                self._hydrate_qumail_metadata(m)
+                if not m.get("isQuMail", False):
+                    logger.warning("Safe Deletion Guard: Blocked deletion of non-QuMail message '%s' (subject: %s)", msg_id, m.get("subject"))
+                    return False
                 if m["folder"] == "trash":
                     self.messages.remove(m)
                 else:

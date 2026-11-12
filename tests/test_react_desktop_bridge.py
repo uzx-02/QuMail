@@ -300,6 +300,8 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     assert pq_inbox_msg["body"] == secret_body
     assert pq_inbox_msg["indicator"]["badgeLevel"] == "SECURE"
     assert "Secured by QuMail" in pq_inbox_msg["indicator"]["headline"]
+    assert pq_inbox_msg.get("isQuMail") is True
+    assert pq_inbox_msg.get("securityTier") == "pq_sealed"
 
     # Verify Conventional email: Correctly categorized as Content Shielded (NEUTRAL)
     conv_inbox_msg = next(m for m in inbox if m["id"] == "imap-1002")
@@ -307,3 +309,9 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     assert "Shielded" in conv_inbox_msg["subject"]
     assert conv_inbox_msg["indicator"]["badgeLevel"] == "NEUTRAL"
     assert "Content Shielded" in conv_inbox_msg["indicator"]["headline"]
+    assert conv_inbox_msg.get("isQuMail") is False
+    assert conv_inbox_msg.get("securityTier") == "standard_tls"
+
+    # Safe Deletion Guard: Conventional emails cannot be deleted, while QuMail emails can
+    assert api.deleteMessage("imap-1002") is False
+    assert api.deleteMessage("imap-1001") is True

@@ -31,6 +31,8 @@ export interface EmailMessage {
   hasAttachments: boolean;
   attachments?: Attachment[];
   securityMode?: 'pq' | 'weblink' | 'standard';
+  isQuMail?: boolean;
+  securityTier?: 'pq_sealed' | 'weblink' | 'standard_tls';
   requireEmailOtp?: boolean;
   passcode?: string;
   indicator?: SecurityIndicator;

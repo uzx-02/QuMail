@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ShieldAlert } from 'lucide-react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { MessageList } from './components/MessageList';
@@ -21,7 +22,6 @@ export const App: React.FC = () => {
   // Navigation & layout state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [currentFolder, setCurrentFolder] = useState('inbox');
-  const [categoryFilter, setCategoryFilter] = useState<'primary' | 'updates' | 'secure'>('primary');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals state
@@ -39,6 +39,15 @@ export const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [backendReady, setBackendReady] = useState<boolean | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
+
+  // Auto-dismiss protective toast notice after 4.5 seconds
+  useEffect(() => {
+    if (toastNotice) {
+      const timer = setTimeout(() => setToastNotice(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastNotice]);
 
   // Sync dark mode class on <html>
   useEffect(() => {
@@ -146,12 +155,36 @@ export const App: React.FC = () => {
 
   const handleDeleteMessage = useCallback(async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    await api.deleteMessage(id);
+    const target = messages.find((m) => m.id === id);
+    const isQuMail = target
+      ? Boolean(
+          target.isQuMail !== undefined
+            ? target.isQuMail
+            : target.securityTier === 'pq_sealed' ||
+              target.securityTier === 'weblink' ||
+              target.securityMode === 'pq' ||
+              target.securityMode === 'weblink' ||
+              target.indicator?.badgeLevel === 'SECURE' ||
+              target.subject?.startsWith('[QuMail Secure Link]')
+        )
+      : false;
+
+    if (target && !isQuMail) {
+      setToastNotice('Safe Deletion Guard: Standard legacy emails cannot be deleted by QuMail.');
+      return;
+    }
+
+    const ok = await api.deleteMessage(id);
+    if (!ok) {
+      setToastNotice('Safe Deletion Guard: Deletion of this message was rejected.');
+      return;
+    }
+
     setMessages((prev) => prev.filter((m) => m.id !== id));
     if (selectedMessageId === id) {
       setSelectedMessageId(null);
     }
-  }, [selectedMessageId]);
+  }, [messages, selectedMessageId]);
 
   const handleMarkRead = useCallback(async (id: string, seen: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -365,6 +398,7 @@ export const App: React.FC = () => {
               onForward={handleForward}
               onDelete={handleDeleteMessage}
               onClose={() => setSelectedMessageId(null)}
+              onShowProtectionNotice={setToastNotice}
             />
           ) : (
             /* Gmail Message List */
@@ -377,12 +411,25 @@ export const App: React.FC = () => {
               onDeleteMessage={handleDeleteMessage}
               onMarkRead={handleMarkRead}
               isRefreshing={isRefreshing}
-              categoryFilter={categoryFilter}
-              onCategoryChange={setCategoryFilter}
+              onShowProtectionNotice={setToastNotice}
             />
           )}
         </main>
       </div>
+
+      {/* Floating Protective Notification Toast */}
+      {toastNotice && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full bg-[#1F293D] text-white text-xs font-semibold shadow-2xl flex items-center space-x-2.5 border border-slate-700 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+          <span>{toastNotice}</span>
+          <button
+            onClick={() => setToastNotice(null)}
+            className="ml-2 text-slate-400 hover:text-white p-0.5 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Floating Gmail Compose Modal */}
       <ComposeModal

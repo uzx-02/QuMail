@@ -1,5 +1,22 @@
-import React from 'react';
-import { ArrowLeft, Reply, Forward, Trash2, Printer, ShieldCheck, AlertTriangle, ShieldAlert, Shield, Download, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  ArrowLeft,
+  Reply,
+  Forward,
+  Trash2,
+  Printer,
+  ShieldCheck,
+  AlertTriangle,
+  ShieldAlert,
+  Shield,
+  Download,
+  FileText,
+  CheckCircle2,
+  Lock,
+  Key,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { EmailMessage } from '../types';
 
 interface ReadingPaneProps {
@@ -8,6 +25,7 @@ interface ReadingPaneProps {
   onForward: (msg: EmailMessage) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  onShowProtectionNotice?: (msg: string) => void;
 }
 
 export const ReadingPane: React.FC<ReadingPaneProps> = ({
@@ -16,7 +34,10 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
   onForward,
   onDelete,
   onClose,
+  onShowProtectionNotice,
 }) => {
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+
   if (!message) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#F6F8FC] dark:bg-[#0A0E17] select-none">
@@ -45,7 +66,19 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const isQuMail = Boolean(
+    message.isQuMail !== undefined
+      ? message.isQuMail
+      : message.securityTier === 'pq_sealed' ||
+        message.securityTier === 'weblink' ||
+        message.securityMode === 'pq' ||
+        message.securityMode === 'weblink' ||
+        message.indicator?.badgeLevel === 'SECURE' ||
+        message.subject?.startsWith('[QuMail Secure Link]')
+  );
+
   const isSecure = message.indicator?.badgeLevel === 'SECURE';
+  const isWebLink = message.securityTier === 'weblink' || message.securityMode === 'weblink' || message.subject?.startsWith('[QuMail Secure Link]');
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#161F33] overflow-y-auto">
@@ -83,10 +116,23 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
           >
             <Printer className="w-4 h-4" />
           </button>
+
+          {/* Safe Trash Action with Tooltip & Block */}
           <button
-            onClick={() => onDelete(message.id)}
-            title="Delete message"
-            className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors"
+            onClick={() => {
+              if (!isQuMail) {
+                onShowProtectionNotice?.('Safe Deletion Guard: Standard legacy emails cannot be deleted by QuMail.');
+                return;
+              }
+              onDelete(message.id);
+            }}
+            disabled={!isQuMail}
+            title={isQuMail ? 'Delete QuMail message' : 'Deletion Protected: Standard email cannot be deleted by QuMail'}
+            className={`p-2 rounded-full transition-colors ${
+              isQuMail
+                ? 'text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600'
+                : 'text-gray-300 dark:text-gray-600 opacity-25 cursor-not-allowed hover:bg-transparent'
+            }`}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -100,7 +146,7 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
           {message.subject || '(No Subject)'}
         </h1>
 
-        {/* Post-Quantum Reassurance Trust Ribbon */}
+        {/* Collapsible Cryptographic Receipt & Verification Banner */}
         {message.indicator && (
           <div
             className={`p-4 rounded-2xl border transition-all ${
@@ -126,7 +172,7 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                 }`}
               >
                 {isSecure ? (
-                  <ShieldCheck className="w-5 h-5" />
+                  isWebLink ? <Lock className="w-5 h-5 text-cyan-600" /> : <ShieldCheck className="w-5 h-5 text-emerald-600" />
                 ) : message.indicator.badgeLevel === 'CAUTION' ? (
                   <AlertTriangle className="w-5 h-5" />
                 ) : message.indicator.badgeLevel === 'NEUTRAL' ? (
@@ -143,7 +189,9 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                   <span
                     className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                       isSecure
-                        ? 'bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100'
+                        ? isWebLink
+                          ? 'bg-cyan-200 dark:bg-cyan-900 text-cyan-900 dark:text-cyan-100'
+                          : 'bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100'
                         : message.indicator.badgeLevel === 'CAUTION'
                         ? 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
                         : message.indicator.badgeLevel === 'NEUTRAL'
@@ -151,16 +199,78 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                         : 'bg-red-200 dark:bg-red-900 text-red-900 dark:text-red-100'
                     }`}
                   >
-                    {message.indicator.badgeLevel === 'NEUTRAL' ? 'SHIELDED' : message.indicator.badgeLevel}
+                    {isWebLink ? 'WEBLINK' : message.indicator.badgeLevel === 'NEUTRAL' ? 'SHIELDED' : message.indicator.badgeLevel}
                   </span>
                 </div>
                 <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] leading-relaxed">
                   {message.indicator.description}
                 </p>
-                <div className="flex items-center space-x-1.5 text-[11px] text-[#0B57D0] dark:text-[#818CF8] font-medium pt-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Advice: {message.indicator.actionAdvice}</span>
-                </div>
+
+                {/* Collapsible Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptOpen(!isReceiptOpen)}
+                  className="pt-1.5 flex items-center space-x-1 text-xs font-semibold text-[#0B57D0] dark:text-[#818CF8] hover:underline cursor-pointer select-none"
+                >
+                  <span>{isReceiptOpen ? 'Hide Cryptographic Receipt' : 'View Cryptographic Receipt'}</span>
+                  {isReceiptOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+
+                {/* Detailed Cryptographic Receipts Panel */}
+                {isReceiptOpen && (
+                  <div className="mt-3 pt-3 border-t border-black/10 dark:border-white/10 grid grid-cols-1 md:grid-cols-2 gap-2.5 text-[11px] font-mono select-text">
+                    {isWebLink ? (
+                      <>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Cipher Protocol:</span>
+                          <span className="text-cyan-600 dark:text-cyan-300 font-bold">AES-256-GCM (Zero-Knowledge)</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Recipient Verification:</span>
+                          <span className="text-gray-800 dark:text-gray-200">Ephemeral 6-Digit Email OTP</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Key Confidentiality:</span>
+                          <span className="text-gray-800 dark:text-gray-200">Client-Side URL #fragment</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Burn Policy:</span>
+                          <span className="text-gray-800 dark:text-gray-200">Atomic Single-Use Purge</span>
+                        </div>
+                      </>
+                    ) : isSecure ? (
+                      <>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Key Encapsulation (KEM):</span>
+                          <span className="text-emerald-600 dark:text-emerald-300 font-bold">NIST FIPS 203 (ML-KEM-768)</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Digital Signature (DSA):</span>
+                          <span className="text-emerald-600 dark:text-emerald-300 font-bold">NIST FIPS 204 (ML-DSA-65)</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Payload Encryption:</span>
+                          <span className="text-gray-800 dark:text-gray-200">AES-256-GCM Authenticated Envelope</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Vault Authority:</span>
+                          <span className="text-gray-800 dark:text-gray-200">Windows DPAPI Protected SQLite</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Transport Layer:</span>
+                          <span className="text-gray-700 dark:text-gray-300">Standard IMAP/TLS</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-black/5 dark:bg-black/30">
+                          <span className="text-gray-500 dark:text-gray-400 block font-sans font-bold">Privacy Enclave:</span>
+                          <span className="text-gray-700 dark:text-gray-300">Content Isolated Locally</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -199,35 +309,38 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
 
         {/* Attachments Section */}
         {message.attachments && message.attachments.length > 0 && (
-          <div className="pt-6 border-t border-[#E0E3E7] dark:border-[#1F2C47] space-y-3">
-            <h4 className="text-xs font-bold text-[#5F6368] dark:text-[#94A3B8] uppercase tracking-wider">
+          <div className="pt-4 border-t border-[#E0E3E7] dark:border-[#1F2C47] space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#94A3B8]">
               Attachments ({message.attachments.length})
             </h4>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {message.attachments.map((att, idx) => (
+              {message.attachments.map((att, i) => (
                 <div
-                  key={idx}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-[#E0E3E7] dark:border-[#1F2C47] bg-[#F6F8FC] dark:bg-[#111726] hover:border-[#0B57D0]/60 transition-colors group"
+                  key={i}
+                  className="flex items-center justify-between p-3 rounded-xl border border-[#E0E3E7] dark:border-[#1F2C47] bg-[#F6F8FC] dark:bg-[#111726] hover:bg-gray-100 dark:hover:bg-gray-800/80 transition-colors"
                 >
-                  <div className="flex items-center space-x-3 truncate mr-2">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-[#0B57D0] flex items-center justify-center shrink-0">
-                      <FileText className="w-4 h-4" />
-                    </div>
+                  <div className="flex items-center space-x-3 truncate">
+                    <FileText className="w-5 h-5 text-[#0B57D0] shrink-0" />
                     <div className="truncate">
-                      <p className="text-xs font-bold text-[#202124] dark:text-[#F1F5F9] truncate">
+                      <p className="text-xs font-semibold text-[#202124] dark:text-[#F1F5F9] truncate">
                         {att.name}
                       </p>
-                      <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8]">
+                      <p className="text-[10px] text-[#5F6368] dark:text-[#94A3B8]">
                         {formatSize(att.size)}
                       </p>
                     </div>
                   </div>
-
                   <button
-                    onClick={() => alert(`Saving ${att.name}... In native desktop mode, files export to your Downloads folder.`)}
+                    onClick={() => {
+                      if (att.data) {
+                        const link = document.createElement('a');
+                        link.href = `data:${att.mediaType || 'application/octet-stream'};base64,${att.data}`;
+                        link.download = att.name;
+                        link.click();
+                      }
+                    }}
                     title="Download attachment"
-                    className="p-2 rounded-lg text-[#5F6368] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-slate-800 hover:text-[#0B57D0] dark:hover:text-blue-400 transition-colors shrink-0"
+                    className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-gray-700 transition-colors shrink-0"
                   >
                     <Download className="w-4 h-4" />
                   </button>

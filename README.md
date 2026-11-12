@@ -99,3 +99,4 @@ QuMail/
 - **Zero-Trust Network Model**: Communications require explicit Post-Quantum verification. If a recipient is not enrolled in the Cloud Directory, Maximum Security mode fails closed and guides the user to the Secure Web Link portal.
 - **Strict Memory Zeroization**: Plaintext payloads and private subkeys are wiped from memory immediately after encryption/decryption cycles.
 - **Windows DPAPI Vault**: Root identities and subkeys are stored locally in `%LOCALAPPDATA%\QuMail\vault.sqlite`, protected by hardware-backed OS DPAPI keys.
+

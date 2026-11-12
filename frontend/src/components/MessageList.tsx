@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Bell, Shield } from 'lucide-react';
+import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock } from 'lucide-react';
 import { EmailMessage } from '../types';
-import { AnimatedTabs, TabItem } from './reactbits/AnimatedTabs';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 
 interface MessageListProps {
@@ -13,8 +12,9 @@ interface MessageListProps {
   onDeleteMessage: (id: string, e?: React.MouseEvent) => void;
   onMarkRead: (id: string, seen: boolean, e?: React.MouseEvent) => void;
   isRefreshing: boolean;
-  categoryFilter: 'primary' | 'updates' | 'secure';
-  onCategoryChange: (cat: 'primary' | 'updates' | 'secure') => void;
+  filterMode?: 'all' | 'secure' | 'unread';
+  onFilterChange?: (filter: 'all' | 'secure' | 'unread') => void;
+  onShowProtectionNotice?: (msg: string) => void;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
@@ -26,22 +26,38 @@ export const MessageList: React.FC<MessageListProps> = ({
   onDeleteMessage,
   onMarkRead,
   isRefreshing,
-  categoryFilter,
-  onCategoryChange,
+  filterMode = 'all',
+  onFilterChange,
+  onShowProtectionNotice,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [activeFilter, setActiveFilter] = useState<'all' | 'secure' | 'unread'>(filterMode);
 
-  const categoryTabs: TabItem[] = [
-    { id: 'primary', label: 'Primary', icon: <Inbox className="w-4 h-4" /> },
-    { id: 'updates', label: 'Updates', icon: <Bell className="w-4 h-4" /> },
-    { id: 'secure', label: 'Quantum Secured', icon: <Shield className="w-4 h-4" /> },
-  ];
+  const handleFilterSelect = (mode: 'all' | 'secure' | 'unread') => {
+    setActiveFilter(mode);
+    onFilterChange?.(mode);
+  };
+
+  const isMessageQuMail = (m: EmailMessage): boolean => {
+    if (m.isQuMail !== undefined) return Boolean(m.isQuMail);
+    return Boolean(
+      m.securityTier === 'pq_sealed' ||
+      m.securityTier === 'weblink' ||
+      m.securityMode === 'pq' ||
+      m.securityMode === 'weblink' ||
+      m.indicator?.badgeLevel === 'SECURE' ||
+      m.subject?.startsWith('[QuMail Secure Link]')
+    );
+  };
 
   const filteredMessages = messages.filter((m) => {
-    if (categoryFilter === 'secure') {
-      return m.indicator?.badgeLevel === 'SECURE';
+    if (activeFilter === 'secure') {
+      return isMessageQuMail(m);
     }
-    return m.category === categoryFilter || (categoryFilter === 'primary' && !m.category);
+    if (activeFilter === 'unread') {
+      return !m.seen;
+    }
+    return true;
   });
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,7 +77,18 @@ export const MessageList: React.FC<MessageListProps> = ({
   };
 
   const handleBatchDelete = () => {
-    selectedIds.forEach((id) => onDeleteMessage(id));
+    let blockedCount = 0;
+    selectedIds.forEach((id) => {
+      const msg = messages.find((m) => m.id === id);
+      if (msg && !isMessageQuMail(msg)) {
+        blockedCount++;
+      } else {
+        onDeleteMessage(id);
+      }
+    });
+    if (blockedCount > 0 && onShowProtectionNotice) {
+      onShowProtectionNotice(`Safe Deletion Guard: Protected ${blockedCount} standard email(s). Only QuMail messages can be deleted.`);
+    }
     setSelectedIds(new Set());
   };
 
@@ -69,6 +96,52 @@ export const MessageList: React.FC<MessageListProps> = ({
     selectedIds.forEach((id) => onMarkRead(id, seen));
     setSelectedIds(new Set());
   };
+
+  const renderSecurityBadge = (msg: EmailMessage) => {
+    const isPQC = msg.securityTier === 'pq_sealed' || (isMessageQuMail(msg) && msg.securityTier !== 'weblink' && !msg.subject?.startsWith('[QuMail Secure Link]'));
+    const isWebLink = msg.securityTier === 'weblink' || msg.securityMode === 'weblink' || msg.subject?.startsWith('[QuMail Secure Link]');
+
+    if (isPQC) {
+      return (
+        <div className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span>Verified PQC</span>
+        </div>
+      );
+    }
+
+    if (isWebLink) {
+      return (
+        <div className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-100 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800 shrink-0">
+          <Lock className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+          <span>Secure WebLink</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80 shrink-0">
+        <Shield className="w-3 h-3 text-slate-400" />
+        <span>Standard TLS</span>
+      </div>
+    );
+  };
+
+  const filterPills: { id: 'all' | 'secure' | 'unread'; label: string; icon: React.ReactNode; count: number }[] = [
+    { id: 'all', label: 'All', icon: <Inbox className="w-3.5 h-3.5" />, count: messages.length },
+    {
+      id: 'secure',
+      label: 'QuMail Secure',
+      icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />,
+      count: messages.filter(isMessageQuMail).length,
+    },
+    {
+      id: 'unread',
+      label: 'Unread',
+      icon: <Mail className="w-3.5 h-3.5 text-blue-500" />,
+      count: messages.filter((m) => !m.seen).length,
+    },
+  ];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#161F33] overflow-hidden border-r border-[#E0E3E7] dark:border-[#1F2C47]">
@@ -108,7 +181,7 @@ export const MessageList: React.FC<MessageListProps> = ({
               </button>
               <button
                 onClick={handleBatchDelete}
-                title="Delete selected"
+                title="Delete selected (QuMail only)"
                 className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
@@ -122,13 +195,32 @@ export const MessageList: React.FC<MessageListProps> = ({
         </div>
       </div>
 
-      {/* 2. Category Tabs */}
-      <div className="border-b border-[#E0E3E7] dark:border-[#1F2C47] px-4 bg-white dark:bg-[#161F33] shrink-0">
-        <AnimatedTabs
-          tabs={categoryTabs}
-          activeTab={categoryFilter}
-          onChange={(id) => onCategoryChange(id as 'primary' | 'updates' | 'secure')}
-        />
+      {/* 2. Modern Filter Pills (All | QuMail Secure | Unread) */}
+      <div className="border-b border-[#E0E3E7] dark:border-[#1F2C47] px-4 py-2.5 bg-white dark:bg-[#161F33] shrink-0 flex items-center space-x-2">
+        {filterPills.map((pill) => {
+          const isActive = activeFilter === pill.id;
+          return (
+            <button
+              key={pill.id}
+              onClick={() => handleFilterSelect(pill.id)}
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 outline-none ${
+                isActive
+                  ? 'bg-[#0B57D0] text-white shadow-sm'
+                  : 'bg-[#F0F4F9] dark:bg-[#1E2740] text-[#444746] dark:text-[#C4C7C5] hover:bg-[#E2E8F0] dark:hover:bg-[#2A3755]'
+              }`}
+            >
+              <span>{pill.icon}</span>
+              <span>{pill.label}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {pill.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Synchronization Progress Line */}
@@ -145,8 +237,8 @@ export const MessageList: React.FC<MessageListProps> = ({
             <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#0B57D0]">
               <Inbox className="w-6 h-6" />
             </div>
-            <p className="text-sm font-semibold text-[#202124] dark:text-[#F1F5F9]">
-              Your inbox is clear in this category
+            <p className="text-sm font-semibold text-[#202124] dark:text-white">
+              No messages found
             </p>
             <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-xs">
               All messages have been processed or moved to other categories.
@@ -156,6 +248,8 @@ export const MessageList: React.FC<MessageListProps> = ({
           filteredMessages.map((msg) => {
             const isSelected = selectedMessageId === msg.id;
             const isChecked = selectedIds.has(msg.id);
+            const isQuMail = isMessageQuMail(msg);
+
             return (
               <SpotlightCard
                 key={msg.id}
@@ -214,44 +308,34 @@ export const MessageList: React.FC<MessageListProps> = ({
                   </span>
                 </div>
 
-                {/* Badges: Paperclip & PQC Security Pill */}
-                <div className="flex items-center space-x-2 shrink-0 mr-4">
+                {/* Badges: Paperclip & Distinct Security Badge */}
+                <div className="flex items-center space-x-2 shrink-0 mr-3">
                   {msg.hasAttachments && (
                     <Paperclip className="w-4 h-4 text-[#5F6368] dark:text-[#94A3B8]" />
                   )}
+                  {renderSecurityBadge(msg)}
+                </div>
 
-                  {msg.indicator && (
-                    <div
-                      className={`flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                        msg.indicator.badgeLevel === 'SECURE'
-                          ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300'
-                          : msg.indicator.badgeLevel === 'CAUTION'
-                          ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300'
-                          : msg.indicator.badgeLevel === 'NEUTRAL'
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                          : 'bg-red-100 dark:bg-red-950/70 text-red-800 dark:text-red-300'
-                      }`}
-                    >
-                      {msg.indicator.badgeLevel === 'SECURE' ? (
-                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      ) : msg.indicator.badgeLevel === 'CAUTION' ? (
-                        <AlertTriangle className="w-3 h-3 text-amber-600" />
-                      ) : msg.indicator.badgeLevel === 'NEUTRAL' ? (
-                        <Shield className="w-3 h-3 text-slate-500 dark:text-slate-400" />
-                      ) : (
-                        <ShieldAlert className="w-3 h-3 text-red-600" />
-                      )}
-                      <span>
-                        {msg.indicator.badgeLevel === 'SECURE'
-                          ? 'Verified PQC'
-                          : msg.indicator.badgeLevel === 'CAUTION'
-                          ? 'Encrypted'
-                          : msg.indicator.badgeLevel === 'NEUTRAL'
-                          ? 'Shielded'
-                          : 'Alert'}
-                      </span>
-                    </div>
-                  )}
+                {/* Safe Trash Action Icon on Row */}
+                <div className="shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => {
+                      if (!isQuMail) {
+                        onShowProtectionNotice?.("Deletion Protected: Standard legacy emails cannot be deleted by QuMail.");
+                        return;
+                      }
+                      onDeleteMessage(msg.id);
+                    }}
+                    disabled={!isQuMail}
+                    title={isQuMail ? "Delete QuMail message" : "Deletion Protected: Standard email cannot be deleted by QuMail"}
+                    className={`p-1.5 rounded-full transition-colors ${
+                      isQuMail
+                        ? "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                        : "text-gray-300 dark:text-gray-600 opacity-25 cursor-not-allowed hover:bg-transparent"
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Date */}
