@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock } from 'lucide-react';
+import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw } from 'lucide-react';
 import { EmailMessage } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 
@@ -12,6 +12,8 @@ interface MessageListProps {
   onDeleteMessage: (id: string, e?: React.MouseEvent) => void;
   onMarkRead: (id: string, seen: boolean, e?: React.MouseEvent) => void;
   isRefreshing: boolean;
+  currentFolder?: string;
+  onRetrySend?: (msg: EmailMessage, e: React.MouseEvent) => void;
   filterMode?: 'all' | 'secure' | 'unread';
   onFilterChange?: (filter: 'all' | 'secure' | 'unread') => void;
   onShowProtectionNotice?: (msg: string) => void;
@@ -26,6 +28,8 @@ export const MessageList: React.FC<MessageListProps> = ({
   onDeleteMessage,
   onMarkRead,
   isRefreshing,
+  currentFolder,
+  onRetrySend,
   filterMode = 'all',
   onFilterChange,
   onShowProtectionNotice,
@@ -260,17 +264,31 @@ export const MessageList: React.FC<MessageListProps> = ({
       {/* 3. Messages List */}
       <div className="flex-1 overflow-y-auto divide-y divide-[#F2F2F2] dark:divide-[#1F2C47]/60">
         {filteredMessages.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
-            <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#0B57D0]">
-              <Inbox className="w-6 h-6" />
+          currentFolder === 'outbox' ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-[#202124] dark:text-white">
+                Outbox is clear
+              </p>
+              <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-sm">
+                All Post-Quantum & WebLink messages have been dispatched cleanly. Failed or offline sends will appear here with a Retry Send option.
+              </p>
             </div>
-            <p className="text-sm font-semibold text-[#202124] dark:text-white">
-              No messages found
-            </p>
-            <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-xs">
-              All messages have been processed or moved to other categories.
-            </p>
-          </div>
+          ) : (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-[#0B57D0]">
+                <Inbox className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-[#202124] dark:text-white">
+                No messages found
+              </p>
+              <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-xs">
+                All messages have been processed or moved to other categories.
+              </p>
+            </div>
+          )
         ) : (
           filteredMessages.map((msg) => {
             const isSelected = selectedMessageId === msg.id;
@@ -336,8 +354,30 @@ export const MessageList: React.FC<MessageListProps> = ({
                   </span>
                 </div>
 
-                {/* Badges: Paperclip & Distinct Security Badge */}
+                {/* Badges: Paperclip, Outbox Retry & Distinct Security Badge */}
                 <div className="flex items-center space-x-2 shrink-0 mr-3">
+                  {msg.folder === 'outbox' && (
+                    <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                      {msg.outboxError && (
+                        <span
+                          title={msg.outboxError}
+                          className="max-w-[180px] truncate px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                        >
+                          {msg.outboxError}
+                        </span>
+                      )}
+                      {onRetrySend && (
+                        <button
+                          onClick={(e) => onRetrySend(msg, e)}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0B57D0] hover:bg-[#0842A0] text-white shadow-sm transition-colors cursor-pointer"
+                          title="Retry SMTP dispatch"
+                        >
+                          <RotateCw className="w-3 h-3" />
+                          <span>Retry Send</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {msg.hasAttachments && (
                     <Paperclip className="w-4 h-4 text-[#5F6368] dark:text-[#94A3B8]" />
                   )}

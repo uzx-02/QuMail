@@ -1113,7 +1113,10 @@ class QuMailJsApi:
                 })
 
             if new_msgs:
-                sent_msgs = [m for m in self.messages if m.get("folder") == "sent"]
+                local_folder_msgs = [
+                    m for m in self.messages
+                    if m.get("folder") in ("sent", "drafts", "outbox", "trash")
+                ]
                 existing_by_id = {m["id"]: m for m in self.messages}
                 now_mono = time.monotonic()
                 for msg in new_msgs:
@@ -1126,7 +1129,7 @@ class QuMailJsApi:
                         msg["starred"] = prev.get("starred", msg["starred"])
                     elif msg_id in self._pending_flag_updates and now_mono >= pending_until:
                         self._pending_flag_updates.pop(msg_id, None)
-                self.messages = new_msgs + sent_msgs
+                self.messages = new_msgs + local_folder_msgs
                 self._save_persisted_messages()
                 logger.info("Successfully synced %d real messages from %s", len(new_msgs), self.account_email)
             else:
@@ -1153,6 +1156,8 @@ class QuMailJsApi:
         body = draft.get("body", "")
         attachments = draft.get("attachments", [])
         security_mode = draft.get("securityMode", "pq")
+        draft_id = draft.get("draftId") or (draft.get("id") if str(draft.get("id", "")).startswith("draft-") else None)
+        outbox_id = draft.get("outboxId") or (draft.get("id") if str(draft.get("id", "")).startswith("outbox-") else None)
 
         sender_email = self.account_email
         sender_name = self.account_display_name or self.account_email.split("@")[0]
@@ -1527,6 +1532,45 @@ class QuMailJsApi:
 
         except Exception as send_err:
             logger.error("Live SMTP dispatch error: %s", send_err, exc_info=True)
+            if security_mode in ("pq", "weblink"):
+                queued_id = outbox_id or f"outbox-{int(time.time() * 1000)}"
+                outbox_msg: Dict[str, Any] = {
+                    "id": queued_id,
+                    "sender": self.account_display_name or sender_email.split("@")[0],
+                    "senderEmail": sender_email,
+                    "recipients": recipients,
+                    "subject": subject,
+                    "snippet": body[:80] if body else "",
+                    "body": body,
+                    "date": "Queued",
+                    "timestamp": int(time.time() * 1000),
+                    "seen": True,
+                    "starred": False,
+                    "folder": "outbox",
+                    "category": "primary",
+                    "hasAttachments": bool(attachments),
+                    "attachments": attachments,
+                    "securityMode": security_mode,
+                    "requireEmailOtp": draft.get("requireEmailOtp", True),
+                    "isQuMail": True,
+                    "securityTier": "pq_sealed" if security_mode == "pq" else "weblink",
+                    "outboxError": str(send_err),
+                    "indicator": {
+                        "badgeLevel": "CAUTION",
+                        "headline": "Queued in Outbox",
+                        "description": f"SMTP dispatch failed: {send_err}",
+                        "actionAdvice": "Use Retry Send in Outbox once connectivity is restored.",
+                    },
+                }
+                self.messages = [m for m in self.messages if m.get("id") not in (draft_id, queued_id)]
+                self.messages.insert(0, outbox_msg)
+                self._save_persisted_messages()
+                return {
+                    "success": False,
+                    "queuedInOutbox": True,
+                    "id": queued_id,
+                    "message": f"SMTP dispatch failed (saved in Outbox for retry): {send_err}",
+                }
             return {"success": False, "message": f"SMTP dispatch failed: {send_err}"}
 
         # 2. Record new message record in local state
@@ -1574,6 +1618,11 @@ class QuMailJsApi:
             "securityTier": "pq_sealed" if security_mode == "pq" else ("weblink" if security_mode == "weblink" else "standard_tls"),
         }
 
+        # Remove any originating draft or outbox item upon successful send/queue
+        cleanup_ids = {cid for cid in (draft_id, outbox_id) if cid}
+        if cleanup_ids:
+            self.messages = [m for m in self.messages if m.get("id") not in cleanup_ids]
+
         self.messages.insert(0, new_msg)
         self._save_persisted_messages()
         logger.info("Message recorded: id=%s, recipients=%s, folder=%s", new_msg["id"], recipients, folder)
@@ -1584,6 +1633,51 @@ class QuMailJsApi:
             "dispatched": dispatched,
             "message": "Email dispatched successfully via SMTP." if dispatched else "Email sealed with Post-Quantum cryptography and queued in Outbox.",
         }
+
+    def saveDraft(self, draft: Dict[str, Any]) -> Dict[str, Any]:
+        """Create or update a local draft message in the drafts folder."""
+        draft_id = str(draft.get("id") or f"draft-{int(time.time() * 1000)}")
+        recipients = [r.strip() for r in draft.get("recipients", []) if str(r).strip()]
+        subject = draft.get("subject", "") or ""
+        body = draft.get("body", "") or ""
+        security_mode = draft.get("securityMode", "pq")
+        attachments = draft.get("attachments", [])
+
+        sender_email = self.account_email or ""
+        sender_name = self.account_display_name or (sender_email.split("@")[0] if sender_email else "Draft")
+
+        draft_msg: Dict[str, Any] = {
+            "id": draft_id,
+            "sender": sender_name,
+            "senderEmail": sender_email,
+            "recipients": recipients,
+            "subject": subject or "(No Subject)",
+            "snippet": body[:80].replace("\n", " ").strip() if body else "(Empty draft)",
+            "body": body,
+            "date": "Draft",
+            "timestamp": int(time.time() * 1000),
+            "seen": True,
+            "starred": False,
+            "folder": "drafts",
+            "category": "primary",
+            "hasAttachments": bool(attachments),
+            "attachments": attachments,
+            "securityMode": security_mode,
+            "requireEmailOtp": draft.get("requireEmailOtp", True),
+            "isQuMail": True,
+            "securityTier": "pq_sealed" if security_mode == "pq" else ("weblink" if security_mode == "weblink" else "standard_tls"),
+            "indicator": {
+                "badgeLevel": "NEUTRAL",
+                "headline": "Draft Message",
+                "description": "Auto-saved locally. Click to resume editing.",
+                "actionAdvice": "Complete and send when ready.",
+            },
+        }
+
+        self.messages = [m for m in self.messages if m.get("id") != draft_id]
+        self.messages.insert(0, draft_msg)
+        self._save_persisted_messages()
+        return {"success": True, "id": draft_id, "draft": draft_msg}
 
     def deleteMessage(self, msg_id: str) -> bool:
         """Move message to trash or permanently delete if already in trash.

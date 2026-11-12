@@ -35,6 +35,7 @@ export interface EmailMessage {
   securityTier?: 'pq_sealed' | 'weblink' | 'standard_tls';
   requireEmailOtp?: boolean;
   passcode?: string;
+  outboxError?: string;
   indicator?: SecurityIndicator;
 }
 

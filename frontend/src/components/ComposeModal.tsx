@@ -1,34 +1,108 @@
-import React, { useState } from 'react';
-import { X, Minus, Maximize2, Minimize2, Paperclip, Shield, Lock, Link, Send, Trash2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Minus, Maximize2, Minimize2, Paperclip, Shield, Send, Trash2, GripHorizontal } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { EmailMessage, Attachment } from '../types';
 
 interface ComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (msg: Partial<EmailMessage>) => Promise<boolean | void>;
+  onSend: (msg: Partial<EmailMessage> & { draftId?: string }) => Promise<boolean | void>;
+  onSaveDraft?: (draft: Partial<EmailMessage>) => Promise<string | void>;
+  onDiscardDraft?: (draftId: string) => void;
+  initialDraftId?: string;
   initialTo?: string;
   initialSubject?: string;
   initialBody?: string;
+  initialSecurityMode?: 'pq' | 'weblink' | 'standard';
 }
 
 export const ComposeModal: React.FC<ComposeModalProps> = ({
   isOpen,
   onClose,
   onSend,
+  onSaveDraft,
+  onDiscardDraft,
+  initialDraftId,
   initialTo = '',
   initialSubject = '',
   initialBody = '',
+  initialSecurityMode = 'pq',
 }) => {
+  const [draftId, setDraftId] = useState<string | undefined>(initialDraftId);
   const [to, setTo] = useState(initialTo);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
-  const [securityMode, setSecurityMode] = useState<'pq' | 'weblink' | 'standard'>('pq');
+  const [securityMode, setSecurityMode] = useState<'pq' | 'weblink' | 'standard'>(initialSecurityMode);
   const [requireEmailOtp, setRequireEmailOtp] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const dragControls = useDragControls();
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasSentRef = useRef(false);
+
+  // Sync fields whenever modal opens or a different draft/reply is loaded
+  useEffect(() => {
+    if (isOpen) {
+      hasSentRef.current = false;
+      setDraftId(initialDraftId);
+      setTo(initialTo);
+      setSubject(initialSubject);
+      setBody(initialBody);
+      setSecurityMode(initialSecurityMode);
+      setAttachments([]);
+      setIsMinimized(false);
+      setDraftStatus('idle');
+    } else if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, [isOpen, initialDraftId, initialTo, initialSubject, initialBody, initialSecurityMode]);
+
+  // Silent 1.5s debounced auto-save (skips completely blank drafts and cancelled if Send clicked)
+  useEffect(() => {
+    if (!isOpen || !onSaveDraft || hasSentRef.current) return;
+
+    const hasContent =
+      to.trim().length > 0 || subject.trim().length > 0 || body.trim().length > 0;
+    if (!hasContent) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (hasSentRef.current) return;
+      setDraftStatus('saving');
+      try {
+        const cleanRecipients = to.split(',').map((s) => s.trim()).filter(Boolean);
+        const savedId = await onSaveDraft({
+          id: draftId,
+          recipients: cleanRecipients,
+          subject: subject.trim(),
+          body,
+          attachments,
+          securityMode,
+          requireEmailOtp,
+        });
+        if (savedId && !draftId) {
+          setDraftId(savedId);
+        }
+        setDraftStatus('saved');
+      } catch {
+        setDraftStatus('idle');
+      }
+    }, 1500);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [isOpen, to, subject, body, securityMode, requireEmailOtp, attachments, draftId, onSaveDraft]);
 
   if (!isOpen) return null;
 
@@ -39,9 +113,16 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       alert('Please enter at least one recipient email address.');
       return;
     }
+    // Cancel any pending auto-save immediately so it cannot recreate a draft after Send
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    hasSentRef.current = true;
     setIsSending(true);
     try {
       const ok = await onSend({
+        draftId,
         recipients: cleanRecipients,
         subject: subject.trim() || '(No Subject)',
         body: body.trim(),
@@ -50,12 +131,17 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         requireEmailOtp,
       });
       if (ok !== false) {
+        setDraftId(undefined);
         setTo('');
         setSubject('');
         setBody('');
         setAttachments([]);
         onClose();
+      } else {
+        hasSentRef.current = false;
       }
+    } catch {
+      hasSentRef.current = false;
     } finally {
       setIsSending(false);
     }
@@ -79,6 +165,10 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   return (
     <AnimatePresence>
       <motion.div
+        drag={!isMaximized}
+        dragListener={false}
+        dragControls={dragControls}
+        dragMomentum={false}
         initial={{ opacity: 0, y: 50, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 50, scale: 0.95 }}
@@ -91,34 +181,57 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             : 'bottom-0 right-12 w-[600px] h-[580px]'
         }`}
       >
-        {/* Modal Header */}
-        <div className="h-12 px-4 bg-[#F2F6FC] dark:bg-[#111726] flex items-center justify-between border-b border-[#E0E3E7] dark:border-[#1F2C47] shrink-0 select-none">
+        {/* Modal Header (Drag Handle) */}
+        <div
+          onPointerDown={(e) => {
+            if (!isMaximized) dragControls.start(e);
+          }}
+          className={`h-12 px-4 bg-[#F2F6FC] dark:bg-[#111726] flex items-center justify-between border-b border-[#E0E3E7] dark:border-[#1F2C47] shrink-0 select-none ${
+            !isMaximized ? 'cursor-grab active:cursor-grabbing' : ''
+          }`}
+        >
           <span className="font-bold text-sm text-[#202124] dark:text-[#F1F5F9] flex items-center space-x-2">
+            {!isMaximized && <GripHorizontal className="w-3.5 h-3.5 text-gray-400" />}
             <span>New Message</span>
             <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-[#0B57D0] dark:text-blue-300">
               {securityMode === 'pq' ? 'ML-KEM-768' : securityMode === 'weblink' ? 'Zero-Knowledge Link' : 'Standard'}
             </span>
+            {draftStatus === 'saving' && (
+              <span className="text-[10px] font-medium text-gray-400">Saving…</span>
+            )}
+            {draftStatus === 'saved' && (
+              <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Saved</span>
+            )}
           </span>
 
-          <div className="flex items-center space-x-1 text-[#5F6368] dark:text-[#94A3B8]">
+          <div
+            className="flex items-center space-x-1 text-[#5F6368] dark:text-[#94A3B8]"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <button
+              type="button"
               onClick={() => setIsMinimized(!isMinimized)}
-              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded"
-              title="Minimize"
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded cursor-pointer"
+              title={isMinimized ? 'Expand' : 'Minimize to dock'}
             >
               <Minus className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setIsMaximized(!isMaximized)}
-              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded"
+              type="button"
+              onClick={() => {
+                setIsMinimized(false);
+                setIsMaximized(!isMaximized);
+              }}
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded cursor-pointer"
               title={isMaximized ? 'Restore' : 'Maximize'}
             >
               {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded"
-              title="Close"
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-800 rounded cursor-pointer"
+              title="Close (auto-saved to Drafts)"
             >
               <X className="w-4 h-4" />
             </button>
@@ -252,6 +365,15 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  if (autoSaveTimerRef.current) {
+                    clearTimeout(autoSaveTimerRef.current);
+                    autoSaveTimerRef.current = null;
+                  }
+                  hasSentRef.current = true;
+                  if (draftId && onDiscardDraft) {
+                    onDiscardDraft(draftId);
+                  }
+                  setDraftId(undefined);
                   setTo('');
                   setSubject('');
                   setBody('');
@@ -259,7 +381,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   onClose();
                 }}
                 title="Discard draft"
-                className="p-2 text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 rounded-full transition-colors"
+                className="p-2 text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 rounded-full transition-colors cursor-pointer"
               >
                 <Trash2 className="w-5 h-5" />
               </button>

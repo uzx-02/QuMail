@@ -9,7 +9,8 @@ declare global {
         ping: () => Promise<{ pong: boolean; version: string; timestamp: number; authenticated: boolean }>;
         getMessages: () => Promise<EmailMessage[]>;
         fetchInbox: () => Promise<EmailMessage[]>;
-        sendMessage: (msg: Partial<EmailMessage>) => Promise<{ success: boolean; id?: string; message?: string }>;
+        sendMessage: (msg: Partial<EmailMessage> & { draftId?: string; outboxId?: string }) => Promise<{ success: boolean; id?: string; folder?: string; message?: string }>;
+        saveDraft: (draft: Partial<EmailMessage>) => Promise<{ success: boolean; id?: string; draft?: EmailMessage }>;
         deleteMessage: (id: string) => Promise<boolean>;
         markRead: (id: string, seen: boolean) => Promise<boolean>;
         toggleStar: (id: string) => Promise<boolean>;
@@ -145,7 +146,7 @@ class ApiService {
     return [...this.messages];
   }
 
-  async sendMessage(draft: Partial<EmailMessage>): Promise<{ success: boolean; id?: string; message?: string }> {
+  async sendMessage(draft: Partial<EmailMessage> & { draftId?: string; outboxId?: string }): Promise<{ success: boolean; id?: string; folder?: string; queuedInOutbox?: boolean; message?: string }> {
     if (window.pywebview?.api?.sendMessage) {
       try {
         const res = await window.pywebview.api.sendMessage(draft);
@@ -195,6 +196,18 @@ class ApiService {
     }
     this.messages = this.messages.filter((m) => m.id !== id);
     return true;
+  }
+
+  async saveDraft(draft: Partial<EmailMessage>): Promise<{ success: boolean; id?: string; draft?: EmailMessage }> {
+    if (window.pywebview?.api?.saveDraft) {
+      try {
+        return await window.pywebview.api.saveDraft(draft);
+      } catch (e) {
+        console.warn('Pywebview API saveDraft failed:', e);
+      }
+    }
+    const id = draft.id || `draft-${Date.now()}`;
+    return { success: true, id };
   }
 
   async getHSMStatus(): Promise<HSMStatus> {

@@ -28,7 +28,13 @@ export const App: React.FC = () => {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
-  const [composeDefaults, setComposeDefaults] = useState({ to: '', subject: '', body: '' });
+  const [composeDefaults, setComposeDefaults] = useState<{
+    draftId?: string;
+    to: string;
+    subject: string;
+    body: string;
+    securityMode?: 'pq' | 'weblink' | 'standard';
+  }>({ to: '', subject: '', body: '' });
 
   // Data state
   const [messages, setMessages] = useState<EmailMessage[]>([]);
@@ -136,12 +142,24 @@ export const App: React.FC = () => {
   }, []);
 
   const handleSelectMessage = useCallback(async (msg: EmailMessage) => {
+    if (msg.folder === 'drafts') {
+      setComposeDefaults({
+        draftId: msg.id,
+        to: msg.recipients.join(', '),
+        subject: msg.subject === '(No Subject)' ? '' : msg.subject,
+        body: msg.body || '',
+        securityMode: msg.securityMode || 'pq',
+      });
+      setIsComposeOpen(true);
+      return;
+    }
+
     setSelectedMessageId(msg.id);
     if (!msg.seen) {
-      await api.markRead(msg.id, true);
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, seen: true } : m))
       );
+      api.markRead(msg.id, true).catch((err) => console.debug('Background markRead sync error:', err));
     }
   }, []);
 
@@ -221,15 +239,56 @@ export const App: React.FC = () => {
     setIsComposeOpen(true);
   }, []);
 
-  const handleSend = useCallback(async (draft: Partial<EmailMessage>) => {
-    const res = await api.sendMessage(draft);
+  const handleSend = useCallback(async (draft: Partial<EmailMessage> & { draftId?: string; outboxId?: string }) => {
+    const res: any = await api.sendMessage(draft);
     if (!res.success) {
+      if (res.queuedInOutbox) {
+        const updated = await api.getMessages();
+        setMessages(updated);
+        setToastNotice(res.message || 'SMTP dispatch failed. Message queued in Outbox for retry.');
+        return true;
+      }
       alert(res.message || 'Failed to dispatch email.');
       return false;
     }
     const updated = await api.getMessages();
     setMessages(updated);
     return true;
+  }, []);
+
+  const handleSaveDraft = useCallback(async (draft: Partial<EmailMessage>) => {
+    const res = await api.saveDraft(draft);
+    if (res.success) {
+      const updated = await api.getMessages();
+      setMessages(updated);
+      return res.id;
+    }
+  }, []);
+
+  const handleDiscardDraft = useCallback(async (draftId: string) => {
+    await api.deleteMessage(draftId);
+    setMessages((prev) => prev.filter((m) => m.id !== draftId));
+  }, []);
+
+  const handleRetrySend = useCallback(async (msg: EmailMessage, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setToastNotice('Retrying SMTP dispatch from Outbox...');
+    const res: any = await api.sendMessage({
+      outboxId: msg.id,
+      recipients: msg.recipients,
+      subject: msg.subject,
+      body: msg.body,
+      attachments: msg.attachments,
+      securityMode: msg.securityMode || 'pq',
+      requireEmailOtp: msg.requireEmailOtp ?? true,
+    });
+    const updated = await api.getMessages();
+    setMessages(updated);
+    if (res.success) {
+      setToastNotice('Outbox message dispatched successfully.');
+    } else {
+      setToastNotice(res.message || 'Retry failed. Message remains in Outbox.');
+    }
   }, []);
 
   const handleSignIn = useCallback(async (email: string, displayName?: string, org?: string) => {
@@ -464,6 +523,8 @@ export const App: React.FC = () => {
               onDeleteMessage={handleDeleteMessage}
               onMarkRead={handleMarkRead}
               isRefreshing={isRefreshing}
+              currentFolder={currentFolder}
+              onRetrySend={handleRetrySend}
               onShowProtectionNotice={setToastNotice}
             />
           )}
@@ -489,9 +550,13 @@ export const App: React.FC = () => {
         isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
         onSend={handleSend}
+        onSaveDraft={handleSaveDraft}
+        onDiscardDraft={handleDiscardDraft}
+        initialDraftId={composeDefaults.draftId}
         initialTo={composeDefaults.to}
         initialSubject={composeDefaults.subject}
         initialBody={composeDefaults.body}
+        initialSecurityMode={composeDefaults.securityMode}
       />
 
       {/* Two-Column Gmail Settings Modal */}

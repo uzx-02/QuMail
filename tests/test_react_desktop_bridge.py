@@ -366,3 +366,81 @@ def test_starred_and_seen_imap_flag_sync_and_pending_guard(tmp_path, monkeypatch
     target_after = next(m for m in msgs_after_poll if m["id"] == "imap-2001")
     assert target_after["starred"] is False
     assert target_after["seen"] is True
+
+
+def test_draft_lifecycle_and_outbox_retry(tmp_path, monkeypatch):
+    """Verify saveDraft, post-send draft cleanup, and Outbox queueing/retry on SMTP failure."""
+    vault_file = tmp_path / "vault_drafts.sqlite"
+    api = QuMailJsApi(account_email="alice@qumail.sec", vault_path=vault_file)
+    api.session_state = "MAILBOX_READY"
+
+    # 1. Save & update draft
+    res1 = api.saveDraft({
+        "recipients": ["bob@example.com"],
+        "subject": "Draft Subj",
+        "body": "Initial draft text",
+        "securityMode": "standard",
+    })
+    assert res1["success"] is True
+    draft_id = res1["id"]
+    assert any(m["id"] == draft_id and m["folder"] == "drafts" for m in api.getMessages())
+
+    # 2. Update same draft ID
+    res2 = api.saveDraft({
+        "id": draft_id,
+        "recipients": ["bob@example.com"],
+        "subject": "Draft Subj Updated",
+        "body": "Updated draft text",
+        "securityMode": "standard",
+    })
+    assert res2["id"] == draft_id
+    draft_msgs = [m for m in api.getMessages() if m["id"] == draft_id]
+    assert len(draft_msgs) == 1
+    assert draft_msgs[0]["subject"] == "Draft Subj Updated"
+
+    # 3. Send draft via standard SMTP -> draft must be deleted from drafts
+    monkeypatch.setattr("transport.smtp_sender.send_email", lambda s, r, m: None)
+    send_res = api.sendMessage({
+        "draftId": draft_id,
+        "recipients": ["bob@example.com"],
+        "subject": "Draft Subj Updated",
+        "body": "Updated draft text",
+        "securityMode": "standard",
+    })
+    assert send_res["success"] is True
+    assert not any(m["id"] == draft_id for m in api.getMessages())
+
+    # 4. Simulate SMTP failure on WebLink -> queued in outbox with outboxError, then retry succeeds
+    monkeypatch.setattr("core.cloud_directory.CloudDirectoryClient._ensure_session_token", lambda self: None)
+    monkeypatch.setattr(
+        "core.cloud_directory.CloudDirectoryClient.create_weblink",
+        lambda self, **kwargs: {"access_url": "https://example.workers.dev/v/abc#key"},
+    )
+    def fail_smtp(s, r, m):
+        raise RuntimeError("Network unreachable")
+    monkeypatch.setattr("transport.smtp_sender.send_email", fail_smtp)
+
+    fail_res = api.sendMessage({
+        "recipients": ["carol@example.com"],
+        "subject": "Secret Link",
+        "body": "Confidential",
+        "securityMode": "weblink",
+    })
+    assert fail_res["success"] is False
+    assert fail_res.get("queuedInOutbox") is True
+    outbox_id = fail_res["id"]
+    queued = next(m for m in api.getMessages() if m["id"] == outbox_id)
+    assert queued["folder"] == "outbox"
+    assert "Network unreachable" in queued["outboxError"]
+
+    # Retry succeeds -> outbox item removed
+    monkeypatch.setattr("transport.smtp_sender.send_email", lambda s, r, m: None)
+    retry_res = api.sendMessage({
+        "outboxId": outbox_id,
+        "recipients": ["carol@example.com"],
+        "subject": "Secret Link",
+        "body": "Confidential",
+        "securityMode": "weblink",
+    })
+    assert retry_res["success"] is True
+    assert not any(m["id"] == outbox_id for m in api.getMessages())
