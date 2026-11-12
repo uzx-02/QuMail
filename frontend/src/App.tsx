@@ -8,7 +8,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { SignInModal } from './components/SignInModal';
 import { api } from './lib/api';
 import { EmailMessage, HSMStatus, AccountSession } from './types';
-import { INITIAL_ACCOUNT, INITIAL_HSM } from './mockData';
+import { INITIAL_ACCOUNT, INITIAL_HSM } from './initialState';
 
 export const App: React.FC = () => {
   // Theme state
@@ -36,6 +36,7 @@ export const App: React.FC = () => {
   const [account, setAccount] = useState<AccountSession>(INITIAL_ACCOUNT);
   const [hsmStatus, setHsmStatus] = useState<HSMStatus>(INITIAL_HSM);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [backendReady, setBackendReady] = useState<boolean | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
 
@@ -62,18 +63,32 @@ export const App: React.FC = () => {
       }
       setBackendReady(true);
 
-      const [msgs, acc, hsm] = await Promise.all([
-        api.getMessages(),
-        api.getAccount(),
-        api.getHSMStatus(),
-      ]);
+      // Sequential IPC initialization to avoid Edge WebView2 message interleaving
+      const msgs = await api.getMessages();
       setMessages(msgs);
+      const acc = await api.getAccount();
       setAccount(acc);
+      const hsm = await api.getHSMStatus();
       setHsmStatus(hsm);
 
       // If no email exists in session, prompt sign in
       if (!acc.email) {
         setIsSignInOpen(true);
+      } else {
+        // Background live inbox synchronization with visual loading state
+        setSyncStatus('Checking for new messages in background...');
+        setIsRefreshing(true);
+        api.fetchInbox()
+          .then((liveMsgs) => {
+            if (liveMsgs && liveMsgs.length > 0) {
+              setMessages(liveMsgs);
+            }
+          })
+          .catch((err) => console.debug('Initial live inbox sync note:', err))
+          .finally(() => {
+            setIsRefreshing(false);
+            setSyncStatus(null);
+          });
       }
     } catch (e: any) {
       console.error('Failed to initialize QuMail state:', e);
@@ -97,6 +112,7 @@ export const App: React.FC = () => {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    setSyncStatus('Synchronizing inbox with mail server...');
     try {
       const msgs = await api.fetchInbox();
       const hsm = await api.getHSMStatus();
@@ -105,6 +121,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error('Failed to refresh data:', e);
     } finally {
+      setSyncStatus(null);
       setTimeout(() => setIsRefreshing(false), 400);
     }
   }, []);
@@ -172,19 +189,39 @@ export const App: React.FC = () => {
   }, []);
 
   const handleSend = useCallback(async (draft: Partial<EmailMessage>) => {
-    await api.sendMessage(draft);
+    const res = await api.sendMessage(draft);
+    if (!res.success) {
+      alert(res.message || 'Failed to dispatch email.');
+      return false;
+    }
     const updated = await api.getMessages();
     setMessages(updated);
+    return true;
   }, []);
 
   const handleSignIn = useCallback(async (email: string, displayName?: string, org?: string) => {
-    const acc = await api.loginAccount(email, displayName, org);
-    setAccount(acc);
-    const msgs = await api.fetchInbox();
-    setMessages(msgs);
+    setIsRefreshing(true);
+    setSyncStatus(`Connected as ${email}. Initializing post-quantum mailbox...`);
+    try {
+      const acc = await api.loginAccount(email, displayName, org);
+      setAccount(acc);
+      setSyncStatus('Fetching real messages from mail server...');
+      const msgs = await api.fetchInbox();
+      setMessages(msgs);
+    } catch (err: any) {
+      console.warn('Sign in inbox sync note:', err);
+    } finally {
+      setIsRefreshing(false);
+      setSyncStatus(null);
+    }
   }, []);
 
   const handleLogout = useCallback(async () => {
+    // Close compose modal and clear draft before switching accounts
+    setIsComposeOpen(false);
+    setComposeDefaults({ to: '', subject: '', body: '' });
+    setMessages([]);
+    setSelectedMessageId(null);
     await api.logoutAccount();
     setAccount(INITIAL_ACCOUNT);
     setIsSignInOpen(true);
@@ -192,7 +229,14 @@ export const App: React.FC = () => {
 
   const handleUpdateAccountEmail = useCallback(async (email: string) => {
     await api.updateAccountEmail(email);
-    setAccount((prev) => ({ ...prev, email }));
+    try {
+      const fullAcc = await api.getAccount();
+      setAccount(fullAcc);
+    } catch {
+      setAccount((prev) => ({ ...prev, email }));
+    }
+    const msgs = await api.fetchInbox();
+    setMessages(msgs);
   }, []);
 
   // Filter messages according to folder and search
@@ -280,6 +324,16 @@ export const App: React.FC = () => {
           >
             Retry Connection
           </button>
+        </div>
+      )}
+
+      {/* Background Inbox Synchronization Banner */}
+      {syncStatus && (
+        <div className="h-8 bg-emerald-500/10 dark:bg-emerald-950/40 border-b border-emerald-500/20 px-4 flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300 select-none animate-in fade-in duration-200">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="font-medium">{syncStatus}</span>
+          </div>
         </div>
       )}
 

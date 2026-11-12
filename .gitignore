@@ -22,6 +22,8 @@ secrets/
 !secrets/.gitkeep
 certs/
 .qumail_data/
+.wrangler/
+scratch/
 
 liboqs/
 

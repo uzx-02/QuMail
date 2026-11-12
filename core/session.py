@@ -2,16 +2,28 @@
 # This is the single object passed between modules to share live state.
 # Do not persist this to disk. Do not import crypto or transport here.
 
-from PyQt6.QtCore import QObject, pyqtSignal
-
 from core.config import TQR_DEFAULT
 
 
-class Session(QObject):
-    account_changed = pyqtSignal(str)
+class _EventSignal:
+    """Lightweight pure-Python signal replacement for legacy Qt event notifications."""
+    def __init__(self):
+        self._handlers = []
 
+    def connect(self, handler):
+        self._handlers.append(handler)
+
+    def emit(self, *args, **kwargs):
+        for h in self._handlers:
+            try:
+                h(*args, **kwargs)
+            except Exception:
+                pass
+
+
+class Session:
     def __init__(self) -> None:
-        super().__init__()
+        self.account_changed = _EventSignal()
         # --- Account ---
         self._active_account: str | None = None     # e.g. "user@gmail.com"
         self.provider: str | None = None            # "gmail" or "yahoo"

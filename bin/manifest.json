@@ -40,36 +40,6 @@
         "terminal_server_aware": true,
         "dll_characteristics_hex": "0xc160"
       }
-    },
-    "qumail-m3-provider": {
-      "binary": "qumail-m3-provider.exe",
-      "version": "0.1.0",
-      "purpose": "Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend",
-      "size_bytes": 8380928,
-      "sha256": "b94c95b3c84992124ec910b34e5f1860399c9c48302a3a2a7bf1c4a413566f51",
-      "pe_mitigations": {
-        "high_entropy_va_64bit_aslr": true,
-        "dynamic_base_aslr": true,
-        "nx_compat_dep": true,
-        "guard_cf_control_flow_guard": true,
-        "terminal_server_aware": true,
-        "dll_characteristics_hex": "0xc160"
-      }
-    },
-    "qumail-m5-provider": {
-      "binary": "qumail-m5-provider.exe",
-      "version": "0.1.0",
-      "purpose": "RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification",
-      "size_bytes": 10682368,
-      "sha256": "62c5344d8a2392e2d8656ea9bdb9704698320efdb936645b743048a46d83d1a0",
-      "pe_mitigations": {
-        "high_entropy_va_64bit_aslr": true,
-        "dynamic_base_aslr": true,
-        "nx_compat_dep": true,
-        "guard_cf_control_flow_guard": true,
-        "terminal_server_aware": true,
-        "dll_characteristics_hex": "0xc160"
-      }
     }
   }
 }

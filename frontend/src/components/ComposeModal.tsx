@@ -6,7 +6,7 @@ import { EmailMessage, Attachment } from '../types';
 interface ComposeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSend: (msg: Partial<EmailMessage>) => Promise<void>;
+  onSend: (msg: Partial<EmailMessage>) => Promise<boolean | void>;
   initialTo?: string;
   initialSubject?: string;
   initialBody?: string;
@@ -24,6 +24,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [securityMode, setSecurityMode] = useState<'pq' | 'weblink' | 'standard'>('pq');
+  const [requireEmailOtp, setRequireEmailOtp] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -33,24 +34,28 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!to.trim()) {
-      alert('Please enter at least one recipient.');
+    const cleanRecipients = to.split(',').map((s) => s.trim()).filter(Boolean);
+    if (cleanRecipients.length === 0) {
+      alert('Please enter at least one recipient email address.');
       return;
     }
     setIsSending(true);
     try {
-      await onSend({
-        recipients: to.split(',').map((s) => s.trim()),
+      const ok = await onSend({
+        recipients: cleanRecipients,
         subject: subject.trim() || '(No Subject)',
         body: body.trim(),
         attachments,
         securityMode,
+        requireEmailOtp,
       });
-      setTo('');
-      setSubject('');
-      setBody('');
-      setAttachments([]);
-      onClose();
+      if (ok !== false) {
+        setTo('');
+        setSubject('');
+        setBody('');
+        setAttachments([]);
+        onClose();
+      }
     } finally {
       setIsSending(false);
     }
@@ -145,6 +150,25 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                 <span>Zero Plaintext Leak</span>
               </div>
             </div>
+
+            {/* WebLink Email Verification Toggle */}
+            {securityMode === 'weblink' && (
+              <div className="px-4 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-[#E0E3E7] dark:border-[#1F2C47] flex items-center justify-between text-xs">
+                <span className="text-emerald-800 dark:text-emerald-300 font-medium flex items-center space-x-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Recipient Email Verification (6-digit OTP)</span>
+                </span>
+                <label className="flex items-center space-x-1.5 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
+                  <input
+                    type="checkbox"
+                    checked={requireEmailOtp}
+                    onChange={(e) => setRequireEmailOtp(e.target.checked)}
+                    className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
+                  />
+                  <span>Required</span>
+                </label>
+              </div>
+            )}
 
             {/* Recipients Field */}
             <div className="flex items-center px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60">

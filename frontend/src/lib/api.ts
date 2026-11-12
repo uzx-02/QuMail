@@ -1,5 +1,5 @@
 import { EmailMessage, HSMStatus, AccountSession } from '../types';
-import { INITIAL_ACCOUNT, INITIAL_HSM } from '../mockData';
+import { INITIAL_ACCOUNT, INITIAL_HSM } from '../initialState';
 
 // Extend Window interface for pywebview
 declare global {
@@ -291,14 +291,7 @@ class ApiService {
         console.warn('Pywebview loginAccount failed:', e);
       }
     }
-    this.account = {
-      email: trimmed,
-      displayName: displayName || trimmed.split('@')[0],
-      provider: organization || 'QuMail Secure Corporate',
-      pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
-      pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
-      isUnlocked: true,
-    };
+    this.account = { ...INITIAL_ACCOUNT, isUnlocked: false };
     return { ...this.account };
   }
 
@@ -465,8 +458,7 @@ class ApiService {
         return { success: false, message: e?.message || 'Failed to unlock vault' };
       }
     }
-    this.account = { ...this.account, isUnlocked: true };
-    return { success: true };
+    return { success: false, message: 'QuMail desktop bridge is not connected.' };
   }
 
   async logout(): Promise<boolean> {

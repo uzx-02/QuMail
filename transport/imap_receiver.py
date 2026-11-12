@@ -14,9 +14,17 @@ import ssl
 from dataclasses  import dataclass
 from email.message import Message
 
-from core.config            import APP_NAME
-from transport.oauth2_gmail import get_access_token as _gmail_token, GmailAuthError
-from transport.oauth2_yahoo import get_access_token as _yahoo_token, YahooAuthError
+from core.config import APP_NAME
+from transport.oauth2_gmail import get_access_token as get_gmail_token, GmailAuthError
+from transport.oauth2_yahoo import get_access_token as get_yahoo_token, YahooAuthError
+
+class IMAPReceiverError(Exception):
+    """Raised when the IMAP receive operation fails for any reason."""
+    pass
+
+class UnknownProviderError(IMAPReceiverError):
+    """Raised when the account domain does not match any supported provider."""
+    pass
 
 
 # -------------------------------------------------------------------------
@@ -143,9 +151,9 @@ def _get_imap_credentials(provider: str, account_email: str) -> tuple[str, str]:
     """
     try:
         if provider == "gmail":
-            return _GMAIL_IMAP_HOST, _gmail_token()
+            return _GMAIL_IMAP_HOST, get_gmail_token()
         else:
-            return _YAHOO_IMAP_HOST, _yahoo_token()
+            return _YAHOO_IMAP_HOST, get_yahoo_token()
     except (GmailAuthError, YahooAuthError) as exc:
         raise IMAPReceiverError(
             f"OAuth2 token acquisition failed for '{account_email}': {exc}"
@@ -251,12 +259,13 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
     from transport.custom_mailbox import load_custom_account
     custom = load_custom_account(account_email)
 
+    ssl_ctx = ssl.create_default_context()
+
     if custom:
         imap_host = custom.get("imapHost") or "imap.gmail.com"
         imap_port = custom.get("imapPort") or 993
         password = custom.get("password", "")
         try:
-            ssl_ctx = ssl.create_default_context()
             imap = imaplib.IMAP4_SSL(
                 imap_host,
                 int(imap_port),
@@ -267,9 +276,23 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
         except Exception as exc:
             raise IMAPReceiverError(f"Custom IMAP login failed for '{account_email}' on '{imap_host}': {exc}") from exc
     else:
-        provider           = _detect_provider(account_email)
-        imap_host, token   = _get_imap_credentials(provider, account_email)
-        imap               = _open_imap_connection(imap_host, account_email, token)
+        # Google OAuth SASL XOAUTH2 authentication
+        provider = _detect_provider(account_email)
+        imap_host, access_token = _get_imap_credentials(provider, account_email)
+        xoauth2_bytes = _build_xoauth2_string(account_email, access_token)
+
+        try:
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                _IMAP_PORT,
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.authenticate("XOAUTH2", lambda _: base64.b64decode(xoauth2_bytes))
+        except (GmailAuthError, YahooAuthError) as auth_err:
+            raise IMAPReceiverError(f"OAuth authentication failed for '{account_email}': {auth_err}") from auth_err
+        except Exception as exc:
+            raise IMAPReceiverError(f"IMAP connection failed for '{account_email}' on '{imap_host}': {exc}") from exc
 
     try:
         with imap:
@@ -346,12 +369,13 @@ def fetch_message(account_email: str, uid: str) -> InboxMessage:
     from transport.custom_mailbox import load_custom_account
     custom = load_custom_account(account_email)
 
+    ssl_ctx = ssl.create_default_context()
+
     if custom:
         imap_host = custom.get("imapHost") or "imap.gmail.com"
         imap_port = custom.get("imapPort") or 993
         password = custom.get("password", "")
         try:
-            ssl_ctx = ssl.create_default_context()
             imap = imaplib.IMAP4_SSL(
                 imap_host,
                 int(imap_port),
@@ -362,9 +386,23 @@ def fetch_message(account_email: str, uid: str) -> InboxMessage:
         except Exception as exc:
             raise IMAPReceiverError(f"Custom IMAP login failed for '{account_email}' on '{imap_host}': {exc}") from exc
     else:
-        provider           = _detect_provider(account_email)
-        imap_host, token   = _get_imap_credentials(provider, account_email)
-        imap               = _open_imap_connection(imap_host, account_email, token)
+        # Google OAuth SASL XOAUTH2 authentication
+        provider = _detect_provider(account_email)
+        imap_host, access_token = _get_imap_credentials(provider, account_email)
+        xoauth2_bytes = _build_xoauth2_string(account_email, access_token)
+
+        try:
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                _IMAP_PORT,
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.authenticate("XOAUTH2", lambda _: base64.b64decode(xoauth2_bytes))
+        except (GmailAuthError, YahooAuthError) as auth_err:
+            raise IMAPReceiverError(f"OAuth authentication failed for '{account_email}': {auth_err}") from auth_err
+        except Exception as exc:
+            raise IMAPReceiverError(f"IMAP connection failed for '{account_email}' on '{imap_host}': {exc}") from exc
 
     try:
         with imap:

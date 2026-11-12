@@ -131,6 +131,13 @@ export const MessageList: React.FC<MessageListProps> = ({
         />
       </div>
 
+      {/* Synchronization Progress Line */}
+      {isRefreshing && (
+        <div className="h-0.5 w-full bg-blue-100 dark:bg-blue-950 overflow-hidden shrink-0">
+          <div className="h-full bg-blue-600 dark:bg-blue-400 animate-pulse w-full" />
+        </div>
+      )}
+
       {/* 3. Messages List */}
       <div className="flex-1 overflow-y-auto divide-y divide-[#F2F2F2] dark:divide-[#1F2C47]/60">
         {filteredMessages.length === 0 ? (
@@ -220,6 +227,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                           ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300'
                           : msg.indicator.badgeLevel === 'CAUTION'
                           ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300'
+                          : msg.indicator.badgeLevel === 'NEUTRAL'
+                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                           : 'bg-red-100 dark:bg-red-950/70 text-red-800 dark:text-red-300'
                       }`}
                     >
@@ -227,6 +236,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                         <ShieldCheck className="w-3 h-3 text-emerald-600" />
                       ) : msg.indicator.badgeLevel === 'CAUTION' ? (
                         <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      ) : msg.indicator.badgeLevel === 'NEUTRAL' ? (
+                        <Shield className="w-3 h-3 text-slate-500 dark:text-slate-400" />
                       ) : (
                         <ShieldAlert className="w-3 h-3 text-red-600" />
                       )}
@@ -235,6 +246,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                           ? 'Verified PQC'
                           : msg.indicator.badgeLevel === 'CAUTION'
                           ? 'Encrypted'
+                          : msg.indicator.badgeLevel === 'NEUTRAL'
+                          ? 'Shielded'
                           : 'Alert'}
                       </span>
                     </div>

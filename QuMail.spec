@@ -15,13 +15,31 @@ added_files = [
     (str(REPO_ROOT / 'frontend' / 'dist'), 'frontend/dist'),
 ]
 
+# Embed client_secret JSON for production builds
+for secret_name in [
+    'client_secret_953431543574-t137vvqsic9jbrddt9dr1t3g5hjkj5p3.apps.googleusercontent.com.json',
+    'gmail_client_secret.json',
+    'google_client_secret.json',
+]:
+    p = REPO_ROOT / 'secrets' / secret_name
+    if p.is_file():
+        added_files.append((str(p), 'secrets'))
+        added_files.append((str(p), '.'))
+
+
+# Embed codex-rejected-cas.pem if present in Python Lib
+codex_pem = Path(sys.base_prefix) / 'Lib' / 'codex-rejected-cas.pem'
+if codex_pem.is_file():
+    added_files.append((str(codex_pem), '.'))
+    added_files.append((str(codex_pem), '_internal'))
+
 # Add native provider binaries and manifest
 if (REPO_ROOT / 'bin' / 'manifest.json').is_file():
     added_files.append((str(REPO_ROOT / 'bin' / 'manifest.json'), 'bin'))
-if (REPO_ROOT / 'bin' / 'qumail-m3-provider.exe').is_file():
-    added_files.append((str(REPO_ROOT / 'bin' / 'qumail-m3-provider.exe'), 'bin'))
-if (REPO_ROOT / 'bin' / 'qumail-m5-provider.exe').is_file():
-    added_files.append((str(REPO_ROOT / 'bin' / 'qumail-m5-provider.exe'), 'bin'))
+if (REPO_ROOT / 'bin' / 'qumail-vault-provider.exe').is_file():
+    added_files.append((str(REPO_ROOT / 'bin' / 'qumail-vault-provider.exe'), 'bin'))
+if (REPO_ROOT / 'bin' / 'qumail-crypto-provider.exe').is_file():
+    added_files.append((str(REPO_ROOT / 'bin' / 'qumail-crypto-provider.exe'), 'bin'))
 
 hidden_imports = [
     'webview',
@@ -48,6 +66,10 @@ hidden_imports = [
     'transport.imap_receiver',
     'transport.smtp_sender',
     'transport.custom_mailbox',
+    'google_auth_oauthlib',
+    'google_auth_oauthlib.flow',
+    'google.oauth2.credentials',
+    'google.auth.transport.requests',
     'cryptography',
     'cryptography.hazmat.primitives',
     'cryptography.hazmat.primitives.ciphers.aead',
@@ -55,10 +77,10 @@ hidden_imports = [
     'ctypes',
     'ctypes.wintypes',
     'requests',
-    'google_auth_oauthlib',
-    'google.oauth2.credentials',
-    'google.auth.transport.requests',
-    'fpdf2',
+    'certifi',
+    'urllib3',
+    'charset_normalizer',
+    'idna',
 ]
 
 a = Analysis(

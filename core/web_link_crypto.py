@@ -31,7 +31,7 @@ def create_secure_web_link_package(
     recipient_email: str,
     sender_signing_key: ed25519.Ed25519PrivateKey,
     sender_cert_armor: str = "",
-    portal_base_url: str = "https://portal.qumail.invalid",
+    portal_base_url: str = "",
     validity_days: int = 7,
 ) -> dict[str, Any]:
     """
@@ -42,6 +42,10 @@ def create_secure_web_link_package(
       - 'message_id': Unique message identifier
       - 'key_hex': Ephemeral key hex (kept local to sender)
     """
+    if not portal_base_url:
+        from core.config import get_directory_server_url
+        portal_base_url = get_directory_server_url()
+
     msg_id = str(uuid.uuid4())
     k_msg = secrets.token_bytes(32)  # 256-bit AES key
     iv = secrets.token_bytes(12)     # 96-bit GCM nonce
@@ -80,7 +84,7 @@ def create_secure_web_link_package(
     }
 
     # Access URL: RFC 3986 fragment holds the secret key
-    access_url = f"{portal_base_url.rstrip('/')}/view/{msg_id}#{k_msg.hex()}"
+    access_url = f"{portal_base_url.rstrip('/')}/v/{msg_id}#key={k_msg.hex()}"
 
     return {
         "blob_to_upload": blob_to_upload,

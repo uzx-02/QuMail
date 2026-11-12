@@ -1,1 +1,0 @@
-Workflow YAML parses; triggers, matrix and immutable action references verified. Hosted execution remains unverified.

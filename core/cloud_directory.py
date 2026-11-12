@@ -153,8 +153,110 @@ class CloudDirectoryClient:
     ):
         self.base_url = (base_url or get_directory_server_url()).rstrip("/")
         self.session_token = session_token or os.environ.get("QUMAIL_SESSION_TOKEN", "")
+        if not self.session_token:
+            try:
+                from transport.oauth2_gmail import _load_credentials
+                _, token_meta = _load_credentials()
+                if token_meta and token_meta.get("directory_session_token"):
+                    self.session_token = token_meta["directory_session_token"]
+            except Exception:
+                pass
         self.timeout = http_timeout
         self.pinning_store = ContactPinningStore()
+
+    def _ensure_session_token(self) -> None:
+        """Ensure a valid session token exists by auto-enrolling if Google id_token is sealed."""
+        if self.session_token:
+            return
+        try:
+            from transport.oauth2_gmail import _load_credentials, _save_credentials
+            creds, token_meta = _load_credentials()
+            id_token = getattr(creds, "id_token", None) or (token_meta or {}).get("id_token")
+            if not id_token and creds and creds.refresh_token:
+                try:
+                    from google.auth.transport.requests import Request
+                    creds.refresh(Request())
+                    id_token = getattr(creds, "id_token", None)
+                    if id_token and token_meta is not None:
+                        token_meta["id_token"] = id_token
+                        _save_credentials(creds, token_meta)
+                except Exception as ref_err:
+                    logger.debug("OIDC token refresh note: %s", ref_err)
+
+            if not id_token:
+                return
+
+            user_email = (token_meta or {}).get("email", "")
+
+            from core.config import get_vault_path
+            from core.provider_resolver import resolve_provider
+            from core.identity_service import IdentityService
+
+            def _to_bytes(v: Any) -> bytes:
+                if isinstance(v, str):
+                    try:
+                        return bytes.fromhex(v)
+                    except ValueError:
+                        return v.encode("utf-8")
+                elif isinstance(v, (list, tuple)):
+                    return bytes(v)
+                elif isinstance(v, bytes):
+                    return v
+                return b""
+
+            helper = resolve_provider("qumail-vault-provider")
+            v_service = IdentityService.configured(get_vault_path(), helper)
+            v_service.unlock(create=False)
+            vault = v_service.vault
+            summaries = vault.summaries() if vault else []
+            if summaries:
+                # Prefer entry matching user_email if available
+                clean_email = user_email.strip().lower()
+                chosen = summaries[0]
+                for s in summaries:
+                    if len(s) > 2 and s[2].strip().lower() == clean_email:
+                        chosen = s
+                        break
+
+                ctx = chosen[0]
+                h_key = chosen[1]
+                data = vault._read(ctx)
+                key_rec = vault.key(data, ctx, h_key, active=True)
+
+                device_id = str(ctx.device.value)
+                device_label = f"Windows Workstation ({user_email.split('@')[0]})"
+                kem_bytes = _to_bytes(key_rec.get("encryption", b""))
+                dsa_bytes = _to_bytes(key_rec.get("signing", b""))
+                raw_pub = _to_bytes(key_rec.get("public", b""))
+
+                try:
+                    srv_nonce = self.get_challenge()
+                except Exception:
+                    srv_nonce = secrets.token_hex(16)
+
+                kem_b64 = base64.b64encode(kem_bytes).decode("ascii")
+                pop_sig = base64.b64encode(
+                    hashlib.sha256(f"{device_id}:{user_email}:{kem_b64}:{srv_nonce}".encode("utf-8")).digest()
+                ).decode("ascii")
+
+                res = self.register_google(
+                    id_token=id_token,
+                    device_id=device_id,
+                    device_label=device_label,
+                    kem_public_bytes=kem_bytes,
+                    dsa_public_bytes=dsa_bytes,
+                    pop_signature_bytes=pop_sig,
+                    server_nonce=srv_nonce,
+                    raw_public_bytes=raw_pub,
+                )
+                if res.get("session_token"):
+                    self.session_token = res["session_token"]
+                    if token_meta is not None and creds is not None:
+                        token_meta["directory_session_token"] = res["session_token"]
+                        _save_credentials(creds, token_meta)
+                    logger.info("Auto-registered directory session token for %s", user_email)
+        except Exception as exc:
+            logger.debug("Could not auto-register session token: %s", exc)
 
     def _post(self, path: str, payload: Dict[str, Any], require_auth: bool = False) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
@@ -163,15 +265,68 @@ class CloudDirectoryClient:
             "Content-Type": "application/json",
             "User-Agent": "QuMail-Desktop/1.0",
         }
+        if require_auth and not self.session_token:
+            self._ensure_session_token()
+        if require_auth and not self.session_token:
+            try:
+                from transport.oauth2_gmail import _load_credentials
+                creds, meta = _load_credentials()
+                id_token = getattr(creds, "id_token", None) or (meta or {}).get("id_token")
+                if id_token:
+                    self.session_token = id_token
+            except Exception:
+                pass
         if require_auth and self.session_token:
             headers["Authorization"] = f"Bearer {self.session_token}"
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            import ssl
+            ctx = ssl.create_default_context()
+            try:
+                resp_cm = urllib.request.urlopen(req, context=ctx, timeout=self.timeout)
+            except TypeError:
+                resp_cm = urllib.request.urlopen(req, timeout=self.timeout)
+
+            with resp_cm as resp:
                 raw = resp.read().decode("utf-8")
                 return json.loads(raw)
         except urllib.error.HTTPError as err:
+            if err.code == 401 and require_auth:
+                logger.info("Directory session token rejected (401). Forcing token refresh...")
+                self.session_token = ""
+                try:
+                    from transport.oauth2_gmail import _load_credentials, _save_credentials
+                    from google.auth.transport.requests import Request
+                    creds, meta = _load_credentials()
+                    if creds and creds.refresh_token:
+                        creds.refresh(Request())
+                        if getattr(creds, "id_token", None):
+                            self.session_token = creds.id_token
+                            if meta is not None:
+                                meta["id_token"] = creds.id_token
+                                _save_credentials(creds, meta)
+                except Exception as ref_err:
+                    logger.debug("Google token refresh note on 401: %s", ref_err)
+
+                if not self.session_token:
+                    self._ensure_session_token()
+
+                if self.session_token:
+                    headers["Authorization"] = f"Bearer {self.session_token}"
+                    retry_req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+                    try:
+                        import ssl
+                        retry_ctx = ssl.create_default_context()
+                        try:
+                            resp_cm = urllib.request.urlopen(retry_req, context=retry_ctx, timeout=self.timeout)
+                        except TypeError:
+                            resp_cm = urllib.request.urlopen(retry_req, timeout=self.timeout)
+                        with resp_cm as resp:
+                            return json.loads(resp.read().decode("utf-8"))
+                    except Exception as retry_err:
+                        logger.error("Retry after session refresh failed: %s", retry_err)
+
             err_body = err.read().decode("utf-8", errors="replace")
             try:
                 parsed = json.loads(err_body)
@@ -194,19 +349,30 @@ class CloudDirectoryClient:
         device_label: str,
         kem_public_bytes: bytes,
         dsa_public_bytes: bytes,
-        pop_signature_bytes: bytes,
+        pop_signature_bytes: bytes | str,
         server_nonce: str,
+        raw_public_bytes: Optional[bytes] = None,
     ) -> Dict[str, Any]:
         """Enroll device using Google OIDC ID token."""
+        cert_bundle = {
+            "kem_public_base64": base64.b64encode(kem_public_bytes).decode("ascii") if isinstance(kem_public_bytes, bytes) else str(kem_public_bytes),
+            "dsa_public_base64": base64.b64encode(dsa_public_bytes).decode("ascii") if isinstance(dsa_public_bytes, bytes) else str(dsa_public_bytes),
+        }
+        if raw_public_bytes:
+            cert_bundle["raw_public_base64"] = base64.b64encode(raw_public_bytes).decode("ascii")
+
+        pop_sig_str = (
+            base64.b64encode(pop_signature_bytes).decode("ascii")
+            if isinstance(pop_signature_bytes, bytes)
+            else str(pop_signature_bytes)
+        )
+
         payload = {
             "id_token": id_token,
             "device_id": device_id,
             "device_label": device_label,
-            "public_key_bundle": {
-                "kem_public_base64": base64.b64encode(kem_public_bytes).decode("ascii"),
-                "dsa_public_base64": base64.b64encode(dsa_public_bytes).decode("ascii"),
-            },
-            "pop_signature": base64.b64encode(pop_signature_bytes).decode("ascii"),
+            "public_key_bundle": cert_bundle,
+            "pop_signature": pop_sig_str,
             "server_nonce": server_nonce,
         }
         res = self._post("/api/v1/auth/google", payload)
@@ -286,6 +452,7 @@ class CloudDirectoryClient:
         sender_email: str,
         recipient_email: str,
         passcode: Optional[str] = None,
+        require_email_otp: bool = True,
         max_views: int = 5,
         burn_after_read: bool = False,
         ttl_days: int = 7,
@@ -294,7 +461,12 @@ class CloudDirectoryClient:
         Generate Ephemeral WebLink (Pillar 2).
         Encrypts payload client-side with AES-256-GCM.
         Generates secret URL fragment (#key=...) that is never transmitted to Cloudflare.
+        By default, enables zero-friction Email OTP gating so only the intended recipient
+        can reveal the message.  Set require_email_otp=False to disable (direct-reveal mode).
         """
+        if not self.session_token:
+            self._ensure_session_token()
+
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
         raw_aes_key = secrets.token_bytes(32)
@@ -304,13 +476,13 @@ class CloudDirectoryClient:
         passcode_salt_hex = ""
         passcode_tag = ""
 
-        # Derive encryption key if passcode is configured
+        # Derive encryption key if passcode is configured (Advanced Security mode)
         if has_passcode:
             salt_bytes = secrets.token_bytes(16)
             passcode_salt_hex = salt_bytes.hex()
-            # K = HMAC-SHA256(raw_key, passcode)
+            # K_encrypted = HMAC-SHA256(raw_key, passcode)
             enc_key = hmac_bytes(raw_aes_key, passcode.strip().encode("utf-8"))
-            # Tag for server gate authentication
+            # Tag for server-side gate: SHA-256(passcode + salt)
             passcode_tag = hashlib.sha256(passcode.strip().encode("utf-8") + salt_bytes).hexdigest()
         else:
             enc_key = raw_aes_key
@@ -320,7 +492,20 @@ class CloudDirectoryClient:
         payload_bytes = plaintext_body.encode("utf-8")
         ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
 
-        payload = {
+        # Zero-friction Email OTP gating: SHA-256(normalizedEmail + salt) stored server-side.
+        # The plaintext recipient email is never stored in Cloudflare D1.
+        # Normalization MUST match the Worker's normalizeEmail() logic exactly.
+        recipient_email_hash: Optional[str] = None
+        recipient_email_salt: Optional[str] = None
+        if require_email_otp and recipient_email:
+            norm_email = _normalize_email_like_worker(recipient_email)
+            salt_bytes16 = secrets.token_bytes(16)
+            recipient_email_salt = salt_bytes16.hex()
+            recipient_email_hash = hashlib.sha256(
+                (norm_email + recipient_email_salt).encode("utf-8")
+            ).hexdigest()
+
+        payload: Dict[str, Any] = {
             "encrypted_payload": base64.b64encode(ciphertext).decode("ascii"),
             "iv_hex": iv.hex(),
             "has_passcode": has_passcode,
@@ -329,6 +514,8 @@ class CloudDirectoryClient:
             "max_views": max_views,
             "burn_after_read": burn_after_read,
             "ttl_days": ttl_days,
+            "recipient_email_hash": recipient_email_hash,
+            "recipient_email_salt": recipient_email_salt,
         }
 
         res = self._post("/api/v1/weblinks/create", payload, require_auth=True)
@@ -336,12 +523,14 @@ class CloudDirectoryClient:
         access_url = res.get("access_url", f"{self.base_url}/v/{link_id}")
 
         # The decryption key is appended strictly to the URL fragment (#)
+        # and is never transmitted to any server per RFC 3986 §3.5.
         full_url = f"{access_url}#key={raw_aes_key.hex()}"
 
         return {
             "link_id": link_id,
             "access_url": full_url,
             "has_passcode": has_passcode,
+            "has_email_otp": require_email_otp and bool(recipient_email_hash),
             "expires_at": res.get("expires_at"),
             "burn_after_read": burn_after_read,
         }
@@ -350,3 +539,24 @@ class CloudDirectoryClient:
 def hmac_bytes(key: bytes, msg: bytes) -> bytes:
     import hmac
     return hmac.new(key, msg, hashlib.sha256).digest()
+
+
+def _normalize_email_like_worker(raw_email: str) -> str:
+    """
+    Mirror the Cloudflare Worker's normalizeEmail() function exactly.
+    Gmail: strip dots from local part and remove +tags, normalize googlemail.com -> gmail.com.
+    Non-Gmail: lowercase only, preserve dots and +tags.
+    """
+    trimmed = raw_email.strip().lower()
+    at_idx = trimmed.find("@")
+    if at_idx == -1:
+        return trimmed
+    local = trimmed[:at_idx]
+    domain = trimmed[at_idx + 1:]
+    if domain == "googlemail.com":
+        domain = "gmail.com"
+    if domain == "gmail.com":
+        no_plus = local.split("+")[0]
+        no_dots = no_plus.replace(".", "")
+        return f"{no_dots}@{domain}"
+    return f"{local}@{domain}"

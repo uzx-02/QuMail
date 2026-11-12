@@ -58,15 +58,8 @@ class PrivacyFilter(logging.Filter):
 
 def get_default_log_dir() -> Path:
     """Return the platform-appropriate log directory for QuMail."""
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA")
-        if base:
-            log_dir = Path(base) / "QuMail" / "logs"
-        else:
-            log_dir = Path.home() / "AppData" / "Local" / "QuMail" / "logs"
-    else:
-        log_dir = Path.home() / ".qumail" / "logs"
-    return log_dir
+    from core.config import get_user_data_dir
+    return get_user_data_dir() / "logs"
 
 
 _CONFIGURED = False

@@ -23,6 +23,6 @@ MAX_WEBLINK_SIZE_BYTES = 262144 # 256 KB
 
 # Secrets must be configured via wrangler secret put:
 # - DIRECTORY_PEPPER (High-entropy 256-bit hex, CANNOT BE ROTATED)
-# - RESEND_API_KEY (Resend email delivery key)
+# - BREVO_API_KEY (Brevo email delivery key)
 # - TURNSTILE_SECRET_KEY (Cloudflare Turnstile secret)
 # - GOOGLE_CLIENT_ID (Google OAuth Client ID for OIDC verification)

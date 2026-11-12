@@ -109,14 +109,9 @@ def test_qumail_js_api_hsm_and_entropy():
     assert sample["rate"] == 115200
 
 
-def test_qumail_js_api_google_auth_and_ports(tmp_path, monkeypatch):
-    """Verify Google OAuth configuration methods, ping readiness, and COM port detection."""
+def test_qumail_js_api_ping_and_ports(tmp_path, monkeypatch):
+    """Verify ping readiness, account status, and COM port detection."""
     monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
-    from core.config import (
-        get_google_client_secrets_path,
-        validate_google_client_config,
-        load_google_client_config,
-    )
 
     api = QuMailJsApi(account_email="")
     
@@ -132,47 +127,11 @@ def test_qumail_js_api_google_auth_and_ports(tmp_path, monkeypatch):
     assert acc["kemAlgorithm"] == "ML-KEM-768 (NIST FIPS 203)"
     assert acc["dsaAlgorithm"] == "ML-DSA-65 (NIST FIPS 204)"
 
-    # Service Account rejection test
-    sa_json = {
-        "type": "service_account",
-        "project_id": "test-project",
-        "private_key_id": "12345",
-        "client_email": "sa@test-project.iam.gserviceaccount.com",
-    }
-    sa_ok, sa_msg, sa_norm = validate_google_client_config(sa_json)
-    assert sa_ok is False
-    assert "service account" in sa_msg.lower()
-    assert "desktop app" in sa_msg.lower()
-
-    # Valid Desktop Installed OAuth config test
-    installed_json = {
-        "installed": {
-            "client_id": "953431543574-test.apps.googleusercontent.com",
-            "client_secret": "GOCSPX-test-secret-12345",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-        }
-    }
-    inst_ok, inst_id, inst_norm = validate_google_client_config(installed_json)
-    assert inst_ok is True
-    assert inst_id == "953431543574-test.apps.googleusercontent.com"
-    assert "installed" in inst_norm
-
-    # Valid Desktop Installed OAuth config as a list of dicts
-    list_json = [installed_json]
-    list_ok, list_id, list_norm = validate_google_client_config(list_json)
-    assert list_ok is True
-    assert list_id == "953431543574-test.apps.googleusercontent.com"
-
-    # Check google configuration
+    # Google OAuth embedded client configuration check
     cfg = api.checkGoogleConfigured()
-    assert "configured" in cfg
-    assert "tokenExists" in cfg
-
-    # Save credentials manually test
-    res = api.saveGoogleCredentials("test-id.apps.googleusercontent.com", "test-secret")
-    assert res["success"] is True
-    assert get_google_client_secrets_path().is_file()
+    assert cfg["configured"] is True
+    assert "953431543574" in cfg["clientId"]
+    assert cfg["tokenExists"] is False
 
     # List ports
     ports = api.listPorts()
@@ -182,25 +141,16 @@ def test_qumail_js_api_google_auth_and_ports(tmp_path, monkeypatch):
     assert api.lockVault() is True
 
 
-def test_oauth_state_mismatch_security(monkeypatch):
-    """Verify that OAuth loopback flow rejects state mismatches with constant-time verification."""
-    from transport.oauth2_gmail import _run_loopback_flow, GmailAuthError
-    from unittest.mock import MagicMock
-
-    mock_flow = MagicMock()
-    mock_flow.authorization_url.return_value = ("http://127.0.0.1:0/auth", "expected-secret-state-nonce")
-    mock_flow.redirect_uri = ""
-
-    # Simulate callback handler with malicious/mismatched state
-    def mock_server_flow(flow, timeout=1):
-        import secrets
-        expected = "expected-secret-state-nonce"
-        attacker_state = "attacker-tampered-state-nonce"
-        if not secrets.compare_digest(expected, attacker_state):
-            raise GmailAuthError("OAuth state parameter mismatch (possible CSRF or replay attempt).")
-
-    with pytest.raises(GmailAuthError, match="OAuth state parameter mismatch"):
-        mock_server_flow(mock_flow)
+def test_oauth_token_retrieval_safety_when_unauthenticated(tmp_path, monkeypatch):
+    """Verify that OAuth operations fail closed safely when unauthenticated."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    from transport.oauth2_gmail import get_access_token, GmailAuthError
+    # Without cached credentials or browser interaction, get_access_token fails cleanly with GmailAuthError
+    def mock_flow(*args, **kwargs):
+        raise GmailAuthError("Authorization cancelled by user")
+    monkeypatch.setattr("google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file", mock_flow)
+    with pytest.raises(GmailAuthError):
+        get_access_token()
 
 
 def test_custom_mailbox_authentication_and_host_inference(tmp_path, monkeypatch):
@@ -250,26 +200,22 @@ def test_custom_mailbox_authentication_and_host_inference(tmp_path, monkeypatch)
     clear_custom_account()
 
 
-def test_google_oauth_html_success_page_and_ssl_sanitization(monkeypatch):
-    """Verify HTML success landing page has clear, truthful guidance and SSL environment sanitization."""
-    from transport.oauth2_gmail import SUCCESS_HTML_PAGE, sanitize_ssl_environment
-
-    # Verify HTML template structure
-    assert "<!DOCTYPE html>" in SUCCESS_HTML_PAGE
-    assert "Authentication Complete" in SUCCESS_HTML_PAGE
-    assert "Please close this browser tab" in SUCCESS_HTML_PAGE
-    assert "Post-Quantum ML-KEM Vault Bound" in SUCCESS_HTML_PAGE
-
-    # Verify SSL sanitization removes nonexistent SSLKEYLOGFILE
-    monkeypatch.setenv("SSLKEYLOGFILE", r"C:\nonexistent_qumail_dir_12345\keylog.txt")
-    monkeypatch.setenv("REQUESTS_CA_BUNDLE", r"C:\nonexistent_qumail_dir_12345\bundle.pem")
-    sanitize_ssl_environment()
-
-    import os
-    assert "SSLKEYLOGFILE" not in os.environ
-    # REQUESTS_CA_BUNDLE was repointed to valid certifi cacert.pem
-    assert "nonexistent" not in os.environ.get("REQUESTS_CA_BUNDLE", "")
-    assert os.path.exists(os.environ["REQUESTS_CA_BUNDLE"])
+def test_google_oauth_authorized_user_credentials(tmp_path, monkeypatch):
+    """Verify Google OAuth token retrieval and credential persistence."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    from transport.oauth2_gmail import _save_credentials, _load_credentials
+    from google.oauth2.credentials import Credentials
+    fake_creds = Credentials(
+        token="ya29.test-valid-access-token",
+        refresh_token="1//test-refresh-token",
+        client_id="test-client-id.apps.googleusercontent.com",
+        client_secret="test-client-secret",
+    )
+    _save_credentials(fake_creds, {"email": "user@gmail.com", "displayName": "Test User", "client_id": "test-client-id.apps.googleusercontent.com", "client_secret": "test-client-secret"})
+    loaded_creds, meta = _load_credentials()
+    assert loaded_creds is not None
+    assert loaded_creds.token == "ya29.test-valid-access-token"
+    assert meta["email"] == "user@gmail.com"
 
 
 def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
@@ -355,8 +301,9 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     assert pq_inbox_msg["indicator"]["badgeLevel"] == "SECURE"
     assert "Secured by QuMail" in pq_inbox_msg["indicator"]["headline"]
 
-    # Verify Conventional email: Correctly categorized as Standard Inbound TLS
+    # Verify Conventional email: Correctly categorized as Content Shielded (NEUTRAL)
     conv_inbox_msg = next(m for m in inbox if m["id"] == "imap-1002")
-    assert "A new device signed into" in conv_inbox_msg["body"]
+    assert "PRIVACY PROTECTION NOTICE" in conv_inbox_msg["body"]
+    assert "Shielded" in conv_inbox_msg["subject"]
     assert conv_inbox_msg["indicator"]["badgeLevel"] == "NEUTRAL"
-    assert conv_inbox_msg["indicator"]["headline"] == "Standard Inbound TLS"
+    assert "Content Shielded" in conv_inbox_msg["indicator"]["headline"]

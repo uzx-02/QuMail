@@ -20,10 +20,40 @@ from typing import Any, Dict, Optional, Tuple
 
 from cryptography.fernet import Fernet
 
-from core.config import CUSTOM_ACCOUNT_PATH
-from transport.oauth2_gmail import _get_fernet, _ensure_secret_dir, _secure_file_permissions, sanitize_ssl_environment
+import stat
+from core.config import CUSTOM_ACCOUNT_PATH, get_oauth_master_key_path
 
 logger = logging.getLogger("transport.custom_mailbox")
+
+_CUSTOM_MASTER_KEY_PATH = str(get_oauth_master_key_path())
+
+def _secure_file_permissions(path: str) -> None:
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except OSError:
+        pass
+
+def _ensure_secret_dir(path: str) -> None:
+    parent = os.path.dirname(path)
+    if not parent:
+        return
+    os.makedirs(parent, exist_ok=True)
+    try:
+        os.chmod(parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    except OSError:
+        pass
+
+def _get_fernet() -> Fernet:
+    _ensure_secret_dir(_CUSTOM_MASTER_KEY_PATH)
+    if os.path.exists(_CUSTOM_MASTER_KEY_PATH):
+        with open(_CUSTOM_MASTER_KEY_PATH, "rb") as f:
+            key = f.read()
+    else:
+        key = Fernet.generate_key()
+        with open(_CUSTOM_MASTER_KEY_PATH, "wb") as f:
+            f.write(key)
+        _secure_file_permissions(_CUSTOM_MASTER_KEY_PATH)
+    return Fernet(key)
 
 # Known provider host defaults
 PROVIDER_HOST_DEFAULTS = {
@@ -62,7 +92,6 @@ def verify_imap_credentials(email: str, password: str, imap_host: str, imap_port
     Perform a live TLS connection and IMAP authentication handshake.
     Returns (success, message).
     """
-    sanitize_ssl_environment()
     try:
         ssl_ctx = ssl.create_default_context()
         with imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=ssl_ctx, timeout=12) as imap:
@@ -88,7 +117,6 @@ def verify_imap_credentials(email: str, password: str, imap_host: str, imap_port
 
 def verify_smtp_credentials(email: str, password: str, smtp_host: str, smtp_port: int = 587) -> Tuple[bool, str]:
     """Verify SMTP authentication over STARTTLS."""
-    sanitize_ssl_environment()
     try:
         ssl_ctx = ssl.create_default_context()
         with smtplib.SMTP(smtp_host, int(smtp_port), timeout=10) as smtp:

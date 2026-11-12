@@ -86,14 +86,14 @@ def resolve_provider(name: str = "qumail-crypto-provider") -> Path:
     canonical = _normalize_name(name)
     app_root = get_application_root()
 
-    # Canonical exe names with legacy fallbacks
+    # Canonical exe names
     if canonical == "qumail-vault-provider":
-        exe_names = ["qumail-vault-provider.exe", "qumail-m3-provider.exe"] if sys.platform == "win32" else ["qumail-vault-provider", "qumail-m3-provider"]
-        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_VAULT_PROVIDER_PATH", "QUMAIL_M3_PROVIDER_PATH"]
+        exe_names = ["qumail-vault-provider.exe"] if sys.platform == "win32" else ["qumail-vault-provider"]
+        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_VAULT_PROVIDER_PATH"]
         env_hint = "QUMAIL_VAULT_PROVIDER_PATH"
     else:
-        exe_names = ["qumail-crypto-provider.exe", "qumail-m5-provider.exe"] if sys.platform == "win32" else ["qumail-crypto-provider", "qumail-m5-provider"]
-        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_CRYPTO_PROVIDER_PATH", "QUMAIL_M5_PROVIDER_PATH"]
+        exe_names = ["qumail-crypto-provider.exe"] if sys.platform == "win32" else ["qumail-crypto-provider"]
+        env_keys = ["QUMAIL_PROVIDER_PATH", "QUMAIL_CRYPTO_PROVIDER_PATH"]
         env_hint = "QUMAIL_CRYPTO_PROVIDER_PATH"
 
     searched: list[Path] = []

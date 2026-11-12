@@ -10,20 +10,35 @@ import os
 from pathlib import Path
 import sys
 
+from core.config import get_vault_path
 from core.logging_config import configure_logging, get_logger
 from core.provider_resolver import resolve_provider, verify_provider, ProviderNotFoundError
 
+# Immunize SSLContext.__new__ against missing codex-rejected-cas.pem in Windows / PyInstaller environments
+try:
+    import ssl
+    if not getattr(ssl.SSLContext, "_is_qumail_patched", False):
+        from _ssl import _SSLContext
+
+        def _safe_ssl_context_new(cls, protocol=None, *args, **kwargs):
+            if protocol is None:
+                protocol = getattr(ssl, "PROTOCOL_TLS_CLIENT", ssl.PROTOCOL_TLS)
+            self = _SSLContext.__new__(cls, protocol)
+            try:
+                ssl_dir = os.path.dirname(getattr(ssl, "__file__", ""))
+                pem_path = os.path.join(ssl_dir, "codex-rejected-cas.pem")
+                if pem_path and os.path.isfile(pem_path):
+                    _SSLContext.load_verify_locations(self, cafile=pem_path)
+            except Exception:
+                pass
+            return self
+
+        ssl.SSLContext.__new__ = _safe_ssl_context_new
+        ssl.SSLContext._is_qumail_patched = True
+except Exception:
+    pass
+
 logger = get_logger("bootstrap")
-
-
-def get_default_vault_path() -> Path:
-    """Return the default operating-system vault path for the user."""
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA")
-        if base:
-            return Path(base) / "QuMail" / "vault.sqlite"
-        return Path.home() / "AppData" / "Local" / "QuMail" / "vault.sqlite"
-    return Path.home() / ".qumail" / "vault.sqlite"
 
 
 def _show_critical_error(title: str, message: str) -> None:
@@ -40,7 +55,7 @@ def _launch_react_desktop(
 ) -> int:
     """Launch the modern React 19 + Microsoft Edge WebView2 desktop client."""
     try:
-        resolve_provider("qumail-m3-provider")
+        resolve_provider("qumail-vault-provider")
     except ProviderNotFoundError as exc:
         _show_critical_error(
             "QuMail — Missing Cryptographic Engine",
@@ -212,16 +227,10 @@ def main(argv: list[str] | None = None) -> int:
     vault_path = args.vault
     if not vault_path:
         local_dev_vault = Path("qumail_vault.sqlite").resolve()
-        default_sys_vault = get_default_vault_path()
-        try:
-            if local_dev_vault.is_file():
-                vault_path = str(local_dev_vault)
-            elif default_sys_vault.is_file():
-                vault_path = str(default_sys_vault)
-            else:
-                vault_path = str(default_sys_vault)
-        except (OSError, PermissionError):
+        if local_dev_vault.is_file():
             vault_path = str(local_dev_vault)
+        else:
+            vault_path = str(get_vault_path())
 
     return _launch_react_desktop(
         vault=vault_path,

@@ -1,3 +1,0 @@
-Using Python 3.12.14 environment at: .venv-m1-clean
-Checked 47 packages in 26ms
-All installed packages are compatible

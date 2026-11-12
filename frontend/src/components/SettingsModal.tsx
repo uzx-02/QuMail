@@ -48,16 +48,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleConnectAccount = (e: React.FormEvent) => {
+  const handleConnectAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newEmail.includes('@')) {
       alert('Please enter a valid email address.');
       return;
     }
-    onUpdateAccountEmail(newEmail);
-    setNewEmail('');
-    setNewPass('');
-    alert(`Account ${newEmail} successfully enrolled with local Post-Quantum keys!`);
+    if (!newPass) {
+      alert('Password or App Password is required to authenticate mailbox access.');
+      return;
+    }
+    try {
+      const res = await api.authenticateCustomMailbox({
+        email: newEmail.trim(),
+        password: newPass,
+      });
+      if (res.success && res.account) {
+        onUpdateAccountEmail(res.account.email);
+        setNewEmail('');
+        setNewPass('');
+        alert(`Account ${res.account.email} verified and enrolled successfully!`);
+      } else {
+        alert(res.message || 'Custom mailbox authentication failed.');
+      }
+    } catch (err: any) {
+      alert(`Error connecting mailbox: ${err?.message || err}`);
+    }
   };
 
   const tabs = [

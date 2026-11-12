@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Reply, Forward, Trash2, Printer, ShieldCheck, AlertTriangle, ShieldAlert, Download, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Reply, Forward, Trash2, Printer, ShieldCheck, AlertTriangle, ShieldAlert, Shield, Download, FileText, CheckCircle2 } from 'lucide-react';
 import { EmailMessage } from '../types';
 
 interface ReadingPaneProps {
@@ -108,6 +108,8 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                 ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
                 : message.indicator.badgeLevel === 'CAUTION'
                 ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60'
+                : message.indicator.badgeLevel === 'NEUTRAL'
+                ? 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
                 : 'bg-red-50/70 dark:bg-red-950/30 border-red-200 dark:border-red-800/60'
             }`}
           >
@@ -118,6 +120,8 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                     ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
                     : message.indicator.badgeLevel === 'CAUTION'
                     ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300'
+                    : message.indicator.badgeLevel === 'NEUTRAL'
+                    ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                     : 'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-300'
                 }`}
               >
@@ -125,6 +129,8 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                   <ShieldCheck className="w-5 h-5" />
                 ) : message.indicator.badgeLevel === 'CAUTION' ? (
                   <AlertTriangle className="w-5 h-5" />
+                ) : message.indicator.badgeLevel === 'NEUTRAL' ? (
+                  <Shield className="w-5 h-5 text-slate-600 dark:text-slate-400" />
                 ) : (
                   <ShieldAlert className="w-5 h-5" />
                 )}
@@ -138,10 +144,14 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                     className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                       isSecure
                         ? 'bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100'
-                        : 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+                        : message.indicator.badgeLevel === 'CAUTION'
+                        ? 'bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100'
+                        : message.indicator.badgeLevel === 'NEUTRAL'
+                        ? 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        : 'bg-red-200 dark:bg-red-900 text-red-900 dark:text-red-100'
                     }`}
                   >
-                    {message.indicator.badgeLevel}
+                    {message.indicator.badgeLevel === 'NEUTRAL' ? 'SHIELDED' : message.indicator.badgeLevel}
                   </span>
                 </div>
                 <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] leading-relaxed">

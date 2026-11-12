@@ -104,208 +104,49 @@ def get_vault_path() -> Path:
     """Canonical path to default user SQLite encrypted vault."""
     return get_user_data_dir() / "vault.sqlite"
 
-# Pre-configured Desktop Client ID & Secret for seamless out-of-the-box Google Sign-In
-BUILTIN_GMAIL_CLIENT_CONFIG: dict[str, Any] = {
-    "installed": {
-        "client_id": os.getenv("QUMAIL_GMAIL_CLIENT_ID", ""),
-        "project_id": "qumail-512414",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_secret": os.getenv("QUMAIL_GMAIL_CLIENT_SECRET", ""),
-        "redirect_uris": ["http://localhost", "http://127.0.0.1"],
-    }
-}
-
 def validate_google_client_config(content: Any) -> tuple[bool, str, dict | None]:
-    """
-    Validate whether a parsed JSON dictionary (or list containing a dict) is a valid Google OAuth 2.0 client configuration.
-    Explicitly rejects Google Cloud Service Account keys (type == 'service_account') with
-    clear, actionable guidance for the user.
-    Returns (is_valid, error_or_client_id, normalized_dict).
-    """
-    if isinstance(content, list) and content and isinstance(content[0], dict):
-        content = content[0]
-
+    """Validate Google OAuth client secrets format (Installed App / Web Application)."""
     if not isinstance(content, dict):
-        return False, "Invalid JSON structure (expected an object or list of objects).", None
+        return False, "Invalid Google client secrets: root must be a JSON object.", None
+    cfg = content.get("installed") or content.get("web")
+    if not isinstance(cfg, dict):
+        return False, "Google client secret must contain an 'installed' or 'web' application block.", None
+    client_id = cfg.get("client_id")
+    client_secret = cfg.get("client_secret")
+    if not client_id or not isinstance(client_id, str) or not client_id.strip():
+        return False, "Google client configuration missing 'client_id'.", None
+    if not client_secret or not isinstance(client_secret, str) or not client_secret.strip():
+        return False, "Google client configuration missing 'client_secret'.", None
+    return True, "Valid Google Client Configuration", cfg
 
-    if content.get("type") == "service_account":
-        return (
-            False,
-            "The selected file is a Google Cloud Service Account key, not an OAuth 2.0 Client ID. "
-            "QuMail requires an OAuth 2.0 Client ID of type 'Desktop app' (Installed application). "
-            "In Google Cloud Console, navigate to 'APIs & Services' > 'Credentials', click 'Create Credentials' "
-            "> 'OAuth client ID', select Application type 'Desktop app', and download that JSON.",
-            None,
-        )
-
-    if "web" in content and "installed" not in content:
-        return (
-            False,
-            "The selected file is a 'Web application' OAuth client configuration. "
-            "QuMail requires an OAuth 2.0 Client ID of type 'Desktop app' (Installed application) "
-            "to support secure loopback authentication. "
-            "In Google Cloud Console, navigate to 'APIs & Services' > 'Credentials', click 'Create Credentials' "
-            "> 'OAuth client ID', select Application type 'Desktop app', and download that JSON.",
-            None,
-        )
-
-    cfg = None
-    if "installed" in content and isinstance(content["installed"], dict):
-        cfg = content["installed"]
-    elif "client_id" in content and "client_secret" in content:
-        cfg = content
-
-    if not cfg:
-        return (
-            False,
-            "Selected JSON does not contain 'installed' (Desktop app) OAuth client configuration. "
-            "Please ensure you downloaded the client secret JSON for a Desktop application in Google Cloud Console.",
-            None,
-        )
-
-    client_id = str(cfg.get("client_id", "")).strip()
-    client_secret = str(cfg.get("client_secret", "")).strip()
-
-    if not client_id:
-        return False, "Selected JSON is missing 'client_id'.", None
-
-    redirect_uris = cfg.get("redirect_uris", [])
-    if not isinstance(redirect_uris, list):
-        redirect_uris = []
-    has_loopback = any(
-        isinstance(u, str) and ("localhost" in u or "127.0.0.1" in u)
-        for u in redirect_uris
-    )
-    if not has_loopback:
-        redirect_uris = ["http://localhost", "http://127.0.0.1"]
-
-    normalized = {
-        "installed": {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "auth_uri": cfg.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
-            "token_uri": cfg.get("token_uri", "https://oauth2.googleapis.com/token"),
-            "redirect_uris": redirect_uris,
-        }
-    }
-    return True, client_id, normalized
 
 def load_google_client_config() -> tuple[dict | None, str, str | None]:
-    """
-    Locate, validate, and load Google OAuth client configuration.
-    Order of precedence:
-      1. Explicit environment variable QUMAIL_GOOGLE_CLIENT_CONFIG_PATH
-      2. Canonical user config: %LOCALAPPDATA%/QuMail/config/google_client_secret.json
-      3. Project workspace fallback: secrets/gmail_client_secret.json
-      4. Auto-discovery: parent / workspace folders matching client_secret_*.json
-         (If found and valid, auto-copies to canonical config for permanent reliability)
-      5. Built-in configuration / environment variables (QUMAIL_GMAIL_CLIENT_ID)
-    Returns: (config_dict, source_description, error_message)
-    """
-    # 1. Environment variable override
-    env_path = os.environ.get("QUMAIL_GOOGLE_CLIENT_CONFIG_PATH")
-    if env_path:
-        p = Path(env_path)
+    """Load and validate the local Google client secrets configuration."""
+    candidates = [
+        Path(GMAIL_CLIENT_SECRETS_PATH),
+        get_user_config_dir() / "gmail_client_secret.json",
+        get_user_config_dir() / "google_client_secret.json",
+        Path("secrets/gmail_client_secret.json"),
+        Path("secrets/google_client_secret.json"),
+    ]
+    for p in candidates:
         if p.is_file():
             try:
+                import json
                 with open(p, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                ok, res, norm = validate_google_client_config(data)
-                if ok and norm:
-                    return norm, f"environment variable ({p})", None
-                return None, str(p), res
+                valid, msg, cfg = validate_google_client_config(data)
+                if valid and cfg:
+                    return cfg, str(p), None
             except Exception as exc:
-                return None, str(p), f"Failed to read file: {exc}"
+                return None, str(p), str(exc)
+    return None, "missing", "No Google client secrets file found."
 
-    # 2. Canonical user config
-    canon = get_google_client_secrets_path()
-    if canon.is_file():
-        try:
-            with open(canon, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            ok, res, norm = validate_google_client_config(data)
-            if ok and norm:
-                cid = norm.get("installed", {}).get("client_id", "")
-                if cid != "test-id.apps.googleusercontent.com" or "PYTEST_CURRENT_TEST" in os.environ:
-                    return norm, f"user configuration ({canon})", None
-            return None, str(canon), res
-        except Exception as exc:
-            pass
 
-    # 3. Workspace secrets directory fallback
-    ws_secret = Path(__file__).resolve().parent.parent / "secrets" / "gmail_client_secret.json"
-    if ws_secret.is_file():
-        try:
-            with open(ws_secret, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            ok, res, norm = validate_google_client_config(data)
-            if ok and norm:
-                # Copy to canonical config for permanent persistence
-                try:
-                    with open(canon, "w", encoding="utf-8") as cf:
-                        json.dump(norm, cf, indent=2)
-                except Exception:
-                    pass
-                return norm, f"workspace secrets ({ws_secret})", None
-        except Exception:
-            pass
 
-    # 4. Auto-discovery in workspace and parent folders
-    search_dirs = [
-        Path.cwd(),
-        Path(__file__).resolve().parent.parent,
-        Path(__file__).resolve().parent.parent.parent,
-    ]
-    if getattr(sys, "frozen", False):
-        search_dirs.append(Path(sys.executable).parent)
-        search_dirs.append(Path(sys.executable).parent.parent)
 
-    seen_files = set()
-    for s_dir in search_dirs:
-        try:
-            for match in s_dir.glob("client_secret_*.json"):
-                if match in seen_files:
-                    continue
-                seen_files.add(match)
-                try:
-                    with open(match, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    ok, res, norm = validate_google_client_config(data)
-                    if ok and norm:
-                        # Auto-copy to canonical user config
-                        try:
-                            with open(canon, "w", encoding="utf-8") as cf:
-                                json.dump(norm, cf, indent=2)
-                        except Exception:
-                            pass
-                        return norm, f"auto-discovered {match.name}", None
-                except Exception:
-                    continue
-        except Exception:
-            continue
 
-    # 5. Environment variable credentials override
-    env_client_id = os.getenv("QUMAIL_GMAIL_CLIENT_ID", "").strip()
-    env_client_secret = os.getenv("QUMAIL_GMAIL_CLIENT_SECRET", "").strip()
-    if env_client_id:
-        cfg = {
-            "installed": {
-                "client_id": env_client_id,
-                "client_secret": env_client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": ["http://localhost", "http://127.0.0.1"],
-            }
-        }
-        return cfg, "environment client credentials", None
 
-    # 6. Built-in product credentials (pre-configured for QuMail desktop client)
-    if BUILTIN_GMAIL_CLIENT_CONFIG.get("installed", {}).get("client_id"):
-        return BUILTIN_GMAIL_CLIENT_CONFIG, "built-in product credentials", None
-
-    return None, "none", "No Google OAuth Client configuration found."
 
 def _resolve_secret_path(filename: str) -> str:
     """Find secret file in canonical user config dir or migrate from legacy locations."""
