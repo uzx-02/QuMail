@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock } from 'lucide-react';
 import { EmailMessage } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
@@ -32,6 +32,33 @@ export const MessageList: React.FC<MessageListProps> = ({
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<'all' | 'secure' | 'unread'>(filterMode);
+  const [contextMenu, setContextMenu] = useState<{ msg: EmailMessage; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const closeMenu = () => setContextMenu(null);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
+    };
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent, msg: EmailMessage) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const menuWidth = 210;
+    const menuHeight = 165;
+    const x = Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8));
+    const y = Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8));
+    setContextMenu({ msg, x, y });
+  };
 
   const handleFilterSelect = (mode: 'all' | 'secure' | 'unread') => {
     setActiveFilter(mode);
@@ -254,6 +281,7 @@ export const MessageList: React.FC<MessageListProps> = ({
               <SpotlightCard
                 key={msg.id}
                 onClick={() => onSelectMessage(msg)}
+                onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, msg)}
                 className={`group flex items-center px-4 py-3 cursor-pointer transition-all duration-150 select-none ${
                   isSelected
                     ? 'bg-[#D3E3FD]/60 dark:bg-[#2C3D63]/70 font-semibold border-l-4 border-l-[#0B57D0]'
@@ -316,8 +344,29 @@ export const MessageList: React.FC<MessageListProps> = ({
                   {renderSecurityBadge(msg)}
                 </div>
 
-                {/* Safe Trash Action Icon on Row */}
-                <div className="shrink-0 mr-2" onClick={(e) => e.stopPropagation()}>
+                {/* Hover Quick Actions + Safe Trash */}
+                <div
+                  className="flex items-center space-x-1 shrink-0 mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={(e) => onToggleStar(msg.id, e)}
+                    title={msg.starred ? "Remove star (S)" : "Star message (S)"}
+                    className="p-1.5 rounded-full text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer"
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 ${
+                        msg.starred ? "fill-amber-400 text-amber-400" : ""
+                      }`}
+                    />
+                  </button>
+                  <button
+                    onClick={(e) => onMarkRead(msg.id, !msg.seen, e)}
+                    title={msg.seen ? "Mark as unread (U)" : "Mark as read (U)"}
+                    className="p-1.5 rounded-full text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
+                  >
+                    {msg.seen ? <Mail className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
+                  </button>
                   <button
                     onClick={() => {
                       if (!isQuMail) {
@@ -330,8 +379,8 @@ export const MessageList: React.FC<MessageListProps> = ({
                     title={isQuMail ? "Delete QuMail message" : "Deletion Protected: Standard email cannot be deleted by QuMail"}
                     className={`p-1.5 rounded-full transition-colors ${
                       isQuMail
-                        ? "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                        : "text-gray-300 dark:text-gray-600 opacity-25 cursor-not-allowed hover:bg-transparent"
+                        ? "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
+                        : "text-gray-300 dark:text-gray-600 opacity-30 cursor-not-allowed hover:bg-transparent"
                     }`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -355,6 +404,70 @@ export const MessageList: React.FC<MessageListProps> = ({
           })
         )}
       </div>
+
+      {/* Right-Click Context Menu */}
+      {contextMenu && (() => {
+        const ctxMsg = contextMenu.msg;
+        const ctxIsQuMail = isMessageQuMail(ctxMsg);
+        return (
+          <div
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+            className="fixed z-50 w-52 py-1.5 rounded-xl bg-white dark:bg-[#1E293B] border border-[#E0E3E7] dark:border-[#334155] shadow-2xl text-xs font-medium text-[#202124] dark:text-[#F1F5F9] select-none animate-in fade-in zoom-in-95 duration-100"
+          >
+            <button
+              onClick={(e) => {
+                onToggleStar(ctxMsg.id, e);
+                setContextMenu(null);
+              }}
+              className="w-full px-3.5 py-2 flex items-center space-x-2.5 hover:bg-gray-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer text-left"
+            >
+              <Star className={`w-4 h-4 ${ctxMsg.starred ? 'fill-amber-400 text-amber-400' : 'text-gray-500 dark:text-gray-400'}`} />
+              <span>{ctxMsg.starred ? 'Remove star' : 'Add star'}</span>
+            </button>
+            <button
+              onClick={(e) => {
+                onMarkRead(ctxMsg.id, !ctxMsg.seen, e);
+                setContextMenu(null);
+              }}
+              className="w-full px-3.5 py-2 flex items-center space-x-2.5 hover:bg-gray-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer text-left"
+            >
+              {ctxMsg.seen ? (
+                <>
+                  <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <span>Mark as unread</span>
+                </>
+              ) : (
+                <>
+                  <MailOpen className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <span>Mark as read</span>
+                </>
+              )}
+            </button>
+            <div className="my-1 border-t border-gray-200 dark:border-slate-700" />
+            <button
+              onClick={() => {
+                if (!ctxIsQuMail) {
+                  onShowProtectionNotice?.("Safe Deletion Guard: Standard legacy emails cannot be deleted by QuMail.");
+                  setContextMenu(null);
+                  return;
+                }
+                onDeleteMessage(ctxMsg.id);
+                setContextMenu(null);
+              }}
+              title={ctxIsQuMail ? "Move QuMail message to Trash" : "Deletion Protected: Standard email cannot be deleted by QuMail"}
+              className={`w-full px-3.5 py-2 flex items-center space-x-2.5 transition-colors text-left ${
+                ctxIsQuMail
+                  ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer'
+                  : 'text-gray-400 dark:text-gray-500 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{ctxIsQuMail ? 'Move to Trash' : 'Move to Trash (Protected)'}</span>
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };

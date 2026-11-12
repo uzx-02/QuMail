@@ -315,3 +315,54 @@ def test_post_quantum_send_and_inbox_decapsulation(monkeypatch):
     # Safe Deletion Guard: Conventional emails cannot be deleted, while QuMail emails can
     assert api.deleteMessage("imap-1002") is False
     assert api.deleteMessage("imap-1001") is True
+
+
+def test_starred_and_seen_imap_flag_sync_and_pending_guard(tmp_path, monkeypatch):
+    """Verify IMAP \\Flagged/\\Seen hydration, async flag sync, and polling protection."""
+    from email.message import EmailMessage
+    from transport.imap_receiver import InboxMessage
+
+    vault_file = tmp_path / "vault_flags.sqlite"
+    api = QuMailJsApi(account_email="alice@qumail.sec", vault_path=vault_file)
+    api.session_state = "MAILBOX_READY"
+
+    sync_calls = []
+    monkeypatch.setattr(
+        api,
+        "_sync_imap_flag_async",
+        lambda msg_id, add_flags=None, remove_flags=None: sync_calls.append((msg_id, add_flags, remove_flags)),
+    )
+
+    raw_msg = EmailMessage()
+    raw_msg["From"] = "news@example.com"
+    raw_msg["Subject"] = "Weekly Update"
+    raw_msg.set_content("Hello")
+
+    server_item = InboxMessage(
+        uid="2001",
+        subject="Weekly Update",
+        sender="news@example.com",
+        date="2026-11-12",
+        message=raw_msg,
+        starred=True,
+        seen=False,
+    )
+    monkeypatch.setattr("transport.imap_receiver.fetch_inbox", lambda account_email, max_count=30: [server_item])
+
+    msgs = api.fetchInbox()
+    target = next(m for m in msgs if m["id"] == "imap-2001")
+    assert target["starred"] is True
+    assert target["seen"] is False
+
+    # User unstars & marks read locally
+    assert api.toggleStar("imap-2001") is True
+    assert api.markRead("imap-2001", True) is True
+    assert ("imap-2001", None, ["\\Flagged"]) in sync_calls
+    assert ("imap-2001", ["\\Seen"], None) in sync_calls
+
+    # Simulate poll returning stale server flags before STORE completes:
+    # local edits must be preserved by _pending_flag_updates
+    msgs_after_poll = api.fetchInbox()
+    target_after = next(m for m in msgs_after_poll if m["id"] == "imap-2001")
+    assert target_after["starred"] is False
+    assert target_after["seen"] is True

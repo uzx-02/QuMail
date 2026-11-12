@@ -145,12 +145,12 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const handleToggleStar = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await api.toggleStar(id);
+  const handleToggleStar = useCallback((id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, starred: !m.starred } : m))
     );
+    api.toggleStar(id).catch((err) => console.debug('Background star sync error:', err));
   }, []);
 
   const handleDeleteMessage = useCallback(async (id: string, e?: React.MouseEvent) => {
@@ -186,12 +186,12 @@ export const App: React.FC = () => {
     }
   }, [messages, selectedMessageId]);
 
-  const handleMarkRead = useCallback(async (id: string, seen: boolean, e?: React.MouseEvent) => {
+  const handleMarkRead = useCallback((id: string, seen: boolean, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    await api.markRead(id, seen);
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, seen } : m))
     );
+    api.markRead(id, seen).catch((err) => console.debug('Background read sync error:', err));
   }, []);
 
   const handleOpenCompose = useCallback(() => {
@@ -307,6 +307,58 @@ export const App: React.FC = () => {
     return messages.find((m) => m.id === selectedMessageId) || null;
   }, [messages, selectedMessageId]);
 
+  // Keyboard Shortcuts: S (Star), U (Read/Unread), J/K (Next/Prev), Delete/Backspace (Safe Trash)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isComposeOpen || isSettingsOpen || isSignInOpen) return;
+
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (key === 'j' || key === 'k') {
+        if (displayedMessages.length === 0) return;
+        e.preventDefault();
+        const idx = selectedMessageId
+          ? displayedMessages.findIndex((m) => m.id === selectedMessageId)
+          : -1;
+        const nextIdx =
+          key === 'j'
+            ? Math.min(idx + 1, displayedMessages.length - 1)
+            : Math.max(idx <= 0 ? 0 : idx - 1, 0);
+        const nextMsg = displayedMessages[nextIdx];
+        if (nextMsg) handleSelectMessage(nextMsg);
+      } else if (key === 's' && selectedMessage) {
+        e.preventDefault();
+        handleToggleStar(selectedMessage.id);
+      } else if (key === 'u' && selectedMessage) {
+        e.preventDefault();
+        handleMarkRead(selectedMessage.id, !selectedMessage.seen);
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedMessage) {
+        e.preventDefault();
+        handleDeleteMessage(selectedMessage.id);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    isComposeOpen,
+    isSettingsOpen,
+    isSignInOpen,
+    displayedMessages,
+    selectedMessageId,
+    selectedMessage,
+    handleSelectMessage,
+    handleToggleStar,
+    handleMarkRead,
+    handleDeleteMessage,
+  ]);
+
   // Badge counts
   const unreadCount = useMemo(
     () => messages.filter((m) => m.folder === 'inbox' && !m.seen).length,
@@ -397,6 +449,7 @@ export const App: React.FC = () => {
               onReply={handleReply}
               onForward={handleForward}
               onDelete={handleDeleteMessage}
+              onToggleStar={handleToggleStar}
               onClose={() => setSelectedMessageId(null)}
               onShowProtectionNotice={setToastNotice}
             />

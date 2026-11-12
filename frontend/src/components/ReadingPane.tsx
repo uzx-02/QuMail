@@ -16,6 +16,7 @@ import {
   Key,
   ChevronDown,
   ChevronUp,
+  Star,
 } from 'lucide-react';
 import { EmailMessage } from '../types';
 
@@ -24,6 +25,7 @@ interface ReadingPaneProps {
   onReply: (msg: EmailMessage) => void;
   onForward: (msg: EmailMessage) => void;
   onDelete: (id: string) => void;
+  onToggleStar?: (id: string, e: React.MouseEvent) => void;
   onClose: () => void;
   onShowProtectionNotice?: (msg: string) => void;
 }
@@ -33,6 +35,7 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
   onReply,
   onForward,
   onDelete,
+  onToggleStar,
   onClose,
   onShowProtectionNotice,
 }) => {
@@ -109,6 +112,19 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
+          {onToggleStar && (
+            <button
+              onClick={(e) => onToggleStar(message.id, e)}
+              title={message.starred ? 'Remove star (S)' : 'Star message (S)'}
+              className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-500 transition-colors cursor-pointer"
+            >
+              <Star
+                className={`w-4 h-4 ${
+                  message.starred ? 'fill-amber-400 text-amber-400' : ''
+                }`}
+              />
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             title="Print message"

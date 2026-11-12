@@ -90,12 +90,16 @@ class InboxMessage:
     date    : Date header value as a plain string.
     message : Parsed email.message.Message object — passed to mime/decapsulator.py
               to extract ciphertext and metadata for decryption.
+    starred : True if IMAP \\Flagged flag is set on the server.
+    seen    : True if IMAP \\Seen flag is set on the server.
     """
     uid:     str
     subject: str
     sender:  str
     date:    str
     message: Message
+    starred: bool = False
+    seen:    bool = True
 
 
 # -------------------------------------------------------------------------
@@ -203,7 +207,7 @@ def _open_imap_connection(imap_host: str, account_email: str, access_token: str)
         ) from exc
 
 
-def _parse_raw_message(uid: str, raw_bytes: bytes) -> InboxMessage:
+def _parse_raw_message(uid: str, raw_bytes: bytes, starred: bool = False, seen: bool = True) -> InboxMessage:
     """
     Parse raw RFC 822 message bytes into an InboxMessage dataclass.
 
@@ -226,6 +230,8 @@ def _parse_raw_message(uid: str, raw_bytes: bytes) -> InboxMessage:
         sender=  msg.get("From", ""),
         date=    msg.get("Date", ""),
         message= msg,
+        starred= starred,
+        seen=    seen,
     )
 
 
@@ -315,7 +321,7 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
                 return []
 
             query_uids = ",".join(selected_uids)
-            status, fetch_data = imap.uid("FETCH", query_uids, "(BODY.PEEK[])")
+            status, fetch_data = imap.uid("FETCH", query_uids, "(FLAGS BODY.PEEK[])")
 
             if status != "OK" or not fetch_data:
                 return []
@@ -326,14 +332,18 @@ def fetch_inbox(account_email: str, max_count: int = 50) -> list[InboxMessage]:
                 if isinstance(item, tuple) and len(item) == 2:
                     header_meta, raw_bytes = item
 
-                    # Extract UID from the IMAP metadata line.
+                    # Extract UID and IMAP FLAGS from metadata line.
                     meta_str = header_meta.decode(errors='ignore')
                     match = re.search(r'UID\s+(\d+)', meta_str, re.IGNORECASE)
 
                     if match:
                         uid_str = match.group(1)
                         if uid_str in selected_uids:
-                            messages.append(_parse_raw_message(uid_str, raw_bytes))
+                            flags_match = re.search(r'FLAGS\s*\(([^)]*)\)', meta_str, re.IGNORECASE)
+                            flags_str = flags_match.group(1) if flags_match else ""
+                            is_starred = "\\Flagged" in flags_str
+                            is_seen = "\\Seen" in flags_str
+                            messages.append(_parse_raw_message(uid_str, raw_bytes, starred=is_starred, seen=is_seen))
 
             # Maintain reverse-chronological order to match the selected_uids array
             messages.sort(key=lambda m: selected_uids.index(m.uid))
@@ -422,3 +432,57 @@ def fetch_message(account_email: str, uid: str) -> InboxMessage:
         raise
     except imaplib.IMAP4.error as exc:
         raise IMAPReceiverError(f"IMAP error fetching UID '{uid}': {exc}") from exc
+
+
+def set_message_flags(
+    account_email: str,
+    uid: str,
+    add_flags: list[str] | None = None,
+    remove_flags: list[str] | None = None,
+) -> bool:
+    """
+    Synchronize IMAP flags (such as \\Flagged and \\Seen) for a single UID in INBOX.
+    Returns True on success, False if connection or STORE fails.
+    """
+    if not uid or (not add_flags and not remove_flags):
+        return False
+
+    from transport.custom_mailbox import load_custom_account
+    custom = load_custom_account(account_email)
+    ssl_ctx = ssl.create_default_context()
+
+    try:
+        if custom:
+            imap_host = custom.get("imapHost") or "imap.gmail.com"
+            imap_port = custom.get("imapPort") or 993
+            password = custom.get("password", "")
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                int(imap_port),
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.login(account_email, password)
+        else:
+            provider = _detect_provider(account_email)
+            imap_host, access_token = _get_imap_credentials(provider, account_email)
+            xoauth2_bytes = _build_xoauth2_string(account_email, access_token)
+            imap = imaplib.IMAP4_SSL(
+                imap_host,
+                _IMAP_PORT,
+                ssl_context=ssl_ctx,
+                timeout=_IMAP_TIMEOUT_SEC,
+            )
+            imap.authenticate("XOAUTH2", lambda _: base64.b64decode(xoauth2_bytes))
+
+        with imap:
+            imap.select(_INBOX_FOLDER, readonly=False)
+            if add_flags:
+                flag_arg = "(" + " ".join(add_flags) + ")"
+                imap.uid("STORE", uid, "+FLAGS.SILENT", flag_arg)
+            if remove_flags:
+                flag_arg = "(" + " ".join(remove_flags) + ")"
+                imap.uid("STORE", uid, "-FLAGS.SILENT", flag_arg)
+        return True
+    except Exception:
+        return False

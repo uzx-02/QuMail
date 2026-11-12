@@ -208,6 +208,7 @@ class QuMailJsApi:
         self.active_context = None
         self.active_key_handle = None
         self._inbox_lock = threading.Lock()
+        self._pending_flag_updates: Dict[str, float] = {}
         self.messages: List[Dict[str, Any]] = self._load_persisted_messages()
 
         self._init_vault_and_session()
@@ -1100,8 +1101,8 @@ class QuMailJsApi:
                     "body": body_text or "(No message body)",
                     "date": item.date[:16] if len(item.date) > 16 else item.date,
                     "timestamp": int(time.time() * 1000),
-                    "seen": False,
-                    "starred": False,
+                    "seen": bool(getattr(item, "seen", False)),
+                    "starred": bool(getattr(item, "starred", False)),
                     "folder": "inbox",
                     "category": "primary",
                     "hasAttachments": bool(attachments),
@@ -1114,11 +1115,17 @@ class QuMailJsApi:
             if new_msgs:
                 sent_msgs = [m for m in self.messages if m.get("folder") == "sent"]
                 existing_by_id = {m["id"]: m for m in self.messages}
+                now_mono = time.monotonic()
                 for msg in new_msgs:
-                    prev = existing_by_id.get(msg["id"])
-                    if prev:
+                    msg_id = msg["id"]
+                    pending_until = self._pending_flag_updates.get(msg_id, 0.0)
+                    prev = existing_by_id.get(msg_id)
+                    if prev and now_mono < pending_until:
+                        # Preserve in-flight local Star/Read edits until background IMAP STORE completes
                         msg["seen"] = prev.get("seen", msg["seen"])
                         msg["starred"] = prev.get("starred", msg["starred"])
+                    elif msg_id in self._pending_flag_updates and now_mono >= pending_until:
+                        self._pending_flag_updates.pop(msg_id, None)
                 self.messages = new_msgs + sent_msgs
                 self._save_persisted_messages()
                 logger.info("Successfully synced %d real messages from %s", len(new_msgs), self.account_email)
@@ -1595,21 +1602,50 @@ class QuMailJsApi:
                 return True
         return False
 
+    def _sync_imap_flag_async(self, msg_id: str, add_flags: list[str] | None = None, remove_flags: list[str] | None = None) -> None:
+        """Push IMAP flag changes (\\Flagged / \\Seen) asynchronously without blocking UI."""
+        if not msg_id.startswith("imap-") or not self.account_email:
+            return
+        uid = msg_id[len("imap-"):]
+        account_email = self.account_email
+
+        def _worker() -> None:
+            try:
+                from transport.imap_receiver import set_message_flags
+                set_message_flags(account_email, uid, add_flags=add_flags, remove_flags=remove_flags)
+            except Exception as exc:
+                logger.debug("Background IMAP flag sync note for %s: %s", msg_id, exc)
+
+        threading.Thread(target=_worker, daemon=True, name=f"imap-flag-{uid}").start()
+
     def markRead(self, msg_id: str, seen: bool) -> bool:
-        """Mark message as read or unread."""
+        """Mark message as read or unread and sync \\Seen flag to IMAP asynchronously."""
         for m in self.messages:
             if m["id"] == msg_id:
-                m["seen"] = seen
+                m["seen"] = bool(seen)
+                self._pending_flag_updates[msg_id] = time.monotonic() + 8.0
                 self._save_persisted_messages()
+                self._sync_imap_flag_async(
+                    msg_id,
+                    add_flags=["\\Seen"] if seen else None,
+                    remove_flags=None if seen else ["\\Seen"],
+                )
                 return True
         return False
 
     def toggleStar(self, msg_id: str) -> bool:
-        """Toggle star status on message."""
+        """Toggle star status on message and sync \\Flagged flag to IMAP asynchronously."""
         for m in self.messages:
             if m["id"] == msg_id:
-                m["starred"] = not m["starred"]
+                new_starred = not m.get("starred", False)
+                m["starred"] = new_starred
+                self._pending_flag_updates[msg_id] = time.monotonic() + 8.0
                 self._save_persisted_messages()
+                self._sync_imap_flag_async(
+                    msg_id,
+                    add_flags=["\\Flagged"] if new_starred else None,
+                    remove_flags=None if new_starred else ["\\Flagged"],
+                )
                 return True
         return False
 
