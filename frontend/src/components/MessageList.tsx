@@ -1,36 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { EmailMessage } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
+import { EmailMessage, ListDensityOption, LanguageOption } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
+import { resolveDisplaySubject } from '../lib/privacy';
+import { t } from '../lib/i18n';
+
+const CustomCheckbox: React.FC<{
+  checked: boolean;
+  indeterminate?: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  title?: string;
+  className?: string;
+}> = ({ checked, indeterminate, onClick, title, className = '' }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title}
+    className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all cursor-pointer outline-none shrink-0 ${
+      checked || indeterminate
+        ? 'qumail-accent-bg border-transparent text-white shadow-sm'
+        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1E293B] hover:border-gray-400 dark:hover:border-gray-400'
+    } ${className}`}
+  >
+    {checked ? (
+      <Check className="w-3 h-3 stroke-[3]" />
+    ) : indeterminate ? (
+      <div className="w-2 h-0.5 bg-white rounded-full" />
+    ) : null}
+  </button>
+);
 
 interface MessageListProps {
   messages: EmailMessage[];
   selectedMessageId: string | null;
+  userEmail?: string;
+  userAvatarUrl?: string;
   onSelectMessage: (msg: EmailMessage) => void;
   onToggleStar: (id: string, e: React.MouseEvent) => void;
   onRefresh: () => void;
   onDeleteMessage: (id: string, e?: React.MouseEvent) => void;
   onMarkRead: (id: string, seen: boolean, e?: React.MouseEvent) => void;
   isRefreshing: boolean;
+  isInitialSyncing?: boolean;
   currentFolder?: string;
   onRetrySend?: (msg: EmailMessage, e: React.MouseEvent) => void;
   filterMode?: 'all' | 'secure' | 'unread';
   onFilterChange?: (filter: 'all' | 'secure' | 'unread') => void;
   onShowProtectionNotice?: (msg: string) => void;
   maskEncryptedSnippets?: boolean;
-  listDensity?: 'comfortable' | 'compact';
+  listDensity?: ListDensityOption;
+  showSenderAvatars?: boolean;
   pageSize?: number;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
+  showIconLabels?: boolean;
+  language?: LanguageOption;
 }
 
 export const MessageList: React.FC<MessageListProps> = ({
   messages,
   selectedMessageId,
+  userEmail,
+  userAvatarUrl,
   onSelectMessage,
   onToggleStar,
   onRefresh,
   onDeleteMessage,
   onMarkRead,
   isRefreshing,
+  isInitialSyncing = false,
   currentFolder,
   onRetrySend,
   filterMode = 'all',
@@ -38,7 +76,12 @@ export const MessageList: React.FC<MessageListProps> = ({
   onShowProtectionNotice,
   maskEncryptedSnippets = false,
   listDensity = 'comfortable',
+  showSenderAvatars = true,
   pageSize = 50,
+  hasActiveFilters = false,
+  onClearFilters,
+  showIconLabels = false,
+  language,
 }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<'all' | 'secure' | 'unread'>(filterMode);
@@ -96,6 +139,23 @@ export const MessageList: React.FC<MessageListProps> = ({
     );
   };
 
+  // Thread message counts for grouping indication
+  const threadCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of messages) {
+      const normSubj = (m.subject || '')
+        .replace(/^((re|fwd):\s*)+/gi, '')
+        .replace(/\s*\[(Shield|Shielded|Quantum-Safe|QuMail Secure Link|Encrypted)\]\s*/gi, ' ')
+        .trim()
+        .toLowerCase();
+      const key = m.threadId || (normSubj ? `${m.folder || 'inbox'}:${normSubj}` : '');
+      if (key) {
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [messages]);
+
   const filteredMessages = messages.filter((m) => {
     if (activeFilter === 'secure') {
       return isMessageQuMail(m);
@@ -106,11 +166,12 @@ export const MessageList: React.FC<MessageListProps> = ({
     return true;
   });
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(filteredMessages.map((m) => m.id)));
-    } else {
+  const handleToggleSelectAll = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (selectedIds.size === filteredMessages.length) {
       setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredMessages.map((m) => m.id)));
     }
   };
 
@@ -143,47 +204,17 @@ export const MessageList: React.FC<MessageListProps> = ({
     setSelectedIds(new Set());
   };
 
-  const renderSecurityBadge = (msg: EmailMessage) => {
-    const isPQC = msg.securityTier === 'pq_sealed' || (isMessageQuMail(msg) && msg.securityTier !== 'weblink' && !msg.subject?.startsWith('[QuMail Secure Link]'));
-    const isWebLink = msg.securityTier === 'weblink' || msg.securityMode === 'weblink' || msg.subject?.startsWith('[QuMail Secure Link]');
-
-    if (isPQC) {
-      return (
-        <div className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-          <span>Verified PQC</span>
-        </div>
-      );
-    }
-
-    if (isWebLink) {
-      return (
-        <div className="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-100 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-800 shrink-0">
-          <Lock className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-          <span>Secure WebLink</span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700/80 shrink-0">
-        <Shield className="w-3 h-3 text-slate-400" />
-        <span>Standard TLS</span>
-      </div>
-    );
-  };
-
   const filterPills: { id: 'all' | 'secure' | 'unread'; label: string; icon: React.ReactNode; count: number }[] = [
-    { id: 'all', label: 'All', icon: <Inbox className="w-3.5 h-3.5" />, count: messages.length },
+    { id: 'all', label: t(language, 'filter_pill_all'), icon: <Inbox className="w-3.5 h-3.5" />, count: messages.length },
     {
       id: 'secure',
-      label: 'QuMail Secure',
+      label: t(language, 'filter_pill_secure'),
       icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />,
       count: messages.filter(isMessageQuMail).length,
     },
     {
       id: 'unread',
-      label: 'Unread',
+      label: t(language, 'filter_pill_unread'),
       icon: <Mail className="w-3.5 h-3.5 text-blue-500" />,
       count: messages.filter((m) => !m.seen).length,
     },
@@ -194,44 +225,79 @@ export const MessageList: React.FC<MessageListProps> = ({
       {/* 1. Top Mailbox Toolbar */}
       <div className="h-12 px-4 flex items-center justify-between border-b border-[#E0E3E7] dark:border-[#1F2C47] shrink-0 select-none bg-white dark:bg-[#161F33]">
         <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
-            onChange={handleSelectAll}
-            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-[#0B57D0] focus:ring-[#0B57D0] cursor-pointer"
-          />
+          {selectedIds.size === 0 ? (
+            <button
+              onClick={onRefresh}
+              title={t(language, 'refresh')}
+              className={`${
+                showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2 rounded-full'
+              } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-white transition-colors outline-none cursor-pointer`}
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#0B57D0]' : ''}`} />
+              {showIconLabels && <span className="text-xs font-semibold">{t(language, 'refresh')}</span>}
+            </button>
+          ) : (
+            <div className="flex items-center space-x-2.5">
+              <CustomCheckbox
+                checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
+                indeterminate={selectedIds.size > 0 && selectedIds.size < filteredMessages.length}
+                onClick={handleToggleSelectAll}
+                title={selectedIds.size === filteredMessages.length ? t(language, 'deselect_all') : t(language, 'select_all')}
+              />
 
-          <button
-            onClick={onRefresh}
-            title="Refresh mail"
-            className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] hover:text-[#202124] transition-colors outline-none"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#0B57D0]' : ''}`} />
-          </button>
+              <span className="text-xs font-bold text-[#202124] dark:text-[#F1F5F9]">
+                {t(language, 'selected_count', { count: selectedIds.size })}
+              </span>
 
-          {selectedIds.size > 0 && (
-            <div className="flex items-center space-x-1 pl-2 border-l border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => handleBatchMarkRead(true)}
-                title="Mark as read"
-                className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors"
-              >
-                <MailOpen className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleBatchMarkRead(false)}
-                title="Mark as unread"
-                className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors"
-              >
-                <Mail className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                title="Delete selected (QuMail only)"
-                className="p-2 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {selectedIds.size < filteredMessages.length && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set(filteredMessages.map((m) => m.id)))}
+                  className="text-[11px] font-semibold qumail-accent-text hover:underline cursor-pointer"
+                >
+                  {t(language, 'select_all')} ({filteredMessages.length})
+                </button>
+              )}
+
+              <div className="flex items-center space-x-1 pl-2 border-l border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => handleBatchMarkRead(true)}
+                  title={t(language, 'mark_as_read')}
+                  className={`${
+                    showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer`}
+                >
+                  <MailOpen className="w-4 h-4" />
+                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'mark_as_read')}</span>}
+                </button>
+                <button
+                  onClick={() => handleBatchMarkRead(false)}
+                  title={t(language, 'mark_as_unread')}
+                  className={`${
+                    showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer`}
+                >
+                  <Mail className="w-4 h-4" />
+                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'mark_as_unread')}</span>}
+                </button>
+                <button
+                  onClick={handleBatchDelete}
+                  title={t(language, 'delete_selected')}
+                  className={`${
+                    showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors cursor-pointer`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'delete_selected')}</span>}
+                </button>
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  title={t(language, 'deselect_all')}
+                  className="p-1.5 rounded-full text-[#5F6368] dark:text-[#94A3B8] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -283,9 +349,9 @@ export const MessageList: React.FC<MessageListProps> = ({
             <button
               key={pill.id}
               onClick={() => handleFilterSelect(pill.id)}
-              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 outline-none ${
+              className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 outline-none cursor-pointer ${
                 isActive
-                  ? 'bg-[#0B57D0] text-white shadow-sm'
+                  ? 'qumail-accent-bg shadow-sm'
                   : 'bg-[#F0F4F9] dark:bg-[#1E2740] text-[#444746] dark:text-[#C4C7C5] hover:bg-[#E2E8F0] dark:hover:bg-[#2A3755]'
               }`}
             >
@@ -303,6 +369,27 @@ export const MessageList: React.FC<MessageListProps> = ({
         })}
       </div>
 
+      {/* Active Search Filter Status Bar */}
+      {hasActiveFilters && (
+        <div className="bg-sky-50/80 dark:bg-sky-950/30 border-b border-sky-200/60 dark:border-sky-800/60 px-4 py-2 flex items-center justify-between text-xs transition-colors">
+          <div className="flex items-center space-x-2 text-sky-800 dark:text-sky-300">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span className="font-semibold">
+              {t(language, 'filter_active_status', { count: filteredMessages.length, plural: filteredMessages.length !== 1 ? 's' : '' })}
+            </span>
+          </div>
+          {onClearFilters && (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="text-[11px] font-bold text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-200 hover:underline cursor-pointer flex items-center space-x-1"
+            >
+              <span>{t(language, 'reset_filters')}</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Synchronization Progress Line */}
       {isRefreshing && (
         <div className="h-0.5 w-full bg-blue-100 dark:bg-blue-950 overflow-hidden shrink-0">
@@ -313,17 +400,75 @@ export const MessageList: React.FC<MessageListProps> = ({
       {/* 3. Messages List */}
       <div className="flex-1 overflow-y-auto divide-y divide-[#F2F2F2] dark:divide-[#1F2C47]/60">
         {filteredMessages.length === 0 ? (
-          currentFolder === 'outbox' ? (
+          (isInitialSyncing || (isRefreshing && messages.length === 0)) ? (
+            <div>
+              {/* Subtle status header */}
+              <div className="flex items-center justify-between px-5 py-3 bg-blue-50/70 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 text-xs text-blue-700 dark:text-blue-300 select-none">
+                <div className="flex items-center space-x-2.5">
+                  <RotateCw className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
+                  <span className="font-semibold">{t(language, 'syncing_mailbox')}</span>
+                </div>
+                <span className="text-[11px] text-blue-600/80 dark:text-blue-400/80 font-medium">{t(language, 'syncing_checking_imap')}</span>
+              </div>
+
+              {/* Skeleton Shimmer Rows */}
+              <div className="divide-y divide-[#F2F2F2] dark:divide-[#1F2C47]/60">
+                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                  <div
+                    key={n}
+                    className="flex items-center px-4 py-3.5 gap-3.5 border-b border-gray-100 dark:border-gray-800/40 animate-pulse select-none"
+                  >
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <div className="w-4 h-4 rounded-[4px] bg-gray-200 dark:bg-gray-800" />
+                      <div className="w-4 h-4 rounded bg-gray-200 dark:bg-gray-800" />
+                    </div>
+                    {showSenderAvatars && (
+                      <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className={`h-3.5 bg-gray-200 dark:bg-gray-800 rounded ${n % 2 === 0 ? 'w-36' : 'w-28'}`} />
+                        <div className="h-3 bg-gray-200 dark:bg-gray-800 rounded w-14 shrink-0" />
+                      </div>
+                      <div className={`h-3 bg-gray-200 dark:bg-gray-800 rounded ${n % 3 === 0 ? 'w-4/5' : 'w-3/5'}`} />
+                      <div className={`h-2.5 bg-gray-100 dark:bg-gray-800/60 rounded ${n % 2 === 0 ? 'w-1/2' : 'w-2/3'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : currentFolder === 'outbox' ? (
             <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
               <div className="w-12 h-12 rounded-full bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <p className="text-sm font-semibold text-[#202124] dark:text-white">
-                Outbox is clear
+                {t(language, 'outbox_clear_title')}
               </p>
               <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-sm">
-                All Post-Quantum & WebLink messages have been dispatched cleanly. Failed or offline sends will appear here with a Retry Send option.
+                {t(language, 'outbox_clear_desc')}
               </p>
+            </div>
+          ) : hasActiveFilters ? (
+            <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center qumail-accent-text">
+                <SlidersHorizontal className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-[#202124] dark:text-white">
+                {t(language, 'no_matching_filters')}
+              </p>
+              <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-xs">
+                {t(language, 'no_matching_filters_desc')}
+              </p>
+              {onClearFilters && (
+                <button
+                  type="button"
+                  onClick={onClearFilters}
+                  className="px-4 py-2 rounded-xl qumail-accent-bg text-white text-xs font-bold shadow-md cursor-pointer hover:opacity-95 transition-opacity"
+                >
+                  {t(language, 'reset_filters')}
+                </button>
+              )}
             </div>
           ) : (
             <div className="h-64 flex flex-col items-center justify-center text-center p-8 space-y-3">
@@ -331,10 +476,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                 <Inbox className="w-6 h-6" />
               </div>
               <p className="text-sm font-semibold text-[#202124] dark:text-white">
-                No messages found
-              </p>
-              <p className="text-xs text-[#5F6368] dark:text-[#94A3B8] max-w-xs">
-                All messages have been processed or moved to other categories.
+                {t(language, 'no_messages_in_folder')}
               </p>
             </div>
           )
@@ -348,33 +490,102 @@ export const MessageList: React.FC<MessageListProps> = ({
             const isSelected = selectedMessageId === msg.id;
             const isChecked = selectedIds.has(msg.id);
             const isQuMail = isMessageQuMail(msg);
+            const isPQC = msg.securityTier === 'pq_sealed' || (isQuMail && msg.securityTier !== 'weblink' && !msg.subject?.startsWith('[QuMail Secure Link]'));
+            const isWebLink = msg.securityTier === 'weblink' || msg.securityMode === 'weblink' || Boolean(msg.subject?.startsWith('[QuMail Secure Link]'));
+
+            // Clean sender display name
+            const senderDisplayName = (msg.sender || msg.senderEmail?.split('@')[0] || 'Unknown').trim();
+
+            // Clean display subject (strip bracketed tags like [Shield], [Shielded], [Quantum-Safe], etc. while preserving masking dots ••••••••)
+            const { displaySubject, isCloaked } = resolveDisplaySubject(msg);
+            const cleanSubject = (displaySubject || '(No Subject)')
+              .replace(/\s*\[(Shield|Shielded|Quantum-Safe|QuMail Secure Link|Encrypted)\]\s*/gi, ' ')
+              .trim() || '(No Subject)';
+
+            // Single optional compact status pill
+            let statusPill: React.ReactNode = null;
+            if (msg.folder === 'outbox' && msg.outboxError) {
+              statusPill = (
+                <span
+                  title={msg.outboxError}
+                  className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                >
+                  Send Failed
+                </span>
+              );
+            } else if (msg.indicator?.badgeLevel === 'ALERT' || msg.snippet?.toLowerCase().includes('decryption error')) {
+              statusPill = (
+                <span
+                  title="Message could not be decrypted with active keys"
+                  className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                >
+                  Decryption Failed
+                </span>
+              );
+            } else if (isCloaked) {
+              statusPill = (
+                <span
+                  title="Subject line was hidden from mail servers for privacy"
+                  className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                >
+                  Hidden Subject
+                </span>
+              );
+            }
+
+            // Preview snippet text
+            let previewText = '';
+            if (maskEncryptedSnippets && isQuMail) {
+              previewText = 'Encrypted message';
+            } else if (!isQuMail) {
+              const isGmail =
+                msg.senderEmail?.toLowerCase().includes('gmail') ||
+                msg.recipients?.some((r) => r.toLowerCase().includes('gmail')) ||
+                true;
+              previewText = isGmail ? 'Standard email · View in Gmail' : 'Standard email · View in webmail';
+            } else if (msg.snippet) {
+              previewText = msg.snippet.trim();
+            }
 
             return (
               <SpotlightCard
                 key={msg.id}
                 onClick={() => onSelectMessage(msg)}
                 onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, msg)}
-                className={`group flex items-center px-4 ${
-                  listDensity === 'compact' ? 'py-1.5' : 'py-3'
+                className={`group flex items-center px-4 overflow-hidden w-full ${
+                  listDensity === 'compact'
+                    ? 'py-1.5'
+                    : listDensity === 'cozy'
+                    ? 'py-2.5'
+                    : 'py-3'
                 } cursor-pointer transition-all duration-150 select-none ${
                   isSelected
-                    ? 'bg-[#D3E3FD]/60 dark:bg-[#2C3D63]/70 font-semibold border-l-4 border-l-[#0B57D0]'
+                    ? 'qumail-accent-soft font-semibold border-l-4 qumail-accent-border'
                     : !msg.seen
-                    ? 'bg-white dark:bg-[#161F33] font-semibold text-[#202124] dark:text-white'
-                    : 'bg-[#F9FAFC] dark:bg-[#111726]/60 text-[#5F6368] dark:text-[#94A3B8] font-normal hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740]/70'
+                    ? 'bg-white dark:bg-[#161F33] text-[#202124] dark:text-white'
+                    : 'bg-[#F9FAFC] dark:bg-[#111726]/60 text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740]/70'
                 }`}
               >
-                {/* Row Checkbox & Star */}
-                <div className="flex items-center space-x-2 mr-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={(e) => handleToggleRowSelect(msg.id, e as any)}
-                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-[#0B57D0] focus:ring-[#0B57D0] cursor-pointer"
-                  />
+                {/* 1. Left Cluster (Fixed Width — Never Wraps or Shrinks) */}
+                <div className="flex items-center space-x-1.5 mr-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className={`transition-opacity duration-150 ${
+                      selectedIds.size > 0 || isChecked
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    <CustomCheckbox
+                      checked={isChecked}
+                      onClick={(e) => handleToggleRowSelect(msg.id, e)}
+                      title={isChecked ? 'Deselect message' : 'Select message'}
+                    />
+                  </div>
                   <button
+                    type="button"
                     onClick={(e) => onToggleStar(msg.id, e)}
-                    className="p-1 text-gray-400 hover:text-amber-400 transition-colors"
+                    className="p-1 text-gray-400 hover:text-amber-400 transition-colors cursor-pointer"
+                    title={msg.starred ? 'Starred' : 'Not starred'}
                   >
                     <Star
                       className={`w-4 h-4 ${
@@ -384,111 +595,107 @@ export const MessageList: React.FC<MessageListProps> = ({
                   </button>
                 </div>
 
-                {/* Sender Column */}
-                <div className="w-44 truncate shrink-0 pr-2">
+                {/* Compact Security Icon Only */}
+                {isPQC ? (
                   <span
-                    className={`text-sm ${
-                      !msg.seen ? 'text-[#202124] dark:text-white font-bold' : 'text-[#444746] dark:text-[#C4C7C5]'
-                    }`}
+                    title="Quantum-Safe Private (ML-KEM-768 sealed)"
+                    className="shrink-0 text-emerald-600 dark:text-emerald-400 mr-2 flex items-center justify-center"
                   >
-                    {msg.sender}
+                    <ShieldCheck className="w-4 h-4" />
                   </span>
-                </div>
+                ) : isWebLink ? (
+                  <span
+                    title="Secure Private Link (Zero-Knowledge)"
+                    className="shrink-0 text-sky-500 dark:text-sky-400 mr-2 flex items-center justify-center"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                  </span>
+                ) : null}
 
-                {/* Inline Subject + Snippet */}
-                <div className="flex-1 flex items-center truncate min-w-0 pr-4">
+                {/* Sender Name (w-44 / 176px fixed, truncate) */}
+                <div className="w-44 shrink-0 flex items-center space-x-1.5 truncate pr-2">
+                  {showSenderAvatars && (
+                    (userEmail && msg.senderEmail && userEmail.toLowerCase() === msg.senderEmail.toLowerCase() && userAvatarUrl) ? (
+                      <img
+                        src={userAvatarUrl}
+                        alt={senderDisplayName}
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        className={`shrink-0 rounded-full object-cover shadow-xs border border-indigo-200 dark:border-indigo-800 ${
+                          listDensity === 'compact' ? 'w-5 h-5' : 'w-6 h-6'
+                        }`}
+                      />
+                    ) : (
+                      <div
+                        className={`shrink-0 rounded-full flex items-center justify-center font-bold text-[10px] qumail-accent-soft qumail-accent-text ${
+                          listDensity === 'compact' ? 'w-5 h-5' : 'w-6 h-6'
+                        }`}
+                      >
+                        {senderDisplayName
+                          .split(' ')
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((p) => p[0]?.toUpperCase() || '')
+                          .join('') || '?'}
+                      </div>
+                    )
+                  )}
                   <span
                     className={`text-sm truncate ${
-                      !msg.seen ? 'text-[#202124] dark:text-white font-bold' : 'text-[#202124] dark:text-[#E2E8F0]'
+                      !msg.seen ? 'text-[#202124] dark:text-white font-bold' : 'text-[#444746] dark:text-[#C4C7C5]'
+                    }`}
+                    title={msg.senderEmail ? `${senderDisplayName} <${msg.senderEmail}>` : senderDisplayName}
+                  >
+                    {senderDisplayName}
+                  </span>
+                  {(() => {
+                    const normSubj = (cleanSubject || '')
+                      .replace(/^((re|fwd):\s*)+/gi, '')
+                      .trim()
+                      .toLowerCase();
+                    const threadKey = msg.threadId || (normSubj ? `${msg.folder || 'inbox'}:${normSubj}` : '');
+                    const threadCount = threadKey ? (threadCounts.get(threadKey) || 1) : 1;
+                    return threadCount > 1 ? (
+                      <span
+                        title={`${threadCount} messages in conversation`}
+                        className="shrink-0 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-black/5 dark:bg-white/10 px-1.5 py-0.2 rounded-full select-none"
+                      >
+                        {threadCount}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+
+                {/* 2. Center Cluster (flex-1 min-w-0 flex items-center gap-2 — Single Clean Line) */}
+                <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden pr-3">
+                  <span
+                    className={`text-sm truncate shrink-0 max-w-[65%] ${
+                      !msg.seen
+                        ? 'text-[#202124] dark:text-white font-medium'
+                        : 'text-[#3C4043] dark:text-[#CBD5E1] font-normal'
                     }`}
                   >
-                    {msg.subject || '(No Subject)'}
+                    {cleanSubject}
                   </span>
-                  <span className="mx-2 text-gray-400 shrink-0">—</span>
-                  <span className="text-sm text-[#5F6368] dark:text-[#94A3B8] truncate font-normal">
-                    {maskEncryptedSnippets && isQuMail
-                      ? '•••••••• (Encrypted snippet hidden)'
-                      : msg.snippet}
-                  </span>
+                  {statusPill}
+                  {previewText && (
+                    <span className="text-xs text-slate-400 dark:text-slate-500 truncate font-normal">
+                      {previewText}
+                    </span>
+                  )}
                 </div>
 
-                {/* Badges: Paperclip, Outbox Retry & Distinct Security Badge */}
-                <div className="flex items-center space-x-2 shrink-0 mr-3">
-                  {msg.folder === 'outbox' && (
-                    <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
-                      {msg.outboxError && (
-                        <span
-                          title={msg.outboxError}
-                          className="max-w-[180px] truncate px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-                        >
-                          {msg.outboxError}
-                        </span>
-                      )}
-                      {onRetrySend && (
-                        <button
-                          onClick={(e) => onRetrySend(msg, e)}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#0B57D0] hover:bg-[#0842A0] text-white shadow-sm transition-colors cursor-pointer"
-                          title="Retry SMTP dispatch"
-                        >
-                          <RotateCw className="w-3 h-3" />
-                          <span>Retry Send</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {msg.hasAttachments && (
-                    <Paperclip className="w-4 h-4 text-[#5F6368] dark:text-[#94A3B8]" />
-                  )}
-                  {renderSecurityBadge(msg)}
-                </div>
-
-                {/* Hover Quick Actions + Safe Trash */}
+                {/* 3. Right Cluster (Fixed Width — Clean Date / Hover Actions) */}
                 <div
-                  className="flex items-center space-x-1 shrink-0 mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                  className="shrink-0 flex items-center justify-end w-28 text-right"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    onClick={(e) => onToggleStar(msg.id, e)}
-                    title={msg.starred ? "Remove star (S)" : "Star message (S)"}
-                    className="p-1.5 rounded-full text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors cursor-pointer"
-                  >
-                    <Star
-                      className={`w-3.5 h-3.5 ${
-                        msg.starred ? "fill-amber-400 text-amber-400" : ""
-                      }`}
-                    />
-                  </button>
-                  <button
-                    onClick={(e) => onMarkRead(msg.id, !msg.seen, e)}
-                    title={msg.seen ? "Mark as unread (U)" : "Mark as read (U)"}
-                    className="p-1.5 rounded-full text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
-                  >
-                    {msg.seen ? <Mail className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!isQuMail) {
-                        onShowProtectionNotice?.("Deletion Protected: Standard legacy emails cannot be deleted by QuMail.");
-                        return;
-                      }
-                      onDeleteMessage(msg.id);
-                    }}
-                    disabled={!isQuMail}
-                    title={isQuMail ? "Delete QuMail message" : "Deletion Protected: Standard email cannot be deleted by QuMail"}
-                    className={`p-1.5 rounded-full transition-colors ${
-                      isQuMail
-                        ? "text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer"
-                        : "text-gray-300 dark:text-gray-600 opacity-30 cursor-not-allowed hover:bg-transparent"
-                    }`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Date */}
-                <div className="w-20 text-right shrink-0">
+                  {/* Default View: Paperclip + Timestamp */}
+                  {msg.hasAttachments && (
+                    <Paperclip className="w-3.5 h-3.5 text-[#5F6368] dark:text-[#94A3B8] mr-2 shrink-0 group-hover:hidden" />
+                  )}
                   <span
-                    className={`text-xs ${
+                    className={`text-xs whitespace-nowrap group-hover:hidden ${
                       !msg.seen
                         ? 'text-[#0B57D0] dark:text-[#818CF8] font-bold'
                         : 'text-[#5F6368] dark:text-[#94A3B8]'
@@ -496,6 +703,47 @@ export const MessageList: React.FC<MessageListProps> = ({
                   >
                     {msg.date}
                   </span>
+
+                  {/* Hover View: Smoothly swapped quick action buttons */}
+                  <div className="hidden group-hover:flex items-center space-x-1">
+                    {msg.folder === 'outbox' && onRetrySend && (
+                      <button
+                        type="button"
+                        onClick={(e) => onRetrySend(msg, e)}
+                        title="Retry Send"
+                        className="p-1 rounded-md text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/40 cursor-pointer"
+                      >
+                        <RotateCw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => onMarkRead(msg.id, !msg.seen, e)}
+                      title={msg.seen ? 'Mark as unread (U)' : 'Mark as read (U)'}
+                      className="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+                    >
+                      {msg.seen ? <Mail className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isQuMail) {
+                          onShowProtectionNotice?.('Safe Deletion Guard: Standard legacy emails cannot be deleted by QuMail.');
+                          return;
+                        }
+                        onDeleteMessage(msg.id);
+                      }}
+                      disabled={!isQuMail}
+                      title={isQuMail ? 'Delete QuMail message' : 'Protected: Standard emails cannot be deleted'}
+                      className={`p-1.5 rounded-full transition-colors ${
+                        isQuMail
+                          ? 'text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer'
+                          : 'text-gray-300 dark:text-gray-600 opacity-20 cursor-not-allowed hover:bg-transparent'
+                      }`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </SpotlightCard>
             );

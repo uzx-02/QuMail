@@ -7,6 +7,7 @@ Strictly excludes all developer secrets and local private configuration.
 
 from pathlib import Path
 import sys
+from PyInstaller.utils.hooks import collect_all
 
 REPO_ROOT = Path.cwd().resolve()
 
@@ -14,6 +15,25 @@ REPO_ROOT = Path.cwd().resolve()
 added_files = [
     (str(REPO_ROOT / 'frontend' / 'dist'), 'frontend/dist'),
 ]
+
+# Collect ctranslate2 and sentencepiece runtime assets and DLLs (without model weights)
+ct2_datas, ct2_binaries, ct2_hidden = collect_all('ctranslate2')
+sp_datas, sp_binaries, sp_hidden = collect_all('sentencepiece')
+added_files += ct2_datas + sp_datas
+
+extra_binaries = []
+import site
+for sp_dir in site.getsitepackages():
+    for libs_name in ('sentencepiece.libs', 'numpy.libs'):
+        libs_path = Path(sp_dir) / libs_name
+        if libs_path.is_dir():
+            added_files.append((str(libs_path), libs_name))
+            added_files.append((str(libs_path), f'_internal/{libs_name}'))
+            for dll in libs_path.glob('*.dll'):
+                extra_binaries.append((str(dll), '.'))
+                extra_binaries.append((str(dll), '_internal'))
+                extra_binaries.append((str(dll), libs_name))
+                extra_binaries.append((str(dll), f'_internal/{libs_name}'))
 
 # Embed client_secret JSON for production builds
 for secret_name in [
@@ -81,12 +101,15 @@ hidden_imports = [
     'urllib3',
     'charset_normalizer',
     'idna',
-]
+    'core.offline_translator',
+    'ctranslate2',
+    'sentencepiece',
+] + ct2_hidden + sp_hidden
 
 a = Analysis(
     ['main.py'],
     pathex=[str(REPO_ROOT)],
-    binaries=[],
+    binaries=ct2_binaries + sp_binaries + extra_binaries,
     datas=added_files,
     hiddenimports=hidden_imports,
     hookspath=[],

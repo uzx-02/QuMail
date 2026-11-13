@@ -9,6 +9,8 @@
 import base64
 import re
 import email
+import email.header
+import email.utils
 import imaplib
 import ssl
 from dataclasses  import dataclass
@@ -155,7 +157,7 @@ def _get_imap_credentials(provider: str, account_email: str) -> tuple[str, str]:
     """
     try:
         if provider == "gmail":
-            return _GMAIL_IMAP_HOST, get_gmail_token()
+            return _GMAIL_IMAP_HOST, get_gmail_token(account_email)
         else:
             return _YAHOO_IMAP_HOST, get_yahoo_token()
     except (GmailAuthError, YahooAuthError) as exc:
@@ -207,12 +209,39 @@ def _open_imap_connection(imap_host: str, account_email: str, access_token: str)
         ) from exc
 
 
+def parse_rfc2047_sender(raw_from: str) -> tuple[str, str]:
+    """
+    Decodes RFC 2047 MIME encoded-word sender names.
+    E.g.: '=?UTF-8?Q?LinkedIn=20Job=20Alerts?= <jobalerts-noreply@linkedin.com>'
+    Returns: ('LinkedIn Job Alerts', 'jobalerts-noreply@linkedin.com')
+    """
+    if not raw_from or not str(raw_from).strip():
+        return "Unknown Sender", ""
+    raw_str = str(raw_from).strip()
+    display_name, email_addr = email.utils.parseaddr(raw_str)
+    decoded_parts = []
+    try:
+        for part, enc in email.header.decode_header(display_name or ""):
+            if isinstance(part, bytes):
+                decoded_parts.append(part.decode(enc or "utf-8", errors="ignore"))
+            else:
+                decoded_parts.append(str(part))
+        clean_name = "".join(decoded_parts).strip().strip('"\'')
+    except Exception:
+        clean_name = display_name or ""
+
+    if not clean_name:
+        clean_name = email_addr.split("@")[0] if email_addr else raw_str
+
+    return clean_name, email_addr
+
+
 def _parse_raw_message(uid: str, raw_bytes: bytes, starred: bool = False, seen: bool = True) -> InboxMessage:
     """
     Parse raw RFC 822 message bytes into an InboxMessage dataclass.
 
-    Decodes the Subject header using email.header.decode_header to handle
-    encoded-word syntax (e.g. =?UTF-8?B?...?=) correctly.
+    Decodes both the Subject and From headers using email.header.decode_header
+    to handle encoded-word syntax (e.g. =?UTF-8?B?...?= or =?UTF-8?Q?...?=) correctly.
     """
     msg = email.message_from_bytes(raw_bytes)
 
@@ -220,14 +249,19 @@ def _parse_raw_message(uid: str, raw_bytes: bytes, starred: bool = False, seen: 
     raw_subject = msg.get("Subject", "")
     subject_parts = email.header.decode_header(raw_subject)
     subject = "".join(
-        part.decode(enc or "utf-8") if isinstance(part, bytes) else part
+        part.decode(enc or "utf-8", errors="ignore") if isinstance(part, bytes) else str(part)
         for part, enc in subject_parts
     )
+
+    # Decode encoded-word Sender / From header
+    raw_from = msg.get("From", "")
+    clean_name, email_addr = parse_rfc2047_sender(raw_from)
+    sender_str = f'"{clean_name}" <{email_addr}>' if email_addr and clean_name else (clean_name or raw_from)
 
     return InboxMessage(
         uid=     uid,
         subject= subject,
-        sender=  msg.get("From", ""),
+        sender=  sender_str,
         date=    msg.get("Date", ""),
         message= msg,
         starred= starred,

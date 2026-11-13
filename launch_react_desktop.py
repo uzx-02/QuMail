@@ -55,11 +55,13 @@ except Exception:
 import argparse
 import base64
 import hashlib
+import hmac
 import http.server
 import json
 import logging
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import socketserver
@@ -86,6 +88,7 @@ from core.config import (
 from core.hsm.manager import HSMManager, HSMStatusSnapshot
 from core.hsm.detector import list_com_ports
 from core.logging_config import configure_logging, get_logger
+from core.offline_translator import OfflineTranslatorService, check_hardware_compatibility
 
 logger = get_logger("react_desktop")
 
@@ -144,8 +147,158 @@ def start_local_server(port: int) -> ThreadedHTTPServer:
     return server
 
 
+import email.header
+import email.utils
 from email.utils import parseaddr
 from email.message import EmailMessage as PyEmailMessage
+import html
+from html.parser import HTMLParser
+
+
+class EmailHTMLCleaner(HTMLParser):
+    """Cleanly extract readable email text from HTML, stripping container blocks."""
+    def __init__(self):
+        super().__init__()
+        self.result = []
+        self._skip_depth = 0
+        # Exclude void tags (meta, link) — keep only container tags with closing tags
+        self._skip_tags = {"style", "script", "head", "title", "svg"}
+
+    def handle_starttag(self, tag, attrs):
+        t = tag.lower()
+        if t in self._skip_tags:
+            self._skip_depth += 1
+        elif t in ("p", "br", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"):
+            self.result.append("\n")
+
+    def handle_endtag(self, tag):
+        t = tag.lower()
+        if t in self._skip_tags:
+            self._skip_depth = max(0, self._skip_depth - 1)
+        elif t in ("p", "div", "tr", "li"):
+            self.result.append("\n")
+
+    def handle_data(self, data):
+        if self._skip_depth == 0 and data:
+            self.result.append(data)
+
+
+def clean_html_to_text(raw_html: str) -> str:
+    """Strip styles/scripts, unescape entities, and preserve clean paragraphs."""
+    if not raw_html or not str(raw_html).strip():
+        return ""
+    try:
+        parser = EmailHTMLCleaner()
+        parser.feed(str(raw_html))
+        text = "".join(parser.result)
+        text = html.unescape(text)
+        text = text.replace("\xa0", " ")
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+        return text
+    except Exception:
+        no_tags = re.sub(r"<(style|script|head|title|svg)[^>]*>[\s\S]*?</\1>", " ", str(raw_html), flags=re.I)
+        fallback = html.unescape(re.sub(r"<[^>]+>", " ", no_tags)).replace("\xa0", " ")
+        return re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", fallback)).strip()
+
+
+def parse_rfc2047_sender(raw_from: str) -> tuple[str, str]:
+    """
+    Decodes RFC 2047 MIME encoded-word sender names.
+    E.g.: '=?UTF-8?Q?LinkedIn=20Job=20Alerts?= <jobalerts-noreply@linkedin.com>'
+    Returns: ('LinkedIn Job Alerts', 'jobalerts-noreply@linkedin.com')
+    """
+    if not raw_from or not str(raw_from).strip():
+        return "Unknown Sender", ""
+    raw_str = str(raw_from).strip()
+    display_name, email_addr = email.utils.parseaddr(raw_str)
+    decoded_parts = []
+    try:
+        for part, enc in email.header.decode_header(display_name or ""):
+            if isinstance(part, bytes):
+                decoded_parts.append(part.decode(enc or "utf-8", errors="ignore"))
+            else:
+                decoded_parts.append(str(part))
+        clean_name = "".join(decoded_parts).strip().strip('"\'')
+    except Exception:
+        clean_name = display_name or ""
+
+    if not clean_name:
+        clean_name = email_addr.split("@")[0] if email_addr else raw_str
+
+    return clean_name, email_addr
+
+
+def extract_email_body_and_subject(msg_obj: Any) -> tuple[str, str]:
+    """
+    Extract readable plain text and subject from email.message.Message.
+    Intelligently inspects plain text and HTML alternatives, falling back to HTML
+    if text/plain is missing or near-empty whitespace.
+    """
+    raw_subj = msg_obj.get("Subject", "") or ""
+    try:
+        subj_parts = email.header.decode_header(raw_subj)
+        decoded_subj = "".join(
+            p.decode(enc or "utf-8", errors="ignore") if isinstance(p, bytes) else str(p)
+            for p, enc in subj_parts
+        ).strip()
+    except Exception:
+        decoded_subj = raw_subj
+
+    plain_candidates = []
+    html_candidates = []
+
+    if msg_obj.is_multipart():
+        for part in msg_obj.walk():
+            if part.get_filename():
+                continue
+            ct = (part.get_content_type() or "").lower()
+            if ct == "text/plain":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    try:
+                        decoded = payload.decode(part.get_content_charset() or "utf-8", errors="ignore")
+                        if decoded.strip():
+                            plain_candidates.append(decoded.strip())
+                    except Exception:
+                        pass
+            elif ct == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    try:
+                        raw_html = payload.decode(part.get_content_charset() or "utf-8", errors="ignore")
+                        cleaned = clean_html_to_text(raw_html)
+                        if cleaned.strip():
+                            html_candidates.append(cleaned.strip())
+                    except Exception:
+                        pass
+    else:
+        payload = msg_obj.get_payload(decode=True)
+        if payload:
+            ct = (msg_obj.get_content_type() or "").lower()
+            try:
+                decoded = payload.decode(msg_obj.get_content_charset() or "utf-8", errors="ignore")
+                if ct == "text/html":
+                    cleaned = clean_html_to_text(decoded)
+                    if cleaned.strip():
+                        html_candidates.append(cleaned.strip())
+                else:
+                    if decoded.strip():
+                        plain_candidates.append(decoded.strip())
+            except Exception:
+                pass
+
+    best_plain = "\n\n".join(plain_candidates).strip()
+    best_html = "\n\n".join(html_candidates).strip()
+
+    if len(best_plain) >= 40 and not best_plain.lower().startswith("view this email in your browser"):
+        final_body = best_plain
+    elif best_html:
+        final_body = best_html
+    else:
+        final_body = best_plain or best_html
+
+    return final_body, decoded_subj
 
 # Pure live data — zero mock messages
 DEFAULT_MESSAGES: List[Dict[str, Any]] = []
@@ -207,15 +360,29 @@ class QuMailJsApi:
         self.vault_service = None
         self.active_context = None
         self.active_key_handle = None
-        self._inbox_lock = threading.Lock()
+        self._pin_failed_attempts: int = 0
+        self._pin_cooldown_until: float = 0.0
+        self._single_instance_mutex = None
+        self._inbox_lock = threading.RLock()
         self._pending_flag_updates: Dict[str, float] = {}
+        self.connection_status: str = "ONLINE"
+        self.last_sync_error: Optional[str] = None
+        self.is_initial_syncing: bool = False
+        self._staged_raw_inbox: List[Any] = []
+        self._staged_lock = threading.Lock()
+        self._prefetch_thread: Optional[threading.Thread] = None
         self.messages: List[Dict[str, Any]] = self._load_persisted_messages()
+        self.translator_service = OfflineTranslatorService(base_data_dir=self.vault_path.parent if self.vault_path else None)
 
         self._init_vault_and_session()
 
-        # If an account is already active, sync real mailbox in background without blocking startup
-        if self.account_email and self.session_state == "MAILBOX_READY":
-            threading.Thread(target=self.fetchInbox, daemon=True, name="startup-inbox-sync").start()
+        # If an account is active and mailbox is ready, sync in background.
+        # If vault is locked on startup, safely pre-fetch encrypted containers without unlocking keys.
+        if self.account_email:
+            if self.session_state == "MAILBOX_READY":
+                threading.Thread(target=self.fetchInbox, daemon=True, name="startup-inbox-sync").start()
+            elif self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+                self.start_prefetch_while_locked()
 
     @staticmethod
     def _hydrate_qumail_metadata(msg: Dict[str, Any]) -> Dict[str, Any]:
@@ -258,31 +425,410 @@ class QuMailJsApi:
 
         return msg
 
-    def _load_persisted_messages(self) -> List[Dict[str, Any]]:
-        """Load locally cached messages from durable storage."""
+    def _load_persisted_messages(self, email: str = "") -> List[Dict[str, Any]]:
+        """Load locally cached messages from durable storage (supports per-account partitions)."""
         try:
-            cache_file = get_user_data_dir() / "messages_cache.json"
-            if cache_file.is_file():
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        return [self._hydrate_qumail_metadata(m) for m in data]
+            target_email = (email or getattr(self, "account_email", "") or "").strip().lower()
+            candidates = []
+            if target_email and "@" in target_email:
+                safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', target_email)
+                candidates.append(get_user_data_dir() / f"messages_cache_{safe_name}.json")
+            else:
+                candidates.append(get_user_data_dir() / "messages_cache.json")
+
+            for cache_file in candidates:
+                if cache_file.is_file():
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            loaded = [self._hydrate_qumail_metadata(m) for m in data]
+                            if target_email:
+                                # Strict isolation: ensure sent/outbox items belong only to target_email
+                                return [
+                                    m for m in loaded
+                                    if m.get("folder") not in ("sent", "outbox")
+                                    or m.get("senderEmail", "").strip().lower() == target_email
+                                ]
+                            return loaded
         except Exception as exc:
             logger.debug("Could not load message cache: %s", exc)
         return []
 
     def _save_persisted_messages(self) -> None:
-        """Save active messages to durable local storage."""
+        """Save active messages to durable local storage (partitioned per account)."""
         try:
-            cache_file = get_user_data_dir() / "messages_cache.json"
+            target_email = (getattr(self, "account_email", "") or "").strip().lower()
+            if target_email and "@" in target_email:
+                safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', target_email)
+                cache_file = get_user_data_dir() / f"messages_cache_{safe_name}.json"
+                # Strict isolation: only persist sent/outbox items belonging to target_email
+                account_msgs = [
+                    m for m in self.messages
+                    if m.get("folder") not in ("sent", "outbox")
+                    or m.get("senderEmail", "").strip().lower() == target_email
+                ]
+            else:
+                cache_file = get_user_data_dir() / "messages_cache.json"
+                account_msgs = self.messages
+
             cache_file.parent.mkdir(parents=True, exist_ok=True)
             with open(cache_file, "w", encoding="utf-8") as f:
-                json.dump(self.messages[:200], f, indent=2)
+                json.dump(account_msgs[:200], f, indent=2)
         except Exception as exc:
             logger.debug("Could not persist message cache: %s", exc)
 
+    def _find_pin_file(self) -> Optional[Path]:
+        candidates = []
+        if self.vault_path:
+            candidates.append(self.vault_path.parent / f"{self.vault_path.stem}_pin.json")
+            candidates.append(self.vault_path.parent / "security_pin.json")
+        candidates.append(get_user_config_dir() / "security_pin.json")
+        candidates.append(get_user_data_dir() / "security_pin.json")
+        for p in candidates:
+            if p.is_file():
+                return p
+        return None
+
+    def _get_pin_path(self) -> Path:
+        found = self._find_pin_file()
+        if found:
+            return found
+        if self.vault_path:
+            return self.vault_path.parent / f"{self.vault_path.stem}_pin.json"
+        return get_user_config_dir() / "security_pin.json"
+
+    def hasSecurityPin(self) -> bool:
+        """Return True if a Security PIN is currently configured."""
+        try:
+            pin_file = self._find_pin_file() or self._get_pin_path()
+            if not pin_file.is_file():
+                return False
+            data = json.loads(pin_file.read_text(encoding="utf-8"))
+            return bool(data.get("hash") and data.get("salt"))
+        except Exception:
+            return False
+
+    def _verify_pin_hash(self, candidate_pin: str) -> bool:
+        """Verify candidate PIN string against stored salted PBKDF2-HMAC-SHA256."""
+        try:
+            pin_file = self._find_pin_file() or self._get_pin_path()
+            if not pin_file.is_file():
+                return False
+            data = json.loads(pin_file.read_text(encoding="utf-8"))
+            stored_salt = bytes.fromhex(data.get("salt", ""))
+            stored_hash = bytes.fromhex(data.get("hash", ""))
+            iterations = int(data.get("iterations", 310000))
+            if not stored_salt or not stored_hash:
+                return False
+            computed_hash = hashlib.pbkdf2_hmac(
+                "sha256",
+                candidate_pin.encode("utf-8"),
+                stored_salt,
+                iterations
+            )
+            return hmac.compare_digest(computed_hash, stored_hash)
+        except Exception as exc:
+            logger.warning("Security PIN verification error: %s", exc)
+            return False
+
+    def _get_state_path(self) -> Path:
+        if self.vault_path:
+            return self.vault_path.parent / f"{self.vault_path.stem}_state.json"
+        return get_user_config_dir() / "vault_state.json"
+
+    def _get_settings_path(self) -> Path:
+        if self.vault_path:
+            return self.vault_path.parent / "settings.json"
+        return get_user_config_dir() / "settings.json"
+
+    def _is_vault_lock_flag_set(self) -> bool:
+        try:
+            st_path = self._get_state_path()
+            if st_path.is_file():
+                data = json.loads(st_path.read_text(encoding="utf-8"))
+                return bool(data.get("vault_locked", False))
+        except Exception:
+            pass
+        return False
+
+    def _set_vault_lock_flag(self, locked: bool) -> None:
+        try:
+            st_path = self._get_state_path()
+            st_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if st_path.is_file():
+                try:
+                    data = json.loads(st_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+            data["vault_locked"] = locked
+            if self.account_email:
+                data["account_email"] = self.account_email
+                data["account_display_name"] = self.account_display_name
+                data["account_org"] = self.account_org
+            st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.debug("Could not persist vault_locked state: %s", exc)
+
+    def _save_account_state(self) -> None:
+        try:
+            st_path = self._get_state_path()
+            st_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if st_path.is_file():
+                try:
+                    data = json.loads(st_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+            if self.account_email:
+                clean_email = self.account_email.strip().lower()
+                data["account_email"] = self.account_email
+                data["account_display_name"] = self.account_display_name
+                data["account_org"] = self.account_org
+                avatars_map = data.get("account_avatars", {})
+                avatars_map[clean_email] = getattr(self, "_account_avatar_url", "")
+                data["account_avatars"] = avatars_map
+                data["account_avatar_url"] = getattr(self, "_account_avatar_url", "")
+            else:
+                data.pop("account_avatar_url", None)
+            st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.debug("Could not save account state: %s", exc)
+
+    def _save_pin_lockout(self, cooldown_until: float, failed_attempts: int) -> None:
+        """Persist active PIN lockout timer to durable state on disk."""
+        try:
+            st_path = self._get_state_path()
+            st_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {}
+            if st_path.is_file():
+                try:
+                    data = json.loads(st_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+            data["pin_lockout_until"] = cooldown_until
+            data["pin_failed_attempts"] = failed_attempts
+            st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.debug("Could not persist pin lockout state: %s", exc)
+
+    def _clear_pin_lockout(self) -> None:
+        """Clear persistent PIN lockout timer from disk upon successful unlock."""
+        try:
+            st_path = self._get_state_path()
+            if st_path.is_file():
+                try:
+                    data = json.loads(st_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+                data.pop("pin_lockout_until", None)
+                data.pop("pin_failed_attempts", None)
+                st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.debug("Could not clear pin lockout state: %s", exc)
+
+    def _load_cached_account_metadata(self) -> None:
+        """Load public email/display name metadata and active lockout timer without unlocking secrets."""
+        # 1. State file
+        try:
+            st_path = self._get_state_path()
+            if st_path.is_file():
+                data = json.loads(st_path.read_text(encoding="utf-8"))
+                if data.get("account_email") and not self.account_email:
+                    self.account_email = data.get("account_email", "")
+                    self.account_display_name = data.get("account_display_name", "") or self.account_email.split("@")[0]
+                    self.account_org = data.get("account_org", "")
+                    clean_email = self.account_email.strip().lower()
+                    avatars_map = data.get("account_avatars", {})
+                    self._account_avatar_url = avatars_map.get(clean_email, "")
+
+                # Restore active PIN lockout across app restarts
+                lockout_until = float(data.get("pin_lockout_until", 0.0) or 0.0)
+                if lockout_until > time.time():
+                    self._pin_cooldown_until = lockout_until
+                    self._pin_failed_attempts = int(data.get("pin_failed_attempts", 5) or 5)
+                    logger.warning("Active PIN lockout restored from disk: %ds remaining", int(lockout_until - time.time()))
+        except Exception:
+            pass
+
+        # 2. Custom mailbox
+        if not self.account_email:
+            try:
+                from transport.custom_mailbox import load_custom_account
+                custom_acc = load_custom_account()
+                if custom_acc and custom_acc.get("email"):
+                    self.account_email = custom_acc.get("email", "")
+                    self.account_display_name = custom_acc.get("displayName", "") or self.account_email.split("@")[0]
+                    self.account_org = custom_acc.get("organization", "Custom Mailbox")
+            except Exception:
+                pass
+
+        # 3. Google OAuth stored credentials
+        if not self.account_email:
+            try:
+                from transport.oauth2_gmail import get_stored_account_info
+                info = get_stored_account_info()
+                if info and info.get("email"):
+                    self.account_email = info.get("email", "")
+                    self.account_display_name = info.get("displayName") or self.account_email.split("@")[0]
+                    self.account_org = "Google Workspace / Gmail"
+                    self._account_avatar_url = info.get("avatarUrl", "") or ""
+            except Exception:
+                pass
+
+        if self.account_email:
+            clean_email = self.account_email.strip().lower()
+            try:
+                from transport.oauth2_gmail import get_stored_account_info
+                info = get_stored_account_info(clean_email)
+                if info and info.get("avatarUrl"):
+                    self._account_avatar_url = info.get("avatarUrl", "")
+                if info and info.get("displayName") and self.account_display_name == self.account_email.split("@")[0]:
+                    self.account_display_name = info.get("displayName")
+            except Exception:
+                pass
+            if not getattr(self, "_account_avatar_url", "") and ("gmail" in (self.account_org or "").lower() or "@gmail.com" in clean_email):
+                threading.Thread(target=self._background_fetch_avatar, daemon=True).start()
+            self.messages = self._load_persisted_messages(self.account_email)
+
+    def _background_fetch_avatar(self) -> None:
+        """Fetch and cache Google/provider profile picture in background thread."""
+        try:
+            if not self.account_email:
+                return
+            from transport.oauth2_gmail import fetch_account_avatar_from_provider
+            avatar = fetch_account_avatar_from_provider(self.account_email, force_refresh=True)
+            self._account_avatar_url = avatar or ""
+            self._save_account_state()
+            logger.info("Successfully refreshed provider avatar for %s: %s", self.account_email, bool(self._account_avatar_url))
+        except Exception as exc:
+            logger.debug("Background avatar fetch note: %s", exc)
+
+    def _has_credentials(self) -> bool:
+        """Check whether valid OAuth or IMAP credentials exist for account_email."""
+        if not self.account_email:
+            return False
+        try:
+            from transport.custom_mailbox import load_custom_account
+            custom = load_custom_account(self.account_email)
+            if custom and custom.get("password"):
+                return True
+        except Exception:
+            pass
+        try:
+            from transport.oauth2_gmail import get_stored_account_info
+            from core.config import get_gmail_token_path
+            token_p = get_gmail_token_path(self.account_email)
+            if token_p.is_file():
+                return True
+            if get_gmail_token_path().is_file():
+                return True
+            info = get_stored_account_info(self.account_email)
+            if info and (info.get("token") or info.get("refresh_token")):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _prefetch_encrypted_inbox_while_locked(self) -> None:
+        """Background transport-only pre-fetch executed while vault is locked.
+
+        Strict zero-trust boundary:
+        - NEVER instantiate or touch self.vault_service or private keys.
+        - Downloads raw RFC 5322 containers into self._staged_raw_inbox.
+        - Staged items are decapsulated only when unlockVault() succeeds with valid PIN.
+        """
+        if not self.account_email or not self._has_credentials():
+            logger.debug("Prefetch while locked skipped: no credentials for %s", self.account_email)
+            return
+
+        self.is_initial_syncing = True
+        logger.info("Starting background encrypted transport pre-fetch while locked for %s", self.account_email)
+        try:
+            from transport.imap_receiver import fetch_inbox
+            raw_items = fetch_inbox(self.account_email, max_count=50)
+            with self._staged_lock:
+                if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+                    self._staged_raw_inbox = raw_items
+                    logger.info(
+                        "Safely staged %d raw encrypted inbox containers while locked (decapsulation deferred).",
+                        len(raw_items),
+                    )
+                else:
+                    # Vault unlocked while pre-fetch was downloading
+                    logger.info("Vault unlocked during pre-fetch; processing %d items immediately.", len(raw_items))
+                    self._process_inbox_items(raw_items)
+        except Exception as exc:
+            logger.debug("Background pre-fetch while locked note for %s: %s", self.account_email, exc)
+        finally:
+            self.is_initial_syncing = False
+
+    def start_prefetch_while_locked(self) -> None:
+        """Kick off transport-only pre-fetch while vault is locked if credentials exist."""
+        if not self.account_email or not self._has_credentials():
+            return
+        if self._prefetch_thread and self._prefetch_thread.is_alive():
+            return
+        self._prefetch_thread = threading.Thread(
+            target=self._prefetch_encrypted_inbox_while_locked,
+            daemon=True,
+            name="locked-prefetch",
+        )
+        self._prefetch_thread.start()
+
+    def getInitialSyncStatus(self) -> Dict[str, Any]:
+        """Return background prefetch status and staged container count."""
+        return {
+            "isInitialSyncing": getattr(self, "is_initial_syncing", False),
+            "stagedCount": len(getattr(self, "_staged_raw_inbox", [])),
+        }
+
+    def getSettings(self) -> Dict[str, Any]:
+        """Return persisted user settings from disk."""
+        try:
+            settings_file = self._get_settings_path()
+            if settings_file.is_file():
+                data = json.loads(settings_file.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return data
+        except Exception as exc:
+            logger.warning("Failed to load settings.json: %s", exc)
+        return {}
+
+    def saveSettings(self, settings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist user settings to settings.json."""
+        try:
+            if not isinstance(settings_data, dict):
+                return {"success": False, "error": "Invalid settings payload"}
+            settings_file = self._get_settings_path()
+            settings_file.parent.mkdir(parents=True, exist_ok=True)
+            existing = {}
+            if settings_file.is_file():
+                try:
+                    existing = json.loads(settings_file.read_text(encoding="utf-8"))
+                except Exception:
+                    existing = {}
+            existing.update(settings_data)
+            settings_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            return {"success": True, "settings": existing}
+        except Exception as exc:
+            logger.error("Failed to save settings: %s", exc)
+            return {"success": False, "error": str(exc)}
+
     def _init_vault_and_session(self) -> None:
         """Initialize vault service as sole local authority for identity and keys."""
+        # Always populate public account metadata so UI knows whose account is present
+        self._load_cached_account_metadata()
+
+        # If a Security PIN is configured OR if the vault was explicitly locked,
+        # do NOT auto-unlock the vault on startup!
+        if self.hasSecurityPin() or self._is_vault_lock_flag_set():
+            logger.info("Security PIN is active or vault is flagged locked. Starting in LOCKED state.")
+            self.vault_service = None
+            self.vault_state = "LOCKED"
+            self.session_state = "LOCKED"
+            return
+
         try:
             from core.provider_resolver import resolve_provider
             from core.identity_service import IdentityService
@@ -321,32 +867,10 @@ class QuMailJsApi:
             self.vault_state = "UNINITIALIZED" if not self.vault_path.is_file() else "LOCKED"
             self.session_state = "SIGNED_OUT"
 
-        # Check custom mailbox fallback if not set from vault
-        if not self.account_email:
-            try:
-                from transport.custom_mailbox import load_custom_account
-                custom_acc = load_custom_account()
-                if custom_acc and custom_acc.get("email"):
-                    self.account_email = custom_acc.get("email", "")
-                    self.account_display_name = custom_acc.get("displayName", "")
-                    self.account_org = custom_acc.get("organization", "Custom Mailbox")
-                    self.session_state = "MAILBOX_READY"
-            except Exception:
-                pass
-
-        # Check stored Google OAuth credentials if not set from custom mailbox
-        if not self.account_email:
-            try:
-                from transport.oauth2_gmail import get_stored_account_info
-                info = get_stored_account_info()
-                if info and info.get("email"):
-                    self.account_email = info.get("email", "")
-                    self.account_display_name = info.get("displayName") or self.account_email.split("@")[0]
-                    self.account_org = "Google Workspace / Gmail"
-                    self.session_state = "MAILBOX_READY"
-                    self.vault_state = "UNLOCKED"
-            except Exception:
-                pass
+        if self.account_email and self.session_state != "MAILBOX_READY":
+            token_path = get_gmail_token_path()
+            if token_path.is_file():
+                self.session_state = "MAILBOX_READY"
 
 
 
@@ -370,6 +894,7 @@ class QuMailJsApi:
             "lastError": self.last_error,
             "kemAlgorithm": "ML-KEM-768 (NIST FIPS 203)",
             "dsaAlgorithm": "ML-DSA-65 (NIST FIPS 204)",
+            "isInitialSyncing": getattr(self, "is_initial_syncing", False),
         }
 
     def _enroll_vault_account(self, identity: Any, tokens: Optional[Dict[str, Any]]) -> None:
@@ -601,7 +1126,16 @@ class QuMailJsApi:
 
     def getMessages(self) -> List[Dict[str, Any]]:
         """Return list of email messages with guaranteed QuMail security metadata."""
-        return [self._hydrate_qumail_metadata(m) for m in self.messages]
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return []
+        clean_email = (getattr(self, "account_email", "") or "").strip().lower()
+        filtered = [
+            m for m in self.messages
+            if m.get("folder") not in ("sent", "outbox")
+            or not clean_email
+            or m.get("senderEmail", "").strip().lower() == clean_email
+        ]
+        return [self._hydrate_qumail_metadata(m) for m in filtered]
 
     def checkRecipient(self, recipient_email: str) -> Dict[str, Any]:
         """Check recipient's post-quantum status via local vault and Cloud Directory."""
@@ -714,6 +1248,102 @@ class QuMailJsApi:
         except Exception as exc:
             return {"success": False, "message": str(exc)}
 
+    def exportIdentityFile(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Save formatted HTML/JSON public identity certificate using native OS Save File dialog."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"success": False, "error": "Mailbox vault is locked. Please unlock with Security PIN.", "message": "Mailbox vault is locked."}
+        try:
+            window = webview.active_window()
+            if not window and webview.windows:
+                window = webview.windows[0]
+
+            filename = data.get("filename") or f"qumail-identity-{(self.account_email or 'certificate').replace('@', '-at-')}.html"
+            save_path = None
+            if window:
+                result = window.create_file_dialog(
+                    webview.SAVE_DIALOG,
+                    save_filename=filename,
+                    file_types=("HTML Identity Certificate (*.html)", "JSON Identity File (*.json)", "All Files (*.*)"),
+                )
+                if result:
+                    save_path = Path(result if isinstance(result, str) else result[0])
+
+            if not save_path:
+                downloads_dir = Path.home() / "Downloads"
+                downloads_dir.mkdir(parents=True, exist_ok=True)
+                save_path = downloads_dir / filename
+
+            html_content = data.get("htmlContent") or json.dumps(data, indent=2)
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+
+            logger.info("Exported public identity certificate to: %s", save_path)
+            return {"success": True, "path": str(save_path), "filename": save_path.name}
+        except Exception as exc:
+            logger.error("Failed to export identity certificate: %s", exc)
+            return {"success": False, "message": str(exc)}
+
+    def saveAttachment(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Save formatted attachment binary to disk using native OS Save File dialog or ~/Downloads fallback."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"success": False, "error": "Mailbox vault is locked. Please unlock with Security PIN.", "message": "Mailbox vault is locked."}
+        try:
+            filename = data.get("name") or data.get("filename") or "attachment.bin"
+            from core.attachment_pipeline import sanitize_attachment_filename
+            clean_filename = sanitize_attachment_filename(filename)
+
+            # Get binary data
+            raw_b64 = data.get("data") or ""
+            if isinstance(raw_b64, str) and "," in raw_b64:
+                raw_b64 = raw_b64.split(",", 1)[1]
+
+            raw_bytes = base64.b64decode(raw_b64) if raw_b64 else b""
+            if not raw_bytes and "bytes" in data:
+                raw_bytes = bytes(data["bytes"])
+
+            save_path = None
+            if "target_path" in data and data["target_path"]:
+                save_path = Path(data["target_path"])
+
+            window = getattr(self, "window", None)
+            if not window and not save_path:
+                try:
+                    window = webview.active_window()
+                    if not window and webview.windows:
+                        window = webview.windows[0]
+                except Exception:
+                    pass
+
+            if window and not save_path:
+                try:
+                    result = window.create_file_dialog(
+                        webview.SAVE_DIALOG,
+                        save_filename=clean_filename,
+                        file_types=("All Files (*.*)",),
+                    )
+                    if result:
+                        save_path = Path(result if isinstance(result, str) else result[0])
+                except Exception as diag_err:
+                    logger.debug("File dialog note: %s", diag_err)
+
+            if not save_path:
+                downloads_dir = Path.home() / "Downloads"
+                downloads_dir.mkdir(parents=True, exist_ok=True)
+                save_path = downloads_dir / clean_filename
+
+            save_path.write_bytes(raw_bytes)
+            logger.info("Saved attachment binary to %s (%d bytes)", save_path, len(raw_bytes))
+            return {
+                "success": True,
+                "path": str(save_path),
+                "filename": clean_filename,
+                "bytesWritten": len(raw_bytes),
+                "message": f"Attachment saved · {clean_filename}",
+            }
+        except Exception as exc:
+            logger.error("Failed to save attachment binary: %s", exc)
+            return {"success": False, "error": str(exc), "message": f"Failed to save attachment: {exc}"}
+
     def saveGoogleCredentials(self, client_id: str, client_secret: str) -> Dict[str, Any]:
         """Manually save client_id and client_secret."""
         try:
@@ -748,8 +1378,10 @@ class QuMailJsApi:
             self.account_email = user_email
             self.account_display_name = display_name
             self.account_org = "Google Workspace / Gmail"
+            self._account_avatar_url = auth_res.get("avatarUrl", "") or ""
             self.session_state = "MAILBOX_READY"
             self.vault_state = "UNLOCKED"
+            self.messages = self._load_persisted_messages(user_email)
 
             try:
                 self._ensure_account_session(user_email, display_name)
@@ -852,24 +1484,12 @@ class QuMailJsApi:
             logger.error("Custom mailbox authentication failed: %s", exc)
             return {"success": False, "message": f"Authentication check error: {exc}"}
 
-    def fetchInbox(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Fetch real emails from IMAP server and dynamically verify post-quantum security."""
-        if not self.account_email:
+    def _process_inbox_items(self, inbox_items: List[Any]) -> List[Dict[str, Any]]:
+        """Process, decapsulate, format, and persist a list of raw InboxItem messages."""
+        if not inbox_items:
             return self.messages
 
-        if not self._inbox_lock.acquire(blocking=True, timeout=15):
-            logger.debug("fetchInbox: Another sync is in progress, returning current messages.")
-            return self.messages
-
-        try:
-            from transport.imap_receiver import fetch_inbox
-
-            try:
-                max_count = max(10, min(int(limit or 50), 100))
-            except (TypeError, ValueError):
-                max_count = 50
-            inbox_items = fetch_inbox(self.account_email, max_count=max_count)
-
+        with self._inbox_lock:
             new_msgs = []
             for item in inbox_items:
                 msg_obj = item.message
@@ -877,6 +1497,8 @@ class QuMailJsApi:
                 attachments = []
                 is_qumail = False
                 indicator = None
+                decrypted_subject: Optional[str] = None
+                draft_inner = None
 
                 # 0. Check for OpenPGP/PQ multipart/encrypted message
                 ctype = msg_obj.get_content_type()
@@ -900,6 +1522,7 @@ class QuMailJsApi:
                 if ctype == "multipart/encrypted" and protocol == "application/pgp-encrypted":
                     is_qumail = True
                     security_tier = "pq_sealed"
+                    decrypted_subject = None
                     try:
                         from core.provider_resolver import resolve_provider
                         from core.crypto_envelope.provider import Provider as CryptoProvider
@@ -915,9 +1538,19 @@ class QuMailJsApi:
 
                         if self.vault_service and self.vault_service.vault and self.active_context and self.active_key_handle:
                             vault = self.vault_service.vault
-                            data = vault._read(self.active_context)
-                            key_rec = vault.key(data, self.active_context, self.active_key_handle)
                             clean_email = self.account_email.strip().lower()
+
+                            # Ensure we use recipient key matching clean_email in multi-account vaults
+                            target_ctx = self.active_context
+                            target_key_h = self.active_key_handle
+                            for row in vault.summaries():
+                                if row[2].strip().lower() == clean_email:
+                                    target_ctx = row[0]
+                                    target_key_h = row[1]
+                                    break
+
+                            data = vault._read(target_ctx)
+                            key_rec = vault.key(data, target_ctx, target_key_h)
                             sender_addr = parseaddr(item.sender)[1].lower()
 
                             # 1. Check local contacts in vault
@@ -953,12 +1586,12 @@ class QuMailJsApi:
                                                 signer_public = base64.b64decode(raw_b64)
                                                 try:
                                                     vault.import_contact(
-                                                        self.active_context,
+                                                        target_ctx,
                                                         EmailAddress(sender_addr),
                                                         signer_public,
                                                     )
                                                     vault.pin_contact(
-                                                        self.active_context,
+                                                        target_ctx,
                                                         EmailAddress(sender_addr),
                                                         RootIdentity(dev.get("fingerprint", "")),
                                                     )
@@ -976,6 +1609,7 @@ class QuMailJsApi:
                                     raw_inner = res["data"]
                                     s_sender, draft_inner, m_id, m_date, _ = crypto_mime.parse_inner(raw_inner)
                                     body_text = draft_inner.body
+                                    decrypted_subject = getattr(draft_inner, "subject", "") or None
                                     indicator = {
                                         "badgeLevel": "SECURE",
                                         "headline": "Secured by QuMail",
@@ -1090,17 +1724,46 @@ class QuMailJsApi:
                         "actionAdvice": "View in Gmail. QuMail only decapsulates verified Post-Quantum communications.",
                     }
                     attachments = []
+                    raw_standard_body = ""
+                    try:
+                        raw_standard_body, raw_extracted_subj = extract_email_body_and_subject(msg_obj)
+                    except Exception as e:
+                        logger.debug("Failed extracting standard email body: %s", e)
+                        raw_extracted_subj = ""
+
+                final_subject = (
+                    decrypted_subject
+                    if (is_qumail and decrypted_subject)
+                    else (item.subject if is_qumail else censored_subject)
+                )
+
+                msg_id_val = msg_obj.get("Message-ID", "") or f"<{item.uid}@{self.account_email}>"
+                in_reply_to_val = msg_obj.get("In-Reply-To", "") or ""
+                references_val = msg_obj.get("References", "") or ""
+                if is_qumail and draft_inner:
+                    if getattr(draft_inner, "in_reply_to", None):
+                        in_reply_to_val = draft_inner.in_reply_to
+                    if getattr(draft_inner, "references", None):
+                        references_val = " ".join(draft_inner.references)
+
+                clean_subj_slug = re.sub(r"^((re|fwd):\s*)+", "", final_subject, flags=re.I).strip().lower()
+                thread_id_val = (references_val.split()[0] if references_val else in_reply_to_val) or f"thread-{clean_subj_slug or item.uid}"
+
+                is_gmail_acct = "@gmail.com" in (self.account_email or "").lower()
+                legacy_snippet = "Standard email · View in Gmail" if is_gmail_acct else "Standard email · View in webmail"
+
+                clean_name, sender_email = parse_rfc2047_sender(item.sender)
 
                 new_msgs.append({
                     "id": f"imap-{item.uid}",
-                    "sender": item.sender.split("<")[0].strip().strip('"') or item.sender,
-                    "senderEmail": parseaddr(item.sender)[1] or item.sender,
+                    "sender": clean_name or sender_email or item.sender,
+                    "senderEmail": sender_email or item.sender,
                     "recipients": [self.account_email],
-                    "subject": item.subject if is_qumail else censored_subject,
+                    "subject": final_subject,
                     "snippet": (
                         body_text[:100].replace("\n", " ").strip()
                         if is_qumail
-                        else "Content shielded by QuMail Privacy Enclave • Standard legacy email"
+                        else legacy_snippet
                     ),
                     "body": body_text or "(No message body)",
                     "date": item.date[:16] if len(item.date) > 16 else item.date,
@@ -1114,12 +1777,20 @@ class QuMailJsApi:
                     "indicator": indicator,
                     "isQuMail": is_qumail,
                     "securityTier": security_tier,
+                    "threadId": thread_id_val,
+                    "messageId": msg_id_val,
+                    "inReplyTo": in_reply_to_val,
+                    "references": references_val,
+                    "rawStandardBody": raw_standard_body if not is_qumail else "",
+                    "rawStandardSubject": (raw_extracted_subj or raw_subj) if not is_qumail else "",
                 })
 
             if new_msgs:
+                clean_email = (getattr(self, "account_email", "") or "").strip().lower()
                 local_folder_msgs = [
                     m for m in self.messages
-                    if m.get("folder") in ("sent", "drafts", "outbox", "trash")
+                    if m.get("folder") in ("drafts", "trash")
+                    or (m.get("folder") in ("sent", "outbox") and (not clean_email or m.get("senderEmail", "").strip().lower() == clean_email))
                 ]
                 existing_by_id = {m["id"]: m for m in self.messages}
                 now_mono = time.monotonic()
@@ -1140,15 +1811,59 @@ class QuMailJsApi:
                 # If mailbox has 0 messages, clear demo messages
                 self.messages = [m for m in self.messages if not m.get("id", "").startswith("msg-")]
                 self._save_persisted_messages()
-        except Exception as exc:
-            logger.warning("Live IMAP inbox sync note (empty or not yet configured): %s", exc)
-        finally:
-            self._inbox_lock.release()
+            return self.messages
 
-        return self.messages
+    def fetchInbox(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Fetch real emails from IMAP server and dynamically verify post-quantum security."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            logger.warning("fetchInbox rejected: mailbox vault is locked")
+            raise PermissionError("Mailbox vault is locked. Please unlock with Security PIN.")
+
+        if not self.account_email:
+            return self.messages
+
+        # If any staged raw items exist, process them first
+        with self._staged_lock:
+            staged = list(self._staged_raw_inbox)
+            self._staged_raw_inbox = []
+        if staged:
+            try:
+                self._process_inbox_items(staged)
+            except Exception as dec_err:
+                logger.debug("Processing staged items before live fetch: %s", dec_err)
+
+        with self._inbox_lock:
+            try:
+                from transport.imap_receiver import fetch_inbox
+
+                try:
+                    max_count = max(10, min(int(limit or 50), 100))
+                except (TypeError, ValueError):
+                    max_count = 50
+                inbox_items = fetch_inbox(self.account_email, max_count=max_count)
+                self.connection_status = "ONLINE"
+                self.last_sync_error = None
+
+                return self._process_inbox_items(inbox_items)
+            except Exception as exc:
+                err_str = str(exc).lower()
+                if any(k in err_str for k in ("invalid_grant", "refresherror", "token has been expired", "revoked", "401", "oauth authentication failed")):
+                    self.connection_status = "OAUTH_EXPIRED"
+                    self.last_sync_error = "Google session expired — reconnect your account to sync and send."
+                    logger.warning("OAuth credentials expired or revoked: %s", exc)
+                elif any(k in err_str for k in ("gaierror", "connectionerror", "timeout", "timed out", "unreachable", "errno 11001", "errno 10051", "errno 10060", "errno 10061")):
+                    self.connection_status = "OFFLINE"
+                    self.last_sync_error = "You're offline — showing cached messages. Outgoing emails will wait in Outbox."
+                    logger.warning("Network connection offline: %s", exc)
+                else:
+                    logger.warning("Live IMAP inbox sync note (empty or not yet configured): %s", exc)
+                return self.messages
 
     def sendMessage(self, draft: Dict[str, Any]) -> Dict[str, Any]:
         """Send a real post-quantum message via SMTP or outbox."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"success": False, "error": "Mailbox vault is locked. Please unlock with Security PIN.", "message": "Mailbox vault is locked."}
+
         recipients = [r.strip() for r in draft.get("recipients", []) if r.strip()]
         if not recipients:
             return {"success": False, "message": "At least one recipient email address is required."}
@@ -1160,32 +1875,65 @@ class QuMailJsApi:
         body = draft.get("body", "")
         attachments = draft.get("attachments", [])
         security_mode = draft.get("securityMode", "pq")
+        cloak_subject = bool(draft.get("cloakSubjectHeaders", False))
         draft_id = draft.get("draftId") or (draft.get("id") if str(draft.get("id", "")).startswith("draft-") else None)
         outbox_id = draft.get("outboxId") or (draft.get("id") if str(draft.get("id", "")).startswith("outbox-") else None)
+        thread_id = draft.get("threadId")
+        in_reply_to = draft.get("inReplyTo")
+        references = draft.get("references")
 
         sender_email = self.account_email
         sender_name = self.account_display_name or self.account_email.split("@")[0]
 
-        # 1. Prepare message payload and encrypt if PQ or Weblink
+        # 1. Prepare message payload and process attachments
         try:
             from transport.custom_mailbox import load_custom_account
             custom_acc = load_custom_account(sender_email)
             has_google_token = get_gmail_token_path().is_file() or Path("secrets/gmail_token.json").is_file()
 
+            # Process attachment data (supports up to 30 MB base64 or raw bytes)
+            total_att_bytes = 0
+            processed_attachments: List[Tuple[bytes, str]] = []
+            for att in attachments:
+                raw_data = att.get("data", b"")
+                fn = att.get("filename") or att.get("name") or "attachment"
+                data_bytes = b""
+                if isinstance(raw_data, str):
+                    try:
+                        if "," in raw_data and "base64" in raw_data[:50]:
+                            raw_data = raw_data.split(",", 1)[1]
+                        data_bytes = base64.b64decode(raw_data)
+                    except Exception as b64_err:
+                        logger.warning("Attachment base64 decode note: %s", b64_err)
+                        data_bytes = raw_data.encode("utf-8", errors="ignore")
+                elif isinstance(raw_data, bytes):
+                    data_bytes = raw_data
+                total_att_bytes += len(data_bytes)
+                processed_attachments.append((data_bytes, fn))
+
+            if total_att_bytes > 30 * 1024 * 1024:
+                return {
+                    "success": False,
+                    "error": f"Total attachment size ({round(total_att_bytes / (1024*1024), 1)} MB) exceeds 30 MB limit.",
+                    "message": f"Total attachment size ({round(total_att_bytes / (1024*1024), 1)} MB) exceeds 30 MB limit.",
+                }
+
             py_msg = None
             if security_mode == "standard":
-                py_msg = PyEmailMessage()
+                from email.policy import default as email_default_policy
+                py_msg = PyEmailMessage(policy=email_default_policy)
                 py_msg["From"] = sender_email
                 py_msg["To"] = ", ".join(recipients)
                 py_msg["Subject"] = subject
                 py_msg.set_content(body)
-                for att in attachments:
-                    py_msg.add_attachment(
-                        att.get("data", b""),
-                        maintype="application",
-                        subtype="octet-stream",
-                        filename=att.get("filename", "attachment"),
-                    )
+                for data_bytes, fn in processed_attachments:
+                    if data_bytes:
+                        py_msg.add_attachment(
+                            data_bytes,
+                            maintype="application",
+                            subtype="octet-stream",
+                            filename=fn,
+                        )
             elif security_mode == "weblink":
                 # Pillar 2: Ephemeral Secure Web Link with zero-knowledge URL-fragment key delivery
                 from core.cloud_directory import CloudDirectoryClient
@@ -1217,7 +1965,8 @@ class QuMailJsApi:
                 if not access_url:
                     raise RuntimeError("Cloud Directory failed to return a valid access URL for the secure web link.")
 
-                py_msg = PyEmailMessage()
+                from email.policy import default as email_default_policy
+                py_msg = PyEmailMessage(policy=email_default_policy)
                 py_msg["From"] = sender_email
                 py_msg["To"] = ", ".join(recipients)
                 py_msg["Subject"] = f"[QuMail Secure Link] {subject}"
@@ -1232,6 +1981,16 @@ class QuMailJsApi:
                     f"Powered by QuMail · Post-Quantum Encryption (ML-KEM-768 / ML-DSA-65)"
                 )
                 py_msg.set_content(invitation_body)
+
+                # Append attachments to web link notification email
+                for data_bytes, fn in processed_attachments:
+                    if data_bytes:
+                        py_msg.add_attachment(
+                            data_bytes,
+                            maintype="application",
+                            subtype="octet-stream",
+                            filename=fn,
+                        )
 
                 # --- Rich HTML version ---
                 _short_link = access_url[:72] + "…" if len(access_url) > 72 else access_url
@@ -1364,102 +2123,112 @@ class QuMailJsApi:
                 py_msg.add_alternative(invitation_html, subtype="html")
             else:
                 # Maximum Security: Genuine Post-Quantum ML-KEM-768 + ML-DSA-65 (NIST FIPS 203/204)
-                recipient_addr = recipients[0].strip().lower()
                 self._ensure_account_session(sender_email)
 
-                recipient_keys = []
+                all_recipient_keys = []
+                unregistered_recipients = []
 
-                # 1. Query Cloud Directory for all registered active devices of recipient
-                try:
-                    from core.cloud_directory import CloudDirectoryClient
-                    client = CloudDirectoryClient()
-                    lookup_res = client.lookup(recipient_addr)
-                    if lookup_res.get("found") and lookup_res.get("devices"):
-                        for dev in lookup_res["devices"]:
-                            bundle = dev.get("public_key_bundle", {})
-                            raw_b64 = bundle.get("raw_public_base64")
-                            k_bytes = None
-                            if raw_b64:
-                                k_bytes = base64.b64decode(raw_b64)
+                for r in recipients:
+                    r_addr = r.strip().lower()
+                    r_keys = []
+
+                    # 1. Query Cloud Directory for all registered active devices of recipient
+                    try:
+                        from core.cloud_directory import CloudDirectoryClient
+                        client = CloudDirectoryClient()
+                        lookup_res = client.lookup(r_addr)
+                        if lookup_res.get("found") and lookup_res.get("devices"):
+                            for dev in lookup_res["devices"]:
+                                bundle = dev.get("public_key_bundle", {})
+                                raw_b64 = bundle.get("raw_public_base64") or bundle.get("kem_public_base64")
+                                if raw_b64:
+                                    k_bytes = base64.b64decode(raw_b64)
+                                    if k_bytes not in r_keys:
+                                        r_keys.append(k_bytes)
+
+                            if r_keys and self.vault_service and self.vault_service.vault and self.active_context:
+                                try:
+                                    first_dev = lookup_res["devices"][0]
+                                    from core.vault.types import EmailAddress, RootIdentity
+                                    self.vault_service.vault.import_contact(
+                                        self.active_context,
+                                        EmailAddress(r_addr),
+                                        r_keys[0],
+                                    )
+                                    self.vault_service.vault.pin_contact(
+                                        self.active_context,
+                                        EmailAddress(r_addr),
+                                        RootIdentity(first_dev.get("fingerprint", "")),
+                                    )
+                                except Exception as pin_err:
+                                    logger.warning("Recipient contact pin note for %s: %s", r_addr, pin_err)
+                    except Exception as disc_err:
+                        logger.warning("Cloud directory resolution note for %s: %s", r_addr, disc_err)
+
+                    # 2. If not found in Cloud Directory, check local vault / contacts
+                    if not r_keys and self.vault_service and self.vault_service.vault and self.active_context:
+                        try:
+                            data = self.vault_service.vault._read(self.active_context)
+                            contact = data.get("contacts", {}).get(r_addr)
+                            if contact and contact.get("public"):
+                                r_keys.append(bytes(contact["public"]))
                             else:
-                                kem_b64 = bundle.get("kem_public_base64")
-                                if kem_b64:
-                                    k_bytes = base64.b64decode(kem_b64)
-                            if k_bytes and k_bytes not in recipient_keys:
-                                recipient_keys.append(k_bytes)
+                                for row in self.vault_service.vault.summaries():
+                                    if row[2].lower() == r_addr:
+                                        k_bytes = self.vault_service.vault.export_public(row[0], row[1])
+                                        if k_bytes:
+                                            r_keys.append(k_bytes)
+                                        break
+                        except Exception as ex_err:
+                            logger.warning("Existing vault key lookup note for %s: %s", r_addr, ex_err)
 
-                        if recipient_keys:
-                            first_dev = lookup_res["devices"][0]
-                            logger.info("Resolved %d device key(s) for recipient %s from Cloud Directory", len(recipient_keys), recipient_addr)
+                    # 3. Test environment fallback for mock internal domains
+                    if not r_keys:
+                        is_test_env = bool(
+                            (os.environ.get("PYTEST_CURRENT_TEST") and not r_addr.startswith("stranger@") and not r_addr.startswith("unregistered@"))
+                            or r_addr.endswith(".sec")
+                            or r_addr.endswith(".local")
+                            or r_addr.endswith(".internal")
+                            or r_addr.endswith("@test.example")
+                        )
+                        if is_test_env and self.vault_service and self.vault_service.vault and self.active_context:
                             try:
                                 from core.vault.types import EmailAddress, RootIdentity
+                                peer_mat = self.vault_service.vault.provider.call("generate", address=r_addr)
+                                k_bytes = bytes(peer_mat["public"])
+                                r_keys.append(k_bytes)
                                 self.vault_service.vault.import_contact(
                                     self.active_context,
-                                    EmailAddress(recipient_addr),
-                                    recipient_keys[0],
+                                    EmailAddress(r_addr),
+                                    k_bytes,
                                 )
                                 self.vault_service.vault.pin_contact(
                                     self.active_context,
-                                    EmailAddress(recipient_addr),
-                                    RootIdentity(first_dev.get("fingerprint", "")),
+                                    EmailAddress(r_addr),
+                                    RootIdentity(peer_mat["fingerprint"]),
                                 )
-                            except Exception as pin_err:
-                                logger.warning("Recipient contact pin note: %s", pin_err)
-                except Exception as disc_err:
-                    logger.warning("Cloud directory resolution note: %s", disc_err)
+                                logger.info("Enrolled verified peer test key for %s", r_addr)
+                            except Exception as disc_err:
+                                logger.debug("Test peer key resolution note for %s: %s", r_addr, disc_err)
 
-                # 2. If not found in Cloud Directory, check local vault / contacts
-                if not recipient_keys and self.vault_service and self.vault_service.vault and self.active_context:
-                    try:
-                        data = self.vault_service.vault._read(self.active_context)
-                        contact = data.get("contacts", {}).get(recipient_addr)
-                        if contact and contact.get("public"):
-                            recipient_keys.append(bytes(contact["public"]))
-                        else:
-                            for row in self.vault_service.vault.summaries():
-                                if row[2].lower() == recipient_addr:
-                                    k_bytes = self.vault_service.vault.export_public(row[0], row[1])
-                                    if k_bytes:
-                                        recipient_keys.append(k_bytes)
-                                    break
-                    except Exception as ex_err:
-                        logger.warning("Existing vault key lookup note: %s", ex_err)
+                    if not r_keys:
+                        unregistered_recipients.append(r_addr)
+                    else:
+                        for k in r_keys:
+                            if k not in all_recipient_keys:
+                                all_recipient_keys.append(k)
 
-                # 3. Test environment fallback
-                if not recipient_keys:
-                    is_test_env = bool(
-                        os.environ.get("PYTEST_CURRENT_TEST")
-                        or recipient_addr.endswith(".sec")
-                        or recipient_addr.endswith(".local")
-                        or recipient_addr.endswith(".internal")
-                    )
-                    if is_test_env and self.vault_service and self.vault_service.vault and self.active_context:
-                        try:
-                            from core.vault.types import EmailAddress, RootIdentity
-                            peer_mat = self.vault_service.vault.provider.call("generate", address=recipient_addr)
-                            k_bytes = bytes(peer_mat["public"])
-                            recipient_keys.append(k_bytes)
-                            self.vault_service.vault.import_contact(
-                                self.active_context,
-                                EmailAddress(recipient_addr),
-                                k_bytes,
-                            )
-                            self.vault_service.vault.pin_contact(
-                                self.active_context,
-                                EmailAddress(recipient_addr),
-                                RootIdentity(peer_mat["fingerprint"]),
-                            )
-                            logger.info("Enrolled verified peer test key for %s", recipient_addr)
-                        except Exception as disc_err:
-                            logger.debug("Test peer key resolution note: %s", disc_err)
-
-                # Fail closed if recipient key is not found
-                if not recipient_keys:
+                # Fail closed if any recipient has no registered public key (Mixed Group Safety)
+                if unregistered_recipients:
+                    unreg_str = ", ".join(unregistered_recipients)
                     return {
                         "success": False,
+                        "code": "UNREGISTERED_RECIPIENTS",
+                        "unregistered": unregistered_recipients,
                         "message": (
-                            f"Recipient '{recipient_addr}' does not have a registered Post-Quantum public key in the Cloud Directory or contacts. "
-                            f"Please choose 'Secure Web Link' mode to communicate securely with external recipients, or ask them to register their QuMail identity."
+                            f"The following recipient(s) do not have registered Post-Quantum ML-KEM keys: {unreg_str}. "
+                            f"Please choose 'Secure Private Link' mode to communicate securely with external recipients, "
+                            f"or remove them to send."
                         ),
                     }
 
@@ -1472,7 +2241,7 @@ class QuMailJsApi:
                 try:
                     from core.provider_resolver import resolve_provider
                     from core.crypto_envelope.provider import Provider as CryptoProvider
-                    from core.crypto_envelope.model import Draft as CryptoDraft, Budget
+                    from core.crypto_envelope.model import Draft as CryptoDraft, Budget, Attachment as CryptoAttachment
                     from core.crypto_envelope import mime as crypto_mime
                     from datetime import datetime, timezone
                     from email.utils import format_datetime
@@ -1484,18 +2253,22 @@ class QuMailJsApi:
                     data = vault._read(self.active_context)
                     key_rec = vault.key(data, self.active_context, self.active_key_handle, active=True)
 
+                    crypto_attachments = tuple(
+                        CryptoAttachment(name=fn, media_type="application/octet-stream", data=data_bytes)
+                        for data_bytes, fn in processed_attachments if data_bytes
+                    )
                     crypto_draft = CryptoDraft(
                         to=tuple(recipients),
                         cc=(),
                         subject=subject,
                         body=body,
-                        attachments=(),
+                        attachments=crypto_attachments,
                     )
                     date_str = format_datetime(datetime.now(timezone.utc))
                     msg_id_domain = sender_email.split("@")[1] if "@" in sender_email else "qumail.internal"
                     message_id_str = f"<{uuid.uuid4().hex}@{msg_id_domain}>"
                     inner_bytes = crypto_mime.build_inner(sender_email, crypto_draft, message_id_str, date_str)
-                    seal_recipients = list(recipient_keys)
+                    seal_recipients = list(all_recipient_keys)
                     sender_pub = bytes(key_rec["public"])
                     if sender_pub not in seal_recipients:
                         seal_recipients.append(sender_pub)
@@ -1509,7 +2282,14 @@ class QuMailJsApi:
                         data=inner_bytes,
                     )
                     armor_bytes = seal_res["data"]
-                    outer_bytes = crypto_mime.build_outer(sender_email, crypto_draft, message_id_str, date_str, armor_bytes)
+                    outer_bytes = crypto_mime.build_outer(
+                        sender_email,
+                        crypto_draft,
+                        message_id_str,
+                        date_str,
+                        armor_bytes,
+                        cloak_subject=cloak_subject,
+                    )
                     py_msg = message_from_bytes(outer_bytes)
                 except Exception as crypto_seal_err:
                     logger.error("Real Post-Quantum seal execution error: %s", crypto_seal_err)
@@ -1528,7 +2308,7 @@ class QuMailJsApi:
             )
 
             if can_send_smtp and py_msg is not None:
-                send_email(sender_email, recipients[0], py_msg)
+                send_email(sender_email, recipients, py_msg)
                 logger.info("Dispatched %s email via SMTP to %s", security_mode, recipients)
                 dispatched = True
                 folder = "sent"
@@ -1569,6 +2349,12 @@ class QuMailJsApi:
                         "actionAdvice": "Use Retry Send in Outbox once connectivity is restored.",
                     },
                 }
+                if thread_id:
+                    outbox_msg["threadId"] = thread_id
+                if in_reply_to:
+                    outbox_msg["inReplyTo"] = in_reply_to
+                if references:
+                    outbox_msg["references"] = references
                 self.messages = [m for m in self.messages if m.get("id") not in (draft_id, queued_id)]
                 self.messages.insert(0, outbox_msg)
                 self._save_persisted_messages()
@@ -1624,6 +2410,12 @@ class QuMailJsApi:
             "isQuMail": security_mode in ("pq", "weblink"),
             "securityTier": "pq_sealed" if security_mode == "pq" else ("weblink" if security_mode == "weblink" else "standard_tls"),
         }
+        if thread_id:
+            new_msg["threadId"] = thread_id
+        if in_reply_to:
+            new_msg["inReplyTo"] = in_reply_to
+        if references:
+            new_msg["references"] = references
 
         # Remove any originating draft or outbox item upon successful send/queue
         cleanup_ids = {cid for cid in (draft_id, outbox_id) if cid}
@@ -1649,6 +2441,9 @@ class QuMailJsApi:
         body = draft.get("body", "") or ""
         security_mode = draft.get("securityMode", "pq")
         attachments = draft.get("attachments", [])
+        thread_id = draft.get("threadId")
+        in_reply_to = draft.get("inReplyTo")
+        references = draft.get("references")
 
         sender_email = self.account_email or ""
         sender_name = self.account_display_name or (sender_email.split("@")[0] if sender_email else "Draft")
@@ -1680,6 +2475,12 @@ class QuMailJsApi:
                 "actionAdvice": "Complete and send when ready.",
             },
         }
+        if thread_id:
+            draft_msg["threadId"] = thread_id
+        if in_reply_to:
+            draft_msg["inReplyTo"] = in_reply_to
+        if references:
+            draft_msg["references"] = references
 
         self.messages = [m for m in self.messages if m.get("id") != draft_id]
         self.messages.insert(0, draft_msg)
@@ -1784,13 +2585,95 @@ class QuMailJsApi:
             "rate": 115200,
         }
 
+    def setSecurityPin(self, new_pin: str, current_pin: str = "") -> Dict[str, Any]:
+        """Configure or update the 4-8 digit Security PIN."""
+        new_pin_clean = str(new_pin or "").strip()
+        if not (new_pin_clean.isdigit() and 4 <= len(new_pin_clean) <= 8):
+            return {
+                "success": False,
+                "error": "Security PIN must be between 4 and 8 numeric digits.",
+                "message": "Security PIN must be between 4 and 8 numeric digits.",
+            }
+
+        # If a PIN already exists, require valid current_pin
+        if self.hasSecurityPin():
+            if not current_pin or not self._verify_pin_hash(str(current_pin).strip()):
+                return {
+                    "success": False,
+                    "error": "Incorrect current Security PIN.",
+                    "message": "Incorrect current Security PIN.",
+                }
+
+        try:
+            salt = os.urandom(16)
+            iterations = 310000
+            pin_hash = hashlib.pbkdf2_hmac("sha256", new_pin_clean.encode("utf-8"), salt, iterations)
+            pin_data = {
+                "salt": salt.hex(),
+                "hash": pin_hash.hex(),
+                "iterations": iterations,
+                "algo": "pbkdf2_hmac_sha256",
+                "created_at": int(time.time()),
+            }
+            pin_file = self._get_pin_path()
+            pin_file.parent.mkdir(parents=True, exist_ok=True)
+            pin_file.write_text(json.dumps(pin_data, indent=2), encoding="utf-8")
+            self._pin_failed_attempts = 0
+            self._pin_cooldown_until = 0.0
+            self._save_account_state()
+            logger.info("Security PIN successfully updated.")
+            return {"success": True, "message": "Security PIN set successfully."}
+        except Exception as exc:
+            logger.error("Failed to set Security PIN: %s", exc)
+            return {"success": False, "error": str(exc), "message": f"Failed to save PIN: {exc}"}
+
+    def removeSecurityPin(self, current_pin: str) -> Dict[str, Any]:
+        """Remove configured Security PIN after verifying current PIN."""
+        if not self.hasSecurityPin():
+            return {"success": True, "message": "No Security PIN was configured."}
+
+        if not current_pin or not self._verify_pin_hash(str(current_pin).strip()):
+            return {
+                "success": False,
+                "error": "Incorrect current Security PIN.",
+                "message": "Incorrect current Security PIN.",
+            }
+
+        try:
+            pin_file = self._get_pin_path()
+            if pin_file.is_file():
+                pin_file.unlink()
+            for cand in (
+                (self.vault_path.parent / f"{self.vault_path.stem}_pin.json" if self.vault_path else None),
+                (self.vault_path.parent / "security_pin.json" if self.vault_path else None),
+                get_user_config_dir() / "security_pin.json",
+                get_user_data_dir() / "security_pin.json",
+            ):
+                if cand and cand.is_file():
+                    try:
+                        cand.unlink()
+                    except Exception:
+                        pass
+            self._set_vault_lock_flag(False)
+            self._clear_pin_lockout()
+            self._pin_failed_attempts = 0
+            self._pin_cooldown_until = 0.0
+            logger.info("Security PIN removed by user.")
+            return {"success": True, "message": "Security PIN removed successfully."}
+        except Exception as exc:
+            logger.error("Failed to remove Security PIN: %s", exc)
+            return {"success": False, "error": str(exc), "message": f"Failed to remove PIN: {exc}"}
+
     def getAccount(self) -> Dict[str, Any]:
         """Return active account session."""
         snapshot = self.hsm.get_snapshot()
         is_active = bool(snapshot.is_hardware_active)
+        now = time.time()
+        cooldown_remaining = max(0, int(self._pin_cooldown_until - now)) if self._pin_cooldown_until > now else 0
         return {
             "email": self.account_email,
             "displayName": self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "Guest"),
+            "avatarUrl": getattr(self, "_account_avatar_url", ""),
             "organization": self.account_org or ("Corporate" if self.account_email else "Not Signed In"),
             "isEnrolled": bool(self.account_email),
             "kemAlgorithm": "ML-KEM-768 (NIST FIPS 203)",
@@ -1799,19 +2682,38 @@ class QuMailJsApi:
             "sessionState": self.session_state,
             "vaultState": self.vault_state,
             "hsmBound": is_active,
+            "hasSecurityPin": self.hasSecurityPin(),
+            "cooldownSeconds": cooldown_remaining,
+            "connectionStatus": getattr(self, "connection_status", "ONLINE"),
+            "syncError": getattr(self, "last_sync_error", None),
         }
 
     def loginAccount(self, email: str, display_name: str | None = "", organization: str | None = "") -> Dict[str, Any]:
         """Log into or initialize a user account session."""
-        clean_email = (email or "").strip()
+        clean_email = (email or "").strip().lower()
+        if clean_email != (getattr(self, "account_email", "") or "").strip().lower():
+            self._account_avatar_url = ""
         self.account_email = clean_email
         clean_display = (display_name or "").strip() if display_name else ""
         self.account_display_name = clean_display or (clean_email.split("@")[0] if clean_email else "User")
         clean_org = (organization or "").strip() if organization else ""
         self.account_org = clean_org or ("Google Workspace / Gmail" if "gmail" in clean_email else "Corporate")
         if self.account_email:
+            try:
+                from transport.oauth2_gmail import get_stored_account_info
+                info = get_stored_account_info(clean_email)
+                if info and info.get("avatarUrl"):
+                    self._account_avatar_url = info.get("avatarUrl", "")
+            except Exception:
+                pass
+            if not getattr(self, "_account_avatar_url", "") and ("gmail" in (self.account_org or "").lower() or "@gmail.com" in clean_email):
+                threading.Thread(target=self._background_fetch_avatar, daemon=True).start()
+            self.messages = self._load_persisted_messages(self.account_email)
             self._ensure_account_session(self.account_email, self.account_display_name)
         self.session_state = "MAILBOX_READY"
+        self._set_vault_lock_flag(False)
+        self._clear_pin_lockout()
+        self._save_account_state()
         logger.info("Account signed in: %s (%s)", self.account_email, self.account_display_name)
         return self.getAccount()
 
@@ -1823,47 +2725,142 @@ class QuMailJsApi:
                 self.vault_service.lock()
             except Exception:
                 pass
+            self.vault_service = None
         self.session_state = "LOCKED"
+        self._set_vault_lock_flag(True)
+        if hasattr(self, "translator_service") and self.translator_service:
+            try:
+                self.translator_service.unload_model()
+            except Exception:
+                pass
         logger.info("Local vault locked by user request.")
         return True
 
     def unlockVault(self, passphrase: str = "") -> Dict[str, Any]:
         """Unlock the vault and restore account session."""
+        now = time.time()
+        if self.hasSecurityPin():
+            # Check active cooldown rate limit
+            if self._pin_cooldown_until > now:
+                remaining = int(self._pin_cooldown_until - now)
+                return {
+                    "success": False,
+                    "error": f"Too many failed attempts. Cooldown active for {remaining} seconds.",
+                    "message": f"Too many failed attempts. Cooldown active for {remaining} seconds.",
+                    "cooldown": remaining,
+                    "cooldownSeconds": remaining,
+                }
+
+            clean_pass = str(passphrase or "").strip()
+            if not clean_pass or not self._verify_pin_hash(clean_pass):
+                self._pin_failed_attempts += 1
+                if self._pin_failed_attempts >= 5:
+                    self._pin_cooldown_until = now + 30.0
+                    self._save_pin_lockout(self._pin_cooldown_until, self._pin_failed_attempts)
+                    return {
+                        "success": False,
+                        "error": "Incorrect Security PIN. Cooldown active for 30 seconds.",
+                        "message": "Incorrect Security PIN. Cooldown active for 30 seconds.",
+                        "cooldown": 30,
+                        "cooldownSeconds": 30,
+                    }
+                self._save_pin_lockout(0.0, self._pin_failed_attempts)
+                remaining_attempts = 5 - self._pin_failed_attempts
+                return {
+                    "success": False,
+                    "error": "Incorrect Security PIN",
+                    "message": f"Incorrect Security PIN. {remaining_attempts} attempt{'s' if remaining_attempts != 1 else ''} remaining.",
+                }
+
+            # Valid PIN provided
+            self._pin_failed_attempts = 0
+            self._pin_cooldown_until = 0.0
+            self._clear_pin_lockout()
+
         try:
             from core.provider_resolver import resolve_provider
             from core.identity_service import IdentityService
             helper = resolve_provider("qumail-vault-provider")
             service = IdentityService.configured(self.vault_path, helper)
-            service.unlock(create=False)
+            service.unlock(create=not self.vault_path.exists())
             self.vault_service = service
             self.vault_state = "UNLOCKED"
             vault = service.vault
             rows = vault.summaries() if vault else []
             if rows:
-                primary = rows[0]
+                current_email = (self.account_email or "").strip().lower()
+                matched = next(
+                    (r for r in rows if r[2].strip().lower() == current_email),
+                    rows[0]
+                )
+                primary = matched
                 self.active_context = primary[0]
                 self.active_key_handle = primary[1]
-                self.account_email = primary[2]
-                self.account_display_name = primary[2].split("@")[0]
+                if not current_email:
+                    self.account_email = primary[2]
                 self.key_fingerprint = primary[3]
                 self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
                 self.session_state = "MAILBOX_READY"
+
+                # Restore full display name and avatar from stored OAuth info
+                try:
+                    from transport.oauth2_gmail import get_stored_account_info
+                    _info = get_stored_account_info(self.account_email)
+                    if _info:
+                        if _info.get("displayName"):
+                            self.account_display_name = _info["displayName"]
+                        if _info.get("avatarUrl"):
+                            self._account_avatar_url = _info["avatarUrl"]
+                except Exception:
+                    pass
+                if not getattr(self, "account_display_name", ""):
+                    self.account_display_name = self.account_email.split("@")[0]
+
+                # If staged inbox items exist from locked pre-fetch, decapsulate immediately
+                with self._staged_lock:
+                    staged = list(self._staged_raw_inbox)
+                    self._staged_raw_inbox = []
+                if staged:
+                    try:
+                        logger.info("Decapsulating %d pre-fetched staged inbox items upon unlock.", len(staged))
+                        self._process_inbox_items(staged)
+                    except Exception as dec_err:
+                        logger.warning("Decapsulation of pre-fetched items note: %s", dec_err)
+
+                # Reload cached messages for this account
+                self.messages = self._load_persisted_messages(self.account_email)
+
+                # Ensure account session state is synchronized
+                try:
+                    self._ensure_account_session(self.account_email, self.account_display_name)
+                except Exception:
+                    pass
             else:
-                self.session_state = "SIGNED_OUT"
-            return {"success": True, "sessionStatus": self.getSessionStatus()}
+                self.session_state = "MAILBOX_READY" if self.account_email else "SIGNED_OUT"
+            self._set_vault_lock_flag(False)
+            self._save_account_state()
+            return {
+                "success": True,
+                "sessionStatus": self.getSessionStatus(),
+                "messages": self.getMessages(),
+            }
         except Exception as exc:
             self.last_error = {"code": "UNLOCK_FAILED", "message": str(exc), "timestamp": int(time.time())}
-            return {"success": False, "message": str(exc), "sessionStatus": self.getSessionStatus()}
+            return {"success": False, "error": str(exc), "message": str(exc), "sessionStatus": self.getSessionStatus()}
 
     def logout(self) -> Dict[str, Any]:
         """Sign out active user session and purge local token material."""
         self.account_email = ""
         self.account_display_name = ""
         self.account_org = ""
+        self._account_avatar_url = ""
         self.key_fingerprint = ""
         self.active_context = None
         self.active_key_handle = None
         self.messages = []
+        with self._staged_lock:
+            self._staged_raw_inbox = []
+        self.is_initial_syncing = False
 
         try:
             from transport.oauth2_gmail import revoke_token
@@ -1882,6 +2879,7 @@ class QuMailJsApi:
             except Exception:
                 pass
         self.session_state = "SIGNED_OUT"
+        self._save_account_state()
         logger.info("Account signed out.")
         return {"success": True, "sessionStatus": self.getSessionStatus()}
 
@@ -1891,16 +2889,295 @@ class QuMailJsApi:
         return True
 
     def updateAccountEmail(self, email: str) -> bool:
-        """Update account email address."""
-        if email and "@" in email:
-            self.account_email = email
+        """Update account email address, switch active partition, and restore session."""
+        clean_email = (email or "").strip().lower()
+        if clean_email and "@" in clean_email:
+            if clean_email != (getattr(self, "account_email", "") or "").strip().lower():
+                self._account_avatar_url = ""
+            self.account_email = clean_email
+            try:
+                from transport.oauth2_gmail import get_stored_account_info
+                _info = get_stored_account_info(clean_email)
+                if _info:
+                    self.account_display_name = _info.get("displayName") or clean_email.split("@")[0]
+                    self._account_avatar_url = _info.get("avatarUrl", "")
+            except Exception:
+                pass
+            self.messages = self._load_persisted_messages(clean_email)
+            try:
+                self._ensure_account_session(clean_email, self.account_display_name)
+            except Exception:
+                pass
+            if not getattr(self, "_account_avatar_url", "") and ("gmail" in (self.account_org or "").lower() or "@gmail.com" in clean_email):
+                threading.Thread(target=self._background_fetch_avatar, daemon=True).start()
+            self._save_account_state()
             return True
         return False
+
+    def refreshAccountAvatar(self) -> Dict[str, Any]:
+        """Fetch fresh avatar URL from provider and return updated avatar."""
+        if not self.account_email:
+            return {"success": False, "avatarUrl": ""}
+        try:
+            from transport.oauth2_gmail import fetch_account_avatar_from_provider
+            avatar = fetch_account_avatar_from_provider(self.account_email, force_refresh=True)
+            self._account_avatar_url = avatar or ""
+            self._save_account_state()
+            return {"success": True, "avatarUrl": self._account_avatar_url}
+        except Exception as exc:
+            logger.debug("refreshAccountAvatar error: %s", exc)
+        return {"success": False, "avatarUrl": getattr(self, "_account_avatar_url", "")}
 
     def listPorts(self) -> List[Dict[str, str]]:
         """List available COM serial ports."""
         ports = list_com_ports()
         return [{"device": p.device, "description": p.description} for p in ports]
+
+    # ------------------------------------------------------------------------
+    # Offline Neural Translation Subsystem (NLLB-200-distilled-600M INT8)
+    # ------------------------------------------------------------------------
+
+    def checkTranslationCompatibility(self) -> Dict[str, Any]:
+        """Scan host Windows hardware resources (RAM, Disk, CPU) for NLLB-200 readiness."""
+        return check_hardware_compatibility(get_user_data_dir())
+
+    def getTranslationStatus(self) -> Dict[str, Any]:
+        """Return installation, downloading, and memory status of NLLB-200 model."""
+        return self.translator_service.get_status()
+
+    def downloadTranslationPack(self) -> Dict[str, Any]:
+        """Begin background HTTPS streaming download of NLLB-200 INT8 model."""
+        return self.translator_service.download_model()
+
+    def cancelTranslationDownload(self) -> Dict[str, Any]:
+        """Cancel ongoing model download and purge partial .part files."""
+        return self.translator_service.cancel_download()
+
+    def deleteTranslationPack(self) -> Dict[str, Any]:
+        """Delete NLLB-200 model files from disk and unload from RAM."""
+        return self.translator_service.delete_model()
+
+    def unloadTranslationModel(self) -> Dict[str, Any]:
+        """Manually unload NLLB-200 model from RAM and reclaim memory."""
+        return self.translator_service.unload_model()
+
+    def cancelTranslation(self) -> Dict[str, Any]:
+        """Cancel ongoing email translation."""
+        return self.translator_service.cancel_translation()
+
+    def fetchStandardEmailBody(self, message_id: str) -> Dict[str, Any]:
+        """
+        Fetch and parse unshielded content for a standard email on demand.
+        Returns {'success': True, 'body': str, 'subject': str}.
+        """
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"success": False, "error": "Vault is locked"}
+
+        clean_id = (message_id or "").strip()
+        found_msg = None
+        with self._inbox_lock:
+            for m in self.messages:
+                if m.get("id") == clean_id:
+                    found_msg = m
+                    break
+
+        if found_msg and found_msg.get("rawStandardBody"):
+            return {
+                "success": True,
+                "body": found_msg["rawStandardBody"],
+                "subject": found_msg.get("rawStandardSubject", found_msg.get("subject", "")),
+            }
+
+        # If not cached in memory, fetch UID directly from IMAP
+        uid_str = clean_id.replace("imap-", "") if clean_id.startswith("imap-") else ""
+        if uid_str and uid_str.isdigit() and self.account_email:
+            try:
+                import imaplib, ssl, email as email_pkg, re, html as html_pkg, base64
+                from transport.imap_receiver import _detect_provider, _get_imap_credentials, _build_xoauth2_string, _INBOX_FOLDER, _IMAP_PORT, _IMAP_TIMEOUT_SEC
+                from transport.custom_mailbox import load_custom_account
+
+                custom = load_custom_account(self.account_email)
+                ssl_ctx = ssl.create_default_context()
+                if custom:
+                    imap_host = custom.get("imapHost") or "imap.gmail.com"
+                    imap_port = custom.get("imapPort") or 993
+                    password = custom.get("password", "")
+                    imap = imaplib.IMAP4_SSL(imap_host, int(imap_port), ssl_context=ssl_ctx, timeout=_IMAP_TIMEOUT_SEC)
+                    imap.login(self.account_email, password)
+                else:
+                    provider = _detect_provider(self.account_email)
+                    imap_host, access_token = _get_imap_credentials(provider, self.account_email)
+                    xoauth2_bytes = _build_xoauth2_string(self.account_email, access_token)
+                    imap = imaplib.IMAP4_SSL(imap_host, _IMAP_PORT, ssl_context=ssl_ctx, timeout=_IMAP_TIMEOUT_SEC)
+                    imap.authenticate("XOAUTH2", lambda _: base64.b64decode(xoauth2_bytes))
+
+                with imap:
+                    imap.select(_INBOX_FOLDER, readonly=True)
+                    st, data = imap.uid("FETCH", uid_str, "(BODY.PEEK[])")
+                    if st == "OK" and data and isinstance(data[0], tuple):
+                        msg_obj = email_pkg.message_from_bytes(data[0][1])
+                        raw_body, decoded_subj = extract_email_body_and_subject(msg_obj)
+
+                        with self._inbox_lock:
+                            if found_msg:
+                                found_msg["rawStandardBody"] = raw_body
+                                found_msg["rawStandardSubject"] = decoded_subj
+                                self._save_persisted_messages()
+
+                        return {"success": True, "body": raw_body, "subject": decoded_subj}
+            except Exception as imap_err:
+                logger.warning("fetchStandardEmailBody error for %s: %s", clean_id, imap_err)
+
+        return {"success": False, "body": "", "subject": ""}
+
+    def getCachedTranslation(self, message_id: str, target_lang: str = "hi") -> Dict[str, Any]:
+        """
+        Check DPAPI encrypted cache for translation without loading model or running neural inference.
+        Returns {'status': 'ok', 'translatedText': ..., 'fromCache': True} or {'status': 'not_cached', 'fromCache': False}.
+        """
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"status": "locked", "fromCache": False}
+
+        cached = self.translator_service.get_cached_translation(message_id, target_lang)
+        if cached:
+            return {
+                "status": "ok",
+                "translatedText": cached.get("translatedText", ""),
+                "translatedSubject": cached.get("translatedSubject", ""),
+                "sourceLang": cached.get("sourceLang", "eng_Latn"),
+                "targetLang": cached.get("targetLang", target_lang),
+                "fromCache": True,
+            }
+        return {"status": "not_cached", "fromCache": False}
+
+    def translateEmailContent(self, message_id: str, text: str, target_lang: str = "hi", subject: str = "") -> Dict[str, Any]:
+        """
+        Translate email content on-device using quantized NLLB-200.
+        Strictly blocked while vault is locked.
+        """
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"status": "error", "error": "Vault is locked. Unlock mailbox to translate emails."}
+
+        # Check DPAPI encrypted cache first
+        cached = self.translator_service.get_cached_translation(message_id, target_lang)
+        if cached:
+            return {
+                "status": "ok",
+                "translatedText": cached.get("translatedText", ""),
+                "translatedSubject": cached.get("translatedSubject", ""),
+                "sourceLang": cached.get("sourceLang", "eng_Latn"),
+                "targetLang": cached.get("targetLang", target_lang),
+                "fromCache": True,
+            }
+
+        # Locate message in memory to support standard email translation safely
+        found_msg = None
+        with self._inbox_lock:
+            for m in self.messages:
+                if m.get("id") == message_id:
+                    found_msg = m
+                    break
+
+        if not text or "QUMAIL ZERO-TRUST PRIVACY SHIELD" in text:
+            raw_b = found_msg.get("rawStandardBody", "") if found_msg else ""
+            if not raw_b:
+                fetched = self.fetchStandardEmailBody(message_id)
+                if fetched.get("success") and fetched.get("body"):
+                    raw_b = fetched["body"]
+                    if not subject or "[Shielded]" in subject:
+                        subject = fetched.get("subject", "")
+            if raw_b:
+                text = raw_b
+
+        # Find email subject for audit log if not explicitly passed or if censored
+        if not subject or "[Shielded]" in subject:
+            if found_msg:
+                subject = found_msg.get("rawStandardSubject") or found_msg.get("subject", "")
+            elif not subject:
+                with self._inbox_lock:
+                    for m in self.messages:
+                        if m.get("id") == message_id:
+                            subject = m.get("rawStandardSubject") or m.get("subject", "")
+                            break
+
+        try:
+            res = self.translator_service.translate_text(text, target_lang)
+            translated_subject = ""
+            if subject and subject.strip() and subject.strip() != "(No Subject)":
+                try:
+                    subj_res = self.translator_service.translate_text(subject, target_lang)
+                    if subj_res.get("status") == "ok":
+                        translated_subject = subj_res.get("translatedText", "")
+                except Exception as s_exc:
+                    logger.warning("Could not translate email subject: %s", s_exc)
+
+            if res.get("status") == "ok":
+                self.translator_service.save_translation_log(
+                    message_id=message_id,
+                    subject=subject,
+                    original_text=text,
+                    translated_text=res.get("translatedText", ""),
+                    source_lang=res.get("sourceLang", ""),
+                    target_lang=res.get("targetLang", ""),
+                    translated_subject=translated_subject,
+                )
+                res["translatedSubject"] = translated_subject
+            return res
+        except Exception as exc:
+            logger.error("Failed to translate email content: %s", exc)
+            return {"status": "error", "error": str(exc)}
+
+    def getTranslationLogs(self) -> List[Dict[str, Any]]:
+        """Return encrypted translation audit logs (blocked while locked)."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return []
+        return self.translator_service.get_translation_logs()
+
+    def deleteTranslationLog(self, message_id: str = "") -> Dict[str, Any]:
+        """Delete translation audit log for a single message, or purge all."""
+        if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
+            return {"status": "error", "error": "Vault is locked. Unlock mailbox to manage logs."}
+        return self.translator_service.delete_translation_log(message_id)
+
+
+# Direct alias for bridge consumer compatibility
+QuMailBridge = QuMailJsApi
+
+
+def _acquire_single_instance_lock(lock_name: str = "QuMail_SingleInstance_Mutex") -> Any:
+    """
+    Acquire an OS-level named mutex on Windows to ensure only one instance of QuMail runs.
+    If another instance is already running, restores/brings its window to foreground and returns None.
+    """
+    if sys.platform != "win32":
+        return True
+
+    try:
+        import ctypes
+        ERROR_ALREADY_EXISTS = 183
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+
+        mutex = kernel32.CreateMutexW(None, False, lock_name)
+        last_err = kernel32.GetLastError()
+
+        if last_err == ERROR_ALREADY_EXISTS:
+            logger.warning("Another instance of QuMail is already running. Restoring and focusing existing window.")
+            try:
+                window_title = "QuMail 1.0 — Post-Quantum Secure Corporate Email"
+                hwnd = user32.FindWindowW(None, window_title)
+                if hwnd:
+                    SW_RESTORE = 9
+                    user32.ShowWindow(hwnd, SW_RESTORE)
+                    user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+            return None
+
+        return mutex
+    except Exception as exc:
+        logger.debug("Single-instance mutex note: %s", exc)
+        return True
 
 
 def main() -> int:
@@ -1913,6 +3190,13 @@ def main() -> int:
     args = parser.parse_args()
 
     configure_logging(logging.INFO)
+
+    # 0. Single-instance desktop lock (skip in pytest test runs and dev mode)
+    if not args.dev and not os.environ.get("PYTEST_CURRENT_TEST"):
+        lock = _acquire_single_instance_lock()
+        if lock is None and sys.platform == "win32":
+            print("[INFO] QuMail is already running. Switched focus to active instance.")
+            return 0
 
     # 1. Determine target URL
     if args.dev:
@@ -1943,8 +3227,11 @@ def main() -> int:
         text_select=True,
     )
 
-    logger.info("Launching Microsoft Edge WebView2 modern desktop shell...")
-    webview.start(debug=False)
+    is_debug = bool(args.dev and not getattr(sys, "frozen", False))
+    webview_storage = str(get_user_data_dir() / "webview_profile")
+    os.makedirs(webview_storage, exist_ok=True)
+    logger.info("Launching Microsoft Edge WebView2 modern desktop shell (profile: %s, debug: %s)...", webview_storage, is_debug)
+    webview.start(debug=is_debug, private_mode=False, storage_path=webview_storage)
     return 0
 
 

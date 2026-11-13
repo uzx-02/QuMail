@@ -101,46 +101,66 @@ def _get_fernet() -> Fernet:
     return Fernet(key)
 
 
-def _load_credentials() -> Tuple[Optional[Credentials], Optional[Dict[str, Any]]]:
+def _load_credentials(email: str = "") -> Tuple[Optional[Credentials], Optional[Dict[str, Any]]]:
     """
     Load cached Gmail credentials from encrypted token file on disk.
+    If email is specified, prioritizes per-account token file, verifying identity.
     Returns (Credentials, raw_token_dict) if valid, or (None, None).
     """
-    token_path = get_gmail_token_path()
-    candidates = [token_path, Path(GMAIL_TOKEN_PATH), Path("secrets/gmail_token.json")]
-    target = None
-    for c in candidates:
-        if c.is_file():
-            target = c
-            break
+    clean_email = email.strip().lower() if email else ""
+    candidates = []
+    if clean_email:
+        candidates.append(get_gmail_token_path(clean_email))
+    candidates.extend([get_gmail_token_path(), Path(GMAIL_TOKEN_PATH), Path("secrets/gmail_token.json")])
 
-    if not target:
-        return None, None
+    for target in candidates:
+        if not target.is_file():
+            continue
+        try:
+            raw_enc = target.read_bytes()
+            fernet = _get_fernet()
+            decrypted = fernet.decrypt(raw_enc).decode("utf-8")
+            token_data = json.loads(decrypted)
 
-    try:
-        raw_enc = target.read_bytes()
-        fernet = _get_fernet()
-        decrypted = fernet.decrypt(raw_enc).decode("utf-8")
-        token_data = json.loads(decrypted)
-        if "client_id" not in token_data or "client_secret" not in token_data:
-            from core.config import load_google_client_config
-            cfg, _, _ = load_google_client_config()
-            if cfg:
-                token_data.setdefault("client_id", cfg.get("client_id"))
-                token_data.setdefault("client_secret", cfg.get("client_secret"))
-        creds = Credentials.from_authorized_user_info(token_data, GMAIL_SCOPES)
-        return creds, token_data
-    except InvalidToken as exc:
-        logger.warning("Stored Gmail token cannot be decrypted with master key: %s", exc)
-        return None, None
-    except Exception as exc:
-        logger.warning("Failed to load Gmail credentials from %s: %s", target, exc)
-        return None, None
+            # If an email is requested, verify token belongs to this email if metadata is present
+            stored_email = (token_data.get("email") or "").strip().lower()
+            if not stored_email and token_data.get("id_token"):
+                try:
+                    parts = token_data["id_token"].split(".")
+                    if len(parts) >= 2:
+                        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                        claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+                        stored_email = (claims.get("email") or "").strip().lower()
+                        if stored_email:
+                            token_data["email"] = stored_email
+                except Exception:
+                    pass
+
+            if clean_email and stored_email and stored_email != clean_email:
+                continue
+            if clean_email and not stored_email and target != get_gmail_token_path(clean_email):
+                continue
+
+            if "client_id" not in token_data or "client_secret" not in token_data:
+                from core.config import load_google_client_config
+                cfg, _, _ = load_google_client_config()
+                if cfg:
+                    token_data.setdefault("client_id", cfg.get("client_id"))
+                    token_data.setdefault("client_secret", cfg.get("client_secret"))
+            creds = Credentials.from_authorized_user_info(token_data, GMAIL_SCOPES)
+            return creds, token_data
+        except InvalidToken as exc:
+            logger.warning("Stored Gmail token in %s cannot be decrypted with master key: %s", target, exc)
+        except Exception as exc:
+            logger.warning("Failed to load Gmail credentials from %s: %s", target, exc)
+
+    return None, None
 
 
-def _save_credentials(creds: Credentials, extra: Optional[Dict[str, Any]] = None) -> None:
-    """Persist refreshed or newly acquired credentials encrypted with Fernet."""
-    token_path = get_gmail_token_path()
+def _save_credentials(creds: Credentials, extra: Optional[Dict[str, Any]] = None, email: str = "") -> None:
+    """Persist refreshed or newly acquired credentials encrypted with Fernet (per-account)."""
+    target_email = (email or (extra.get("email") if extra else "") or "").strip().lower()
+    token_path = get_gmail_token_path(target_email)
     _ensure_secret_dir(token_path)
 
     data = json.loads(creds.to_json())
@@ -155,6 +175,14 @@ def _save_credentials(creds: Credentials, extra: Optional[Dict[str, Any]] = None
     except OSError:
         pass
     logger.info("Saved encrypted Google credentials to %s", token_path)
+
+    # Also keep default gmail_token.json updated for single-token / legacy fallback
+    default_token_path = get_gmail_token_path()
+    if default_token_path != token_path:
+        try:
+            default_token_path.write_bytes(encrypted)
+        except Exception:
+            pass
 
 
 def _resolve_client_secrets_path() -> Path:
@@ -451,47 +479,80 @@ def authorize_google_account(port: int = 0) -> Dict[str, Any]:
         logger.error("InstalledAppFlow failed: %s", exc)
         raise GmailAuthError(f"Google OAuth authorization flow failed: {exc}") from exc
 
-    # Query user profile email using access token
+    # Query user profile email and avatar using access token and id_token
     email = ""
     display_name = ""
     sub = ""
-    try:
-        import requests
-        resp = requests.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
-            headers={"Authorization": f"Bearer {creds.token}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            profile = resp.json()
-            email = profile.get("email", "").strip()
-            display_name = profile.get("name", "").strip()
-            sub = profile.get("id", "")
-    except Exception as exc:
-        logger.debug("Could not fetch userinfo via Google REST API: %s", exc)
+    avatar_url = ""
 
-    if not email and hasattr(creds, "id_token") and creds.id_token:
+    # 1. First, decode claims from id_token if available (instant, zero network latency)
+    if hasattr(creds, "id_token") and creds.id_token:
         try:
-            # Decode payload from id_token without external dependencies
             parts = creds.id_token.split(".")
             if len(parts) >= 2:
                 payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
                 claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
-                email = claims.get("email", "")
-                display_name = claims.get("name", "")
-                sub = claims.get("sub", "")
-        except Exception:
-            pass
+                email = claims.get("email", "").strip()
+                display_name = claims.get("name", "").strip()
+                sub = claims.get("sub", "").strip()
+                avatar_url = claims.get("picture", "").strip()
+        except Exception as id_exc:
+            logger.debug("Could not parse id_token claims: %s", id_exc)
+
+    # 2. Second, query OpenID Connect userinfo endpoint with access token
+    if not avatar_url or not email:
+        try:
+            import requests
+            resp = requests.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {creds.token}"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                profile = resp.json()
+                if not email:
+                    email = profile.get("email", "").strip()
+                if not display_name:
+                    display_name = profile.get("name", "").strip()
+                if not sub:
+                    sub = profile.get("sub", "").strip()
+                if not avatar_url:
+                    avatar_url = profile.get("picture", "").strip()
+        except Exception as oidc_exc:
+            logger.debug("Could not fetch userinfo via OIDC API: %s", oidc_exc)
+
+    # 3. Third, fallback to legacy OAuth2 v2 userinfo
+    if not avatar_url or not email:
+        try:
+            import requests
+            resp = requests.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {creds.token}"},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                profile = resp.json()
+                if not email:
+                    email = profile.get("email", "").strip()
+                if not display_name:
+                    display_name = profile.get("name", "").strip()
+                if not sub:
+                    sub = profile.get("id", "").strip()
+                if not avatar_url:
+                    avatar_url = profile.get("picture", "").strip()
+        except Exception as exc:
+            logger.debug("Could not fetch userinfo via Google REST API: %s", exc)
 
     if not email:
         raise GmailAuthError("Could not retrieve verified email address for Google account.")
 
-    # Save credentials with verified email and subject
+    # Save credentials with verified email, subject, and avatar
     extra_meta = {
         "email": email,
         "displayName": display_name or email.split("@")[0],
         "subject": sub,
         "id_token": getattr(creds, "id_token", None),
+        "avatarUrl": avatar_url,
     }
     _save_credentials(creds, extra_meta)
 
@@ -507,16 +568,18 @@ def authorize_google_account(port: int = 0) -> Dict[str, Any]:
         "success": True,
         "email": email,
         "displayName": display_name or email.split("@")[0],
+        "avatarUrl": avatar_url,
         "subject": sub,
         "token": creds.token,
     }
 
 
-def get_access_token() -> str:
+def get_access_token(email: str = "") -> str:
     """
-    Return a valid Gmail OAuth2 access token, refreshing or re-authorizing as needed.
+    Return a valid Gmail OAuth2 access token for the specified email, refreshing or re-authorizing as needed.
     """
-    creds, _ = _load_credentials()
+    clean_email = email.strip().lower() if email else ""
+    creds, token_data = _load_credentials(clean_email)
 
     # 1. Valid cached credentials: return immediately
     if creds and creds.valid:
@@ -526,10 +589,10 @@ def get_access_token() -> str:
     if creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            _save_credentials(creds)
+            _save_credentials(creds, extra=token_data, email=clean_email)
             return creds.token
         except Exception as refresh_exc:
-            logger.warning("Silent token refresh failed, re-authorizing: %s", refresh_exc)
+            logger.warning("Silent token refresh failed for %s, re-authorizing: %s", clean_email or "default", refresh_exc)
             creds = None
 
     # 3. No credentials or refresh failed: trigger consent flow
@@ -537,22 +600,114 @@ def get_access_token() -> str:
     return auth_res["token"]
 
 
-def get_stored_account_info() -> Optional[Dict[str, Any]]:
-    """Return stored account email and display name if available."""
-    _, token_data = _load_credentials()
+def get_stored_account_info(email: str = "") -> Optional[Dict[str, Any]]:
+    """Return stored account email and display name if available, recovering avatar from id_token if needed."""
+    creds, token_data = _load_credentials(email)
     if token_data and token_data.get("email"):
+        avatar = token_data.get("avatarUrl", "")
+        # If avatar is missing but id_token is stored in token_data, decode it
+        if not avatar and token_data.get("id_token"):
+            try:
+                parts = token_data["id_token"].split(".")
+                if len(parts) >= 2:
+                    payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                    claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+                    avatar = claims.get("picture", "")
+                    if avatar:
+                        token_data["avatarUrl"] = avatar
+                        if creds:
+                            _save_credentials(creds, token_data, email=email)
+            except Exception:
+                pass
+
         return {
             "email": token_data.get("email"),
             "displayName": token_data.get("displayName") or token_data.get("email", "").split("@")[0],
+            "avatarUrl": avatar or "",
             "tokenExists": True,
         }
     return None
 
 
-def revoke_token() -> None:
+def fetch_account_avatar_from_provider(email: str = "", force_refresh: bool = False) -> str:
+    """
+    Actively fetch the user's avatar from Gmail / Google profile using stored credentials or access token.
+    Updates the encrypted token cache on success and returns the avatar URL.
+    """
+    clean_email = email.strip().lower() if email else ""
+    try:
+        creds, token_data = _load_credentials(clean_email)
+        if not token_data:
+            return ""
+
+        stored_email = (token_data.get("email") or "").strip().lower()
+        if clean_email and stored_email and stored_email != clean_email:
+            return ""
+
+        # 1. Check existing avatarUrl if not force_refresh
+        if not force_refresh and token_data.get("avatarUrl"):
+            return token_data["avatarUrl"]
+
+        # 2. Extract from stored id_token if present and not force_refresh
+        if not force_refresh and token_data.get("id_token"):
+            try:
+                parts = token_data["id_token"].split(".")
+                if len(parts) >= 2:
+                    payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                    claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+                    pic = claims.get("picture", "").strip()
+                    if pic:
+                        token_data["avatarUrl"] = pic
+                        if creds:
+                            _save_credentials(creds, token_data, email=clean_email)
+                        return pic
+            except Exception:
+                pass
+
+        # 3. Query Google UserInfo endpoints using valid access token
+        access_token = get_access_token(clean_email)
+        if not access_token:
+            return token_data.get("avatarUrl", "")
+
+        import requests
+        headers = {"Authorization": f"Bearer {access_token}"}
+        for endpoint in (
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+        ):
+            try:
+                resp = requests.get(endpoint, headers=headers, timeout=8)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    user_email = (data.get("email") or "").strip().lower()
+                    if clean_email and user_email and user_email != clean_email:
+                        # Cross-account protection: token belongs to different identity!
+                        return ""
+                    pic = data.get("picture", "").strip()
+                    token_data["avatarUrl"] = pic
+                    if user_email:
+                        token_data["email"] = user_email
+                    if data.get("name"):
+                        token_data["displayName"] = data.get("name")
+                    if creds:
+                        _save_credentials(creds, token_data, email=clean_email)
+                    return pic
+            except Exception as ep_exc:
+                logger.debug("Avatar query via %s note: %s", endpoint, ep_exc)
+
+        return token_data.get("avatarUrl", "")
+    except Exception as exc:
+        logger.debug("fetch_account_avatar_from_provider error: %s", exc)
+        return ""
+
+    return ""
+
+
+def revoke_token(email: str = "") -> None:
     """Revoke Google token and delete token file on logout."""
     import requests
-    creds, _ = _load_credentials()
+    clean_email = email.strip().lower() if email else ""
+    creds, _ = _load_credentials(clean_email)
     if creds and creds.token:
         try:
             requests.post(
@@ -563,7 +718,12 @@ def revoke_token() -> None:
         except Exception:
             pass
 
-    token_path = get_gmail_token_path()
+    token_path = get_gmail_token_path(clean_email)
+    if token_path.is_file():
+        try:
+            token_path.unlink()
+        except OSError:
+            pass
     if token_path.is_file():
         try:
             token_path.unlink()

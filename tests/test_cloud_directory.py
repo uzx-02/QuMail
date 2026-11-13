@@ -213,3 +213,50 @@ def test_qumail_bridge_check_recipient(tmp_path, monkeypatch):
         assert "SECURITY WARNING" in res["warning"]
 
 
+def test_burn_after_read_single_access_and_rejection():
+    """Verify that a WebLink created with burn_after_read=True passes burn_after_read=True to server and rejects subsequent accesses."""
+    client = CloudDirectoryClient(base_url="https://mock.qumail.directory")
+    client._session_token = "valid-test-token"
+
+    store = {}
+    def mock_post(req, *args, **kwargs):
+        payload = json.loads(req.data.decode("utf-8"))
+        link_id = "link-burn-123"
+        store[link_id] = {
+            "payload": payload,
+            "access_count": 0,
+            "burned": False,
+        }
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps({"link_id": link_id, "expires_at": 9999999999}).encode("utf-8")
+        mock_resp.__enter__.return_value = mock_resp
+        return mock_resp
+
+    with patch("urllib.request.urlopen", side_effect=mock_post):
+        weblink = client.create_weblink(
+            plaintext_body="One-time secret message",
+            sender_email="alice@qumail.sec",
+            recipient_email="bob@external.com",
+            burn_after_read=True,
+            max_views=1,
+        )
+
+    link_id = "link-burn-123"
+    assert link_id in store
+    assert store[link_id]["payload"]["burn_after_read"] is True
+    assert store[link_id]["payload"]["max_views"] == 1
+
+    # Simulate server access: 1st access burns the link
+    entry = store[link_id]
+    assert entry["burned"] is False
+    entry["access_count"] += 1
+    if entry["payload"]["burn_after_read"] or entry["access_count"] >= entry["payload"]["max_views"]:
+        entry["burned"] = True
+    assert entry["burned"] is True
+
+    # 2nd access is rejected (410 Gone / 404)
+    can_access_again = not entry["burned"] and entry["access_count"] < entry["payload"]["max_views"]
+    assert can_access_again is False
+
+

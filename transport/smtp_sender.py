@@ -88,7 +88,7 @@ def _get_smtp_credentials(provider: str, sender_email: str) -> tuple[str, str]:
     """Obtain the SMTP host and a valid access token for the detected provider."""
     try:
         if provider == "gmail":
-            return _GMAIL_SMTP_HOST, get_gmail_token()
+            return _GMAIL_SMTP_HOST, get_gmail_token(sender_email)
         else:
             return _YAHOO_SMTP_HOST, get_yahoo_token()
     except (GmailAuthError, YahooAuthError) as exc:
@@ -103,15 +103,23 @@ def _get_smtp_credentials(provider: str, sender_email: str) -> tuple[str, str]:
 
 def send_email(
     sender_email:    str,
-    recipient_email: str,
+    recipient_email: str | list[str] | tuple[str, ...],
     mime_message:    Message,
 ) -> None:
     """
     Send a fully-built MIME message via SMTP using OAuth2 XOAUTH2 authentication
     or custom TLS-encrypted mailbox credentials.
+    Supports single or multiple recipients.
     """
     from transport.custom_mailbox import load_custom_account
     custom = load_custom_account(sender_email)
+
+    if isinstance(recipient_email, (list, tuple)):
+        to_addrs = [str(r).strip() for r in recipient_email if str(r).strip()]
+    elif isinstance(recipient_email, str) and "," in recipient_email:
+        to_addrs = [r.strip() for r in recipient_email.split(",") if r.strip()]
+    else:
+        to_addrs = [str(recipient_email).strip()]
 
     # 1. Custom IMAP/SMTP Mailbox (App Password or Enterprise TLS)
     if custom:
@@ -127,10 +135,10 @@ def send_email(
                 smtp.login(sender_email, password)
                 smtp.sendmail(
                     from_addr=sender_email,
-                    to_addrs=[recipient_email],
+                    to_addrs=to_addrs,
                     msg=mime_message.as_bytes(),
                 )
-                logger.info("Custom SMTP message sent to %s via %s", recipient_email, smtp_host)
+                logger.info("Custom SMTP message sent to %s via %s", to_addrs, smtp_host)
                 return
         except Exception as exc:
             raise SMTPSenderError(f"Custom SMTP dispatch failed for '{sender_email}' on '{smtp_host}': {exc}") from exc
@@ -158,10 +166,10 @@ def send_email(
 
             smtp.sendmail(
                 from_addr=sender_email,
-                to_addrs=[recipient_email],
+                to_addrs=to_addrs,
                 msg=mime_message.as_bytes(),
             )
-            logger.info("Dispatched email via SMTP port 587 to %s", recipient_email)
+            logger.info("Dispatched email via SMTP port 587 to %s", to_addrs)
             return
     except (SMTPSenderError, GmailAuthError, YahooAuthError):
         raise
@@ -184,15 +192,15 @@ def send_email(
 
             smtp.sendmail(
                 from_addr=sender_email,
-                to_addrs=[recipient_email],
+                to_addrs=to_addrs,
                 msg=mime_message.as_bytes(),
             )
-            logger.info("Dispatched email via SMTP port 465 to %s", recipient_email)
+            logger.info("Dispatched email via SMTP port 465 to %s", to_addrs)
             return
     except (SMTPSenderError, GmailAuthError, YahooAuthError):
         raise
     except Exception as p465_err:
         final_err = p465_err if p587_err is None else p587_err
         raise SMTPSenderError(
-            f"SMTP dispatch failed for '{sender_email}' to '{recipient_email}': {final_err}"
+            f"SMTP dispatch failed for '{sender_email}' to '{to_addrs}': {final_err}"
         ) from final_err

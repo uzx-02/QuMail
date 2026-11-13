@@ -3,6 +3,72 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --qumail-accent: #0B57D0;
+    --qumail-accent-hover: #0842A0;
+    --qumail-accent-soft: rgba(11, 87, 208, 0.12);
+    --qumail-accent-fg: #FFFFFF;
+    --qumail-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  :root[data-font="sans"] {
+    --qumail-font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  :root[data-font="geometric"] {
+    --qumail-font-family: 'Google Sans', 'Plus Jakarta Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  :root[data-font="serif"] {
+    --qumail-font-family: Georgia, 'Merriweather', 'Times New Roman', serif;
+  }
+
+  :root[data-font="mono"] {
+    --qumail-font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  }
+
+  :root[data-font-size="small"] {
+    font-size: 14.5px;
+  }
+
+  :root[data-font-size="medium"] {
+    font-size: 16px;
+  }
+
+  :root[data-font-size="large"] {
+    font-size: 17.5px;
+  }
+
+  :root[data-accent="blue"] {
+    --qumail-accent: #0B57D0;
+    --qumail-accent-hover: #0842A0;
+    --qumail-accent-soft: rgba(11, 87, 208, 0.14);
+  }
+
+  :root[data-accent="indigo"] {
+    --qumail-accent: #6366F1;
+    --qumail-accent-hover: #4F46E5;
+    --qumail-accent-soft: rgba(99, 102, 241, 0.16);
+  }
+
+  :root[data-accent="emerald"] {
+    --qumail-accent: #10B981;
+    --qumail-accent-hover: #059669;
+    --qumail-accent-soft: rgba(16, 185, 129, 0.16);
+  }
+
+  :root[data-accent="cyan"] {
+    --qumail-accent: #06B6D4;
+    --qumail-accent-hover: #0891B2;
+    --qumail-accent-soft: rgba(6, 182, 212, 0.16);
+  }
+
+  :root[data-accent="rose"] {
+    --qumail-accent: #F43F5E;
+    --qumail-accent-hover: #E11D48;
+    --qumail-accent-soft: rgba(244, 63, 94, 0.16);
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -10,10 +76,14 @@
   body {
     margin: 0;
     padding: 0;
-    font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--qumail-font-family);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     user-select: none;
+  }
+
+  .font-sans {
+    font-family: var(--qumail-font-family) !important;
   }
 
   /* Custom subtle scrollbar */
@@ -48,4 +118,198 @@
 
 .animate-shine {
   animation: shine 6s linear infinite;
+}
+
+/* Neutral Charcoal / Obsidian Dark Theme Override (zero navy/blue tint) */
+html.dark[data-theme="dark"] .dark\:bg-\[\#0A0E17\] {
+  background-color: #09090B !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#111726\] {
+  background-color: #121214 !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#111726\]\/60 {
+  background-color: rgba(18, 18, 20, 0.72) !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#161F33\] {
+  background-color: #18181B !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#1C2740\]\/60:hover,
+html.dark[data-theme="dark"] .dark\:hover\:bg-\[\#1C2740\]\/60:hover,
+html.dark[data-theme="dark"] .dark\:hover\:bg-\[\#1E2740\]:hover,
+html.dark[data-theme="dark"] .dark\:hover\:bg-\[\#1E2740\]\/70:hover {
+  background-color: rgba(39, 39, 42, 0.7) !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#2C3D63\] {
+  background-color: #27272A !important;
+}
+html.dark[data-theme="dark"] .dark\:bg-\[\#2C3D63\]\/70 {
+  background-color: rgba(39, 39, 42, 0.85) !important;
+}
+html.dark[data-theme="dark"] .dark\:border-\[\#1F2C47\],
+html.dark[data-theme="dark"] .dark\:border-\[\#2A3B5F\] {
+  border-color: #27272A !important;
+}
+html.dark[data-theme="dark"] .dark\:divide-\[\#1F2C47\]\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(39, 39, 42, 0.65) !important;
+}
+
+/* Accent Utility Helpers */
+.qumail-accent-bg {
+  background-color: var(--qumail-accent) !important;
+  color: var(--qumail-accent-fg) !important;
+}
+.qumail-accent-bg:hover {
+  background-color: var(--qumail-accent-hover) !important;
+}
+.qumail-accent-soft {
+  background-color: var(--qumail-accent-soft) !important;
+}
+.qumail-accent-text {
+  color: var(--qumail-accent) !important;
+}
+.qumail-accent-border {
+  border-color: var(--qumail-accent) !important;
+}
+
+/* =========================================================================
+   Accessibility Engine Styles (End-to-End WCAG AAA & Ergonomics)
+   ========================================================================= */
+
+/* 1. Font Scale */
+html[data-font-scale="large"] {
+  font-size: 112.5% !important;
+}
+html[data-font-scale="xlarge"] {
+  font-size: 125% !important;
+}
+
+/* 2. High Contrast Mode */
+html[data-high-contrast="true"] {
+  --qumail-contrast-border: #475569;
+}
+html.dark[data-high-contrast="true"] {
+  --qumail-contrast-border: #94A3B8;
+}
+html[data-high-contrast="true"] * {
+  border-color: var(--qumail-contrast-border) !important;
+}
+html[data-high-contrast="true"] .text-\[\#5F6368\],
+html[data-high-contrast="true"] .text-gray-500,
+html[data-high-contrast="true"] .text-slate-500 {
+  color: #0F172A !important;
+}
+html.dark[data-high-contrast="true"] .dark\:text-\[\#94A3B8\],
+html.dark[data-high-contrast="true"] .dark\:text-gray-400,
+html.dark[data-high-contrast="true"] .dark\:text-slate-400 {
+  color: #F8FAFC !important;
+}
+
+/* 3. Dyslexia-Friendly Reading Typography */
+html[data-dyslexic-font="true"] .qumail-reading-body,
+html[data-dyslexic-font="true"] textarea,
+html[data-dyslexic-font="true"] input,
+html[data-dyslexic-font="true"] .qumail-reading-body * {
+  font-family: 'OpenDyslexic', 'Comic Sans MS', Verdana, Tahoma, sans-serif !important;
+  letter-spacing: 0.035em !important;
+  word-spacing: 0.08em !important;
+  line-height: 1.75 !important;
+}
+
+/* 4. Reduce Motion & Sensory Comfort */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 5. Enhanced High-Visibility Focus Rings */
+html[data-enhanced-focus="true"] :focus-visible {
+  outline: 2px solid var(--qumail-accent) !important;
+  outline-offset: 2px !important;
+}
+
+/* 6. Devanagari Typography Polish (Hindi / Marathi) */
+html[lang="hi"],
+html[lang="mr"],
+html[data-language="hi"],
+html[data-language="mr"] {
+  line-height: 1.55;
+}
+
+html[lang="hi"] button,
+html[lang="mr"] button,
+html[lang="hi"] span,
+html[lang="mr"] span,
+html[lang="hi"] label,
+html[lang="mr"] label {
+  /* Prevent clipping of upper and lower Devanagari matras */
+  letter-spacing: 0.01em;
+}
+
+/* ==========================================================================
+   7. Dedicated Clean Isolated Mail Print Layout & Typography
+   ========================================================================== */
+@media print {
+  /* Hide all application chrome, navigation, headers, toolbars, buttons, dialogs, and modals */
+  header,
+  aside,
+  nav,
+  button,
+  [role="dialog"],
+  [role="alert"],
+  .no-print,
+  .print-hidden {
+    display: none !important;
+  }
+
+  /* Reset document and scrolling wrappers to avoid blank pages or layout clipping */
+  html,
+  body,
+  #root,
+  .flex-1,
+  main {
+    background: #ffffff !important;
+    color: #111827 !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Isolated printable email container */
+  #qumail-printable-email {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    padding: 24px !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure crisp high-contrast black-on-white typography regardless of theme */
+  #qumail-printable-email * {
+    color: #111827 !important;
+    background: transparent !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  #qumail-printable-email .print-border {
+    border-color: #374151 !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
 }

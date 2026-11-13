@@ -11,19 +11,25 @@ venv/
 .venv*/
 tmp/
 build/
-/dist/
+dist/
 !frontend/dist/
 .uv-cache/
 .env
 node_modules/
 
-# QuMail local secrets and OAuth artifacts
+# QuMail local secrets, models, and runtime artifacts
 secrets/
 !secrets/.gitkeep
 certs/
 .qumail_data/
 .wrangler/
 scratch/
+*.argosmodel
+*.bin
+*.sqlite
+translation_models/
+client_secret*.json
+token*.json
 
 liboqs/
 

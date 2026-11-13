@@ -37,6 +37,7 @@ SEND_KEYS_DIR    = "secrets/send_keys"  # encrypted ML-KEM private keys, keyed b
 import sys
 import json
 import shutil
+import re
 from pathlib import Path
 
 def _is_writable_dir(d: Path) -> bool:
@@ -88,9 +89,13 @@ def get_google_client_secrets_path() -> Path:
     """Canonical path to user's Google OAuth client secrets file."""
     return get_user_config_dir() / "google_client_secret.json"
 
-def get_gmail_token_path() -> Path:
-    """Canonical path to user's encrypted Gmail OAuth token file."""
-    return get_user_config_dir() / "gmail_token.json"
+def get_gmail_token_path(email: str = "") -> Path:
+    """Canonical path to user's encrypted Gmail OAuth token file (supports per-account tokens)."""
+    cfg = get_user_config_dir()
+    if email and "@" in email:
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', email.strip().lower())
+        return cfg / f"gmail_token_{safe_name}.json"
+    return cfg / "gmail_token.json"
 
 def get_oauth_master_key_path() -> Path:
     """Canonical path to Fernet master key for token encryption."""

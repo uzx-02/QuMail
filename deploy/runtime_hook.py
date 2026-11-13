@@ -36,6 +36,31 @@ if sys.platform == "win32":
         except Exception:
             pass
 
+    # Register trusted PyInstaller application and vendored wheel DLL directories
+    if hasattr(os, "add_dll_directory"):
+        _base_dirs = []
+        if getattr(sys, "frozen", False):
+            _base_dirs.extend([
+                getattr(sys, "_MEIPASS", ""),
+                os.path.dirname(sys.executable),
+                os.path.join(os.path.dirname(sys.executable), "_internal"),
+            ])
+        _base_dirs.extend([
+            os.path.dirname(os.path.abspath(__file__)),
+            os.path.abspath("."),
+            os.path.abspath("_internal"),
+        ])
+        for _b in _base_dirs:
+            if not _b or not os.path.isdir(_b):
+                continue
+            for _sub in ("", "sentencepiece.libs", "numpy.libs", "ctranslate2", "sentencepiece"):
+                _target = os.path.join(_b, _sub) if _sub else _b
+                if os.path.isdir(_target):
+                    try:
+                        os.add_dll_directory(_target)
+                    except Exception:
+                        pass
+
 # Strip hazardous SSL environment variables in Python os.environ
 os.environ.pop("SSLKEYLOGFILE", None)
 os.environ.pop("__CONDA_OPENSLL_CERT_FILE_SET", None)

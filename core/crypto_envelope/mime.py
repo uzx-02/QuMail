@@ -56,24 +56,25 @@ def validate(draft):
     if len(draft.attachments)>MAX_ATTACHMENTS or sum(len(a.data) for a in draft.attachments)>MAX_ATTACHMENT_BYTES: fail(Code.LIMIT)
     for a in draft.attachments:
         if type(a) is not Attachment or type(a.data) is not bytes: fail()
-        if not isinstance(a.name,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._ -]{0,63}',a.name) or '..' in a.name: fail()
+        if not isinstance(a.name,str) or len(a.name.encode('utf-8'))>255 or '..' in a.name or any(ord(c)<32 or ord(c)==127 for c in a.name): fail()
         if a.media_type not in ('application/octet-stream','text/plain','image/png','application/pdf'): fail(Code.PROFILE)
     if draft.in_reply_to: message_id(draft.in_reply_to)
     if len(draft.references)>8: fail(Code.LIMIT)
     for ref in draft.references: message_id(ref)
 
 
-def outer_fields(sender,draft,ident,date):
+def outer_fields(sender,draft,ident,date,cloak_subject=True):
     fields=[('From',address(sender)),('To',', '.join(draft.to))]
     if draft.cc: fields.append(('Cc',', '.join(draft.cc)))
-    return fields+[('Subject','Encrypted message'),('Date',date),('Message-ID',ident)]
+    subj = 'Encrypted message' if cloak_subject else draft.subject
+    return fields+[('Subject',subj),('Date',date),('Message-ID',ident)]
 
 
 def build_inner(sender,draft,ident,date):
     validate(draft); message_id(ident); text(date,80)
     if parsedate_to_datetime(date).tzinfo is None: fail()
     m=EmailMessage(policy=POLICY)
-    for k,v in outer_fields(sender,draft,ident,date): m[k]=draft.subject if k=='Subject' else v
+    for k,v in outer_fields(sender,draft,ident,date,cloak_subject=True): m[k]=draft.subject if k=='Subject' else v
     m['X-QuMail-Profile']=PROFILE
     m['X-QuMail-Archive']=address(sender) if draft.archive else 'none'
     if draft.in_reply_to: m['In-Reply-To']=draft.in_reply_to
@@ -84,18 +85,18 @@ def build_inner(sender,draft,ident,date):
         main,sub=a.media_type.split('/')
         m.add_attachment(a.data,maintype=main,subtype=sub,filename=a.name,cte='base64')
     m.set_param('hp','cipher',header='Content-Type')
-    for k,v in outer_fields(sender,draft,ident,date): m['HP-Outer']=k+': '+v
+    for k,v in outer_fields(sender,draft,ident,date,cloak_subject=True): m['HP-Outer']=k+': '+v
     raw=m.as_bytes()
     if len(raw)>MAX_INNER: fail(Code.LIMIT)
     parse_inner(raw)  # Writer/reader agreement before any cryptographic operation.
     return raw
 
 
-def build_outer(sender,draft,ident,date,armor):
+def build_outer(sender,draft,ident,date,armor,cloak_subject=True):
     # Sequoia owns ASCII armor. Canonicalize text line endings, never packet bytes.
     armor=armor.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n')
     m=EmailMessage(policy=POLICY)
-    for k,v in outer_fields(sender,draft,ident,date): m[k]=v
+    for k,v in outer_fields(sender,draft,ident,date,cloak_subject=cloak_subject): m[k]=v
     m['MIME-Version']='1.0'; m.set_type('multipart/encrypted')
     m.set_param('protocol','application/pgp-encrypted')
     control=EmailMessage(policy=POLICY); control.set_type('application/pgp-encrypted')

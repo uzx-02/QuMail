@@ -973,6 +973,18 @@ export default {
       // ----------------------------------------------------------------------
       if (url.pathname.startsWith("/v/") && method === "GET") {
         const linkId = url.pathname.slice(3).split("/")[0];
+        const now = Math.floor(Date.now() / 1000);
+        try {
+          const link = (await env.DB.prepare(
+            "SELECT is_burned, expires_at FROM weblinks WHERE link_id = ?"
+          ).bind(linkId).first()) as any;
+
+          if (!link || link.expires_at < now || link.is_burned === 1) {
+            return serveWebLinkBurnedViewer(Boolean(link && link.is_burned === 1));
+          }
+        } catch (dbErr) {
+          console.error("D1 link check note:", dbErr);
+        }
         return serveWebLinkViewer(linkId);
       }
 
@@ -1186,6 +1198,54 @@ async function enrollAccountAndDevice(
 // ============================================================================
 // 5. HTML Viewer (Strict CSP with Nonce, no-store, Email OTP + optional passcode)
 // ============================================================================
+
+function serveWebLinkBurnedViewer(isBurned: boolean = true): Response {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuMail — Link Unavailable</title>
+  <style>
+    :root { --bg: #090d16; --card: #111827; --text: #f3f4f6; --muted: #9ca3af; --border: #1f2937; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; max-width: 500px; width: 100%; padding: 2.5rem; box-shadow: 0 20px 30px -10px rgba(0,0,0,0.6); text-align: center; }
+    .icon-box { width: 64px; height: 64px; border-radius: 20px; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3); color: #f43f5e; display: grid; place-items: center; font-size: 2rem; margin: 0 auto 1.5rem; }
+    .title { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.6rem; color: #fff; }
+    .subtitle { font-size: 0.875rem; color: var(--muted); margin-bottom: 1.75rem; line-height: 1.6; }
+    .badge { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; padding: 0.35rem 0.85rem; border-radius: 9999px; background: rgba(244, 63, 94, 0.1); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.25); margin-bottom: 1.25rem; font-weight: 600; }
+    .footer-note { font-size: 0.72rem; color: #64748b; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 1.25rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon-box">${isBurned ? "🔥" : "⌛"}</div>
+    <div class="badge">${isBurned ? "Burn-After-Reading Enforced" : "Link Expired"}</div>
+    <h1 class="title">${isBurned ? "Communication Burned" : "Communication Expired"}</h1>
+    <p class="subtitle">
+      ${isBurned
+        ? "This confidential message was configured for single-use burn-after-reading. It has already been viewed, and the encrypted payload has been permanently destroyed from server storage."
+        : "This confidential link has exceeded its configured time-to-live (TTL) and is no longer accessible."}
+    </p>
+    <p class="footer-note">
+      Protected by QuMail Post-Quantum Security · Zero-Knowledge Cryptography
+    </p>
+  </div>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 410,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      Pragma: "no-cache",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+    },
+  });
+}
 
 function serveWebLinkViewer(linkId: string): Response {
   const nonce = crypto.randomUUID().replace(/-/g, "");
