@@ -1,5 +1,7 @@
 import React from 'react';
 import { Pen, Inbox, Star, Send, FileText, Package, Trash2, Cpu, CheckCircle2 } from 'lucide-react';
+import UseAnimations from 'react-useanimations';
+import edit from 'react-useanimations/lib/edit';
 import { motion } from 'framer-motion';
 import { HSMStatus, QuMailSettings, LanguageOption } from '../types';
 import { t } from '../lib/i18n';
@@ -73,7 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             isCollapsed ? 'w-12 h-12 justify-center mx-auto' : 'px-6 py-4 w-40'
           }`}
         >
-          <Pen className="w-5 h-5 shrink-0" />
+          <UseAnimations animation={edit} size={20} strokeColor="#ffffff" className="shrink-0" />
           {!isCollapsed && <span>{t(language, 'compose_button')}</span>}
         </motion.button>
 

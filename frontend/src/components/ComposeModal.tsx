@@ -16,7 +16,14 @@ import {
   Globe,
   Link2,
   User,
+  Clock,
+  Flame,
+  KeyRound,
 } from 'lucide-react';
+import UseAnimations from 'react-useanimations';
+import send from 'react-useanimations/lib/send';
+import trash2 from 'react-useanimations/lib/trash2';
+import lock from 'react-useanimations/lib/lock';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmailMessage, Attachment, FontFamilyOption, FontSizeOption, LanguageOption } from '../types';
 import { FONT_FAMILY_STYLE, FONT_SIZE_STYLE } from '../lib/appearance';
@@ -809,43 +816,64 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               </div>
             </div>
 
-            {/* WebLink Security Controls */}
+            {/* WebLink Security Controls (Sleek Dark/Light Unified Security Bar) */}
             {securityMode === 'weblink' && (
-              <div className="px-4 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-b border-[#E0E3E7] dark:border-[#1F2C47] flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="text-emerald-800 dark:text-emerald-300 font-medium flex items-center space-x-1.5">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Private Link Settings:</span>
-                </span>
-                <div className="flex items-center space-x-3">
-                  <select
-                    value={expiresInHours}
-                    onChange={(e) => setExpiresInHours(Number(e.target.value) as 1 | 24 | 168 | 720)}
-                    className="text-[11px] font-semibold rounded border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-[#161F33] text-emerald-900 dark:text-emerald-200 px-2 py-0.5 outline-none cursor-pointer"
-                    title="Link expiry"
+              <div className="px-4 py-2.5 bg-slate-100/90 dark:bg-[#0B111E] border-b border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs transition-colors select-none">
+                <div className="flex items-center space-x-2 text-cyan-600 dark:text-cyan-400 font-semibold">
+                  <UseAnimations animation={lock} size={16} strokeColor="#0284c7" />
+                  <span className="tracking-wide">Private Link Settings</span>
+                  <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20">
+                    Zero-Knowledge
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2.5">
+                  {/* Themed Expiry Dropdown with custom Clock icon */}
+                  <div className="relative inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[#161F33] border border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-2xs hover:border-cyan-500/50 dark:hover:border-cyan-400/50 transition-colors">
+                    <Clock className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+                    <select
+                      value={expiresInHours}
+                      onChange={(e) => setExpiresInHours(Number(e.target.value) as 1 | 24 | 168 | 720)}
+                      className="bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer pr-1"
+                      title="Link expiration duration"
+                    >
+                      <option value={1} className="bg-white dark:bg-[#161F33] text-slate-800 dark:text-slate-200">Expires: 1 hour</option>
+                      <option value={24} className="bg-white dark:bg-[#161F33] text-slate-800 dark:text-slate-200">Expires: 24 hours</option>
+                      <option value={168} className="bg-white dark:bg-[#161F33] text-slate-800 dark:text-slate-200">Expires: 7 days</option>
+                      <option value={720} className="bg-white dark:bg-[#161F33] text-slate-800 dark:text-slate-200">Expires: 30 days</option>
+                    </select>
+                  </div>
+
+                  {/* Interactive Burn-on-Read Toggle Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setBurnAfterRead(!burnAfterRead)}
+                    title="Burn message immediately after first recipient decodes it"
+                    className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                      burnAfterRead
+                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 shadow-xs'
+                        : 'bg-white dark:bg-[#161F33] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
                   >
-                    <option value={1}>Expires: 1h</option>
-                    <option value={24}>Expires: 24h</option>
-                    <option value={168}>Expires: 7d</option>
-                    <option value={720}>Expires: 30d</option>
-                  </select>
-                  <label className="flex items-center space-x-1 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
-                    <input
-                      type="checkbox"
-                      checked={burnAfterRead}
-                      onChange={(e) => setBurnAfterRead(e.target.checked)}
-                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
-                    />
-                    <span>Burn</span>
-                  </label>
-                  <label className="flex items-center space-x-1 cursor-pointer text-gray-700 dark:text-gray-300 font-semibold select-none">
-                    <input
-                      type="checkbox"
-                      checked={requireEmailOtp}
-                      onChange={(e) => setRequireEmailOtp(e.target.checked)}
-                      className="rounded text-[#0B57D0] focus:ring-[#0B57D0]"
-                    />
-                    <span>OTP</span>
-                  </label>
+                    <Flame className={`w-3.5 h-3.5 ${burnAfterRead ? 'text-rose-500' : 'text-slate-400'}`} />
+                    <span>Burn on Read</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${burnAfterRead ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  </button>
+
+                  {/* Interactive Email OTP Toggle Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setRequireEmailOtp(!requireEmailOtp)}
+                    title="Require recipient to verify identity via one-time email passcode"
+                    className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                      requireEmailOtp
+                        ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 shadow-xs'
+                        : 'bg-white dark:bg-[#161F33] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    <KeyRound className={`w-3.5 h-3.5 ${requireEmailOtp ? 'text-cyan-500' : 'text-slate-400'}`} />
+                    <span>OTP Required</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${requireEmailOtp ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  </button>
                 </div>
               </div>
             )}
@@ -854,7 +882,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             <div
               ref={toContainerRef}
               onClick={() => toInputRef.current?.focus()}
-              className="relative flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60 cursor-text min-h-[44px]"
+              className="relative flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60 cursor-text min-h-[44px] focus-within:border-b-sky-500/60 dark:focus-within:border-b-sky-400/60 focus-within:bg-slate-50/50 dark:focus-within:bg-[#111A2E]/40 transition-colors duration-150"
             >
               <span className="text-xs font-semibold text-[#5F6368] dark:text-[#94A3B8] shrink-0 mr-1 select-none">
                 To
@@ -958,7 +986,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                     commitRecipientInput(candidate);
                   }
                 }}
-                className="flex-1 min-w-[130px] bg-transparent border-none outline-none text-sm text-[#202124] dark:text-white py-1"
+                className="flex-1 min-w-[130px] bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 ring-0 focus-visible:outline-none text-sm text-[#202124] dark:text-white py-1"
               />
 
               {/* Autocomplete Dropdown Popover */}
@@ -1002,14 +1030,14 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             </div>
 
             {/* Subject Field */}
-            <div className="flex items-center px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60 gap-2">
+            <div className="flex items-center px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60 gap-2 focus-within:border-b-sky-500/60 dark:focus-within:border-b-sky-400/60 focus-within:bg-slate-50/50 dark:focus-within:bg-[#111A2E]/40 transition-colors duration-150">
               <span className="w-12 text-xs font-semibold text-[#5F6368] dark:text-[#94A3B8]">Subject</span>
               <input
                 type="text"
                 placeholder={t(language, 'subject_placeholder')}
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-sm text-[#202124] dark:text-white"
+                className="flex-1 bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 ring-0 focus-visible:outline-none text-sm text-[#202124] dark:text-white"
               />
               {cloakSubjectHeaders && securityMode !== 'standard' && (
                 <span
@@ -1120,7 +1148,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
             )}
 
             {/* Message Body Editor */}
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 p-4 overflow-y-auto focus-within:bg-slate-50/30 dark:focus-within:bg-[#111A2E]/20 transition-colors duration-150">
               <textarea
                 placeholder={t(language, 'body_placeholder')}
                 value={body}
@@ -1129,7 +1157,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   fontFamily: FONT_FAMILY_STYLE[fontFamily],
                   fontSize: FONT_SIZE_STYLE[fontSize],
                 }}
-                className="w-full h-full bg-transparent border-none outline-none resize-none text-[#202124] dark:text-[#F1F5F9] leading-relaxed placeholder-[#5F6368]"
+                className="w-full h-full bg-transparent border-0 border-none outline-none focus:outline-none focus:ring-0 ring-0 focus-visible:outline-none resize-none text-[#202124] dark:text-[#F1F5F9] leading-relaxed placeholder-[#5F6368]"
               />
             </div>
 
@@ -1161,9 +1189,9 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                 <button
                   type="submit"
                   disabled={isSending}
-                  className="flex items-center space-x-2 px-6 py-2.5 rounded-full qumail-accent-bg text-white font-bold text-sm shadow-md hover:shadow-lg transition-all outline-none disabled:opacity-50"
+                  className="flex items-center space-x-2 px-6 py-2.5 rounded-full qumail-accent-bg text-white font-bold text-sm shadow-md hover:shadow-lg transition-all outline-none disabled:opacity-50 cursor-pointer"
                 >
-                  <Send className="w-4 h-4" />
+                  <UseAnimations animation={send} size={18} strokeColor="#ffffff" className="shrink-0" />
                   <span>{isSending ? t(language, 'sending') : t(language, 'send')}</span>
                 </button>
 
@@ -1201,7 +1229,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                 title={t(language, 'discard')}
                 className="p-2 text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 rounded-full transition-colors cursor-pointer"
               >
-                <Trash2 className="w-5 h-5" />
+                <UseAnimations animation={trash2} size={20} strokeColor="currentColor" className="shrink-0" />
               </button>
             </div>
           </form>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ShieldAlert, Lock, Undo2, X, KeyRound } from 'lucide-react';
+import UseAnimations from 'react-useanimations';
+import checkmark from 'react-useanimations/lib/checkmark';
 import { MotionConfig } from 'framer-motion';
 import { expiryStringToHours, resolveDisplaySubject } from './lib/privacy';
 import { t } from './lib/i18n';
@@ -1668,7 +1670,7 @@ export const App: React.FC = () => {
       {/* Viewport-Centered Floating Toast Outside the Settings Card */}
       {toastNotice && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] px-5 py-2.5 rounded-full bg-[#0F172A]/95 text-white text-xs font-semibold shadow-2xl border border-sky-500/40 shadow-sky-950/50 backdrop-blur-xl flex items-center space-x-3 w-auto max-w-[90vw] whitespace-nowrap pointer-events-auto animate-in fade-in slide-in-from-bottom-3 duration-200 select-none">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <UseAnimations animation={checkmark} size={18} strokeColor="#34d399" className="shrink-0" />
           <span className="truncate leading-normal tracking-wide">{toastNotice}</span>
           <button
             type="button"

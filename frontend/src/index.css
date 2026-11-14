@@ -72,6 +72,14 @@
   * {
     box-sizing: border-box;
   }
+
+  /* Suppress harsh rectangular browser focus outlines on inputs & controls */
+  input:focus,
+  textarea:focus,
+  select:focus,
+  button:focus {
+    outline: none !important;
+  }
   
   body {
     margin: 0;
