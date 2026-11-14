@@ -12,6 +12,7 @@ import { ReadingPane } from './components/ReadingPane';
 import { ComposeModal } from './components/ComposeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SignInModal } from './components/SignInModal';
+import { OnboardingTour, shouldShowTour, resetTour } from './components/OnboardingTour';
 import { api } from './lib/api';
 import { EmailMessage, HSMStatus, AccountSession, QuMailSettings, SearchFilters, DEFAULT_SEARCH_FILTERS, countActiveFilters } from './types';
 import { INITIAL_ACCOUNT, INITIAL_HSM, DEFAULT_SETTINGS } from './initialState';
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountSession>(INITIAL_ACCOUNT);
   const [hsmStatus, setHsmStatus] = useState<HSMStatus>(INITIAL_HSM);
+  const [showTour, setShowTour] = useState(false);
 
   const handleUpdateSettings = useCallback((patch: Partial<QuMailSettings>) => {
     if (patch.theme === 'dark' || patch.theme === 'midnight') {
@@ -320,6 +322,10 @@ export const App: React.FC = () => {
             setIsRefreshing(false);
             setIsInitialSyncing(false);
             setSyncStatus(null);
+            // Show tour for returning users who haven't seen it yet
+            if (shouldShowTour()) {
+              setTimeout(() => setShowTour(true), 1200);
+            }
           });
       }
     } catch (e: any) {
@@ -882,6 +888,10 @@ export const App: React.FC = () => {
       setSyncStatus('Fetching real messages from mail server...');
       const msgs = await api.fetchInbox();
       setMessages(msgs);
+      // Show onboarding tour for first-time users (slight delay so the UI settles)
+      if (shouldShowTour()) {
+        setTimeout(() => setShowTour(true), 800);
+      }
     } catch (err: any) {
       console.warn('Sign in inbox sync note:', err);
     } finally {
@@ -1640,6 +1650,11 @@ export const App: React.FC = () => {
           settings={settings}
           onUpdateSettings={handleUpdateSettings}
           onShowNotice={setToastNotice}
+          onStartTour={() => {
+            setIsSettingsOpen(false);
+            resetTour();
+            setTimeout(() => setShowTour(true), 350);
+          }}
           onVaultStateChange={async () => {
             try {
               const acc = await api.getAccount();
@@ -1665,6 +1680,12 @@ export const App: React.FC = () => {
         onClose={() => setIsSignInOpen(false)}
         onSignIn={handleSignIn}
         allowClose={Boolean(account.email)}
+      />
+
+      {/* First-Time Guided Onboarding Tour */}
+      <OnboardingTour
+        isOpen={showTour}
+        onClose={() => setShowTour(false)}
       />
 
       {/* Viewport-Centered Floating Toast Outside the Settings Card */}

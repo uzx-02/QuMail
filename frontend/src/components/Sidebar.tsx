@@ -71,6 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={onOpenCompose}
+          data-tour="tour-compose"
           className={`flex items-center space-x-3 rounded-2xl shadow-md hover:shadow-lg transition-all duration-200 qumail-accent-bg font-semibold text-sm cursor-pointer ${
             isCollapsed ? 'w-12 h-12 justify-center mx-auto' : 'px-6 py-4 w-40'
           }`}
@@ -87,6 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={f.id}
                 onClick={() => onSelectFolder(f.id)}
+                data-tour={f.id === 'inbox' ? 'tour-inbox' : undefined}
                 className={`w-full flex items-center justify-between px-4 py-2.5 rounded-full text-sm transition-all duration-150 outline-none cursor-pointer ${
                   isSelected
                     ? 'qumail-accent-soft text-[#001D35] dark:text-white font-bold'

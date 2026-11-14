@@ -79,6 +79,7 @@ interface SettingsModalProps {
   onUpdateSettings: (patch: Partial<QuMailSettings>) => void;
   onShowNotice?: (msg: string) => void;
   onVaultStateChange?: () => void;
+  onStartTour?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -96,6 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSettings,
   onShowNotice,
   onVaultStateChange,
+  onStartTour,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'labels' | 'accounts' | 'security' | 'appearance' | 'accessibility' | 'offline_translation' | 'about'>(initialTab);
 
@@ -3378,7 +3380,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#94A3B8]">
                     Frequently Asked Questions
                   </h4>
-                  <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-medium">Help & Support</span>
+                  <div className="flex items-center space-x-2">
+                    {onStartTour && (
+                      <button
+                        type="button"
+                        onClick={onStartTour}
+                        className="inline-flex items-center space-x-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold cursor-pointer py-1 px-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                        title="Replay the animated interactive tour"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>Interactive Feature Tour</span>
+                      </button>
+                    )}
+                    <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-medium">Help & Support</span>
+                  </div>
                 </div>
                 {[
                   {

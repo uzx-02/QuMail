@@ -114,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center space-x-2.5 cursor-pointer select-none">
+        <div className="flex items-center space-x-2.5 cursor-pointer select-none" data-tour="tour-security">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#0B57D0] to-[#4F46E5] flex items-center justify-center shadow-md shadow-blue-500/20">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Center: Large Gmail Search Pill with Advanced Filters */}
-      <div className="flex-1 max-w-2xl mx-4 relative" ref={searchContainerRef}>
+      <div className="flex-1 max-w-2xl mx-4 relative" ref={searchContainerRef} data-tour="tour-search">
         <div
           className={`relative flex items-center w-full h-11 px-4 rounded-full transition-all duration-200 ${
             isSearchFocused || isFilterOpen
@@ -291,6 +291,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={() => onOpenSettings('about')}
           title="Help & FAQs"
+          data-tour="tour-help"
           className={`${
             showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2.5 rounded-full'
           } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer`}
@@ -303,6 +304,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={() => onOpenSettings('general')}
           title={t(language, 'settings_title')}
+          data-tour="tour-settings"
           className={`${
             showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2.5 rounded-full'
           } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer`}
