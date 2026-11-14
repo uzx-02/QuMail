@@ -507,13 +507,18 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                 showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-1.5 rounded-full'
               } text-[#5F6368] dark:text-[#94A3B8] hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-500 transition-colors cursor-pointer`}
             >
-              <UseAnimations
-                animation={star}
-                size={22}
-                active={message.starred}
-                strokeColor={message.starred ? '#f59e0b' : 'currentColor'}
-                fillColor={message.starred ? '#f59e0b' : 'transparent'}
-              />
+              <span
+                key={message.starred ? `star-on-${message.id}` : `star-off-${message.id}`}
+                className={`flex items-center justify-center ${message.starred ? 'star-pop' : ''}`}
+              >
+                <UseAnimations
+                  animation={star}
+                  size={22}
+                  active={message.starred}
+                  strokeColor={message.starred ? '#f59e0b' : 'currentColor'}
+                  fillColor={message.starred ? '#f59e0b' : 'transparent'}
+                />
+              </span>
               {showIconLabels && (
                 <span className="text-xs font-semibold">
                   {message.starred ? t(language, 'starred') : t(language, 'star')}

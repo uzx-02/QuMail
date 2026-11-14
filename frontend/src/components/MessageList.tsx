@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Mail, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, Mail, MailOpen, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
 import UseAnimations from 'react-useanimations';
 import checkBox from 'react-useanimations/lib/checkBox';
 import star from 'react-useanimations/lib/star';
@@ -291,7 +291,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                     showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
                   } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer flex items-center justify-center`}
                 >
-                  <UseAnimations animation={mail} size={22} strokeColor="currentColor" />
+                  <MailOpen className="w-5 h-5" />
                   {showIconLabels && <span className="text-xs font-medium ml-1">{t(language, 'mark_as_unread')}</span>}
                 </button>
                 <button
@@ -581,9 +581,9 @@ export const MessageList: React.FC<MessageListProps> = ({
                 }`}
               >
                 {/* 1. Left Cluster (Fixed Width — Never Wraps or Shrinks) */}
-                <div className="flex items-center space-x-1.5 mr-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-0.5 mr-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <div
-                    className={`transition-opacity duration-150 ${
+                    className={`flex items-center justify-center w-[26px] h-[26px] transition-opacity duration-150 ${
                       selectedIds.size > 0 || isChecked
                         ? 'opacity-100'
                         : 'opacity-0 group-hover:opacity-100'
@@ -601,16 +601,23 @@ export const MessageList: React.FC<MessageListProps> = ({
                       e.stopPropagation();
                       onToggleStar(msg.id, e);
                     }}
-                    className="p-0.5 text-gray-400 hover:text-amber-400 transition-colors cursor-pointer rounded flex items-center justify-center shrink-0"
+                    className="flex items-center justify-center w-[26px] h-[26px] text-gray-400 hover:text-amber-400 transition-colors cursor-pointer rounded shrink-0"
                     title={msg.starred ? 'Starred' : 'Not starred'}
                   >
-                    <UseAnimations
-                      animation={star}
-                      size={22}
-                      active={msg.starred}
-                      strokeColor={msg.starred ? '#f59e0b' : 'currentColor'}
-                      fillColor={msg.starred ? '#f59e0b' : 'transparent'}
-                    />
+                    <span
+                      key={msg.starred ? `star-on-${msg.id}` : `star-off-${msg.id}`}
+                      className={`flex items-center justify-center transition-transform duration-200 ${
+                        msg.starred ? 'star-pop' : ''
+                      }`}
+                    >
+                      <UseAnimations
+                        animation={star}
+                        size={22}
+                        active={msg.starred}
+                        strokeColor={msg.starred ? '#f59e0b' : 'currentColor'}
+                        fillColor={msg.starred ? '#f59e0b' : 'transparent'}
+                      />
+                    </span>
                   </button>
                 </div>
 
@@ -741,7 +748,11 @@ export const MessageList: React.FC<MessageListProps> = ({
                       title={msg.seen ? 'Mark as unread (U)' : 'Mark as read (U)'}
                       className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer flex items-center justify-center shrink-0"
                     >
-                      <UseAnimations animation={mail} size={20} strokeColor="currentColor" />
+                      {msg.seen ? (
+                        <MailOpen className="w-4 h-4" />
+                      ) : (
+                        <UseAnimations animation={mail} size={20} strokeColor="currentColor" />
+                      )}
                     </button>
                     <button
                       type="button"
@@ -799,7 +810,7 @@ export const MessageList: React.FC<MessageListProps> = ({
             >
               {ctxMsg.seen ? (
                 <>
-                  <UseAnimations animation={mail} size={18} strokeColor="currentColor" />
+                  <MailOpen className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                   <span>Mark as unread</span>
                 </>
               ) : (
