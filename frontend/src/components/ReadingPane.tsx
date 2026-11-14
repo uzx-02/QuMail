@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import UseAnimations from 'react-useanimations';
 import star from 'react-useanimations/lib/star';
+import trash2 from 'react-useanimations/lib/trash2';
 import {
   ArrowLeft,
   Reply,
   Forward,
-  Trash2,
   Printer,
   ShieldCheck,
   AlertTriangle,
@@ -544,15 +544,15 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
             disabled={!isQuMail}
             title={isQuMail ? t(language, 'delete') : t(language, 'safe_deletion_guard')}
             className={`${
-              showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2 rounded-full'
-            } transition-colors ${
+              showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-1.5 rounded-full'
+            } transition-colors flex items-center justify-center ${
               isQuMail
-                ? 'text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600'
+                ? 'text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 cursor-pointer'
                 : 'text-gray-300 dark:text-gray-600 opacity-25 cursor-not-allowed hover:bg-transparent'
             }`}
           >
-            <Trash2 className="w-4 h-4" />
-            {showIconLabels && <span className="text-xs font-semibold">{t(language, 'delete')}</span>}
+            <UseAnimations animation={trash2} size={22} strokeColor="currentColor" />
+            {showIconLabels && <span className="text-xs font-semibold ml-1">{t(language, 'delete')}</span>}
           </button>
         </div>
       </div>
@@ -842,7 +842,7 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
                 className="p-1.5 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 text-xs font-medium transition-colors cursor-pointer"
                 title={t(language, 'trans_purge_this')}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <UseAnimations animation={trash2} size={18} strokeColor="currentColor" />
               </button>
             </div>
           </div>

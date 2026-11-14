@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check } from 'lucide-react';
+import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check, HelpCircle } from 'lucide-react';
 import { ShinyText } from './reactbits/ShinyText';
 import { HSMStatus, AccountSession, SearchFilters, countActiveFilters, DEFAULT_SEARCH_FILTERS, LanguageOption } from '../types';
 import { SearchFilterPopover } from './SearchFilterPopover';
@@ -285,6 +285,18 @@ export const Header: React.FC<HeaderProps> = ({
               {isDarkMode ? t(language, 'switch_to_light') : t(language, 'switch_to_dark')}
             </span>
           )}
+        </button>
+
+        {/* Help Button */}
+        <button
+          onClick={() => onOpenSettings('about')}
+          title="Help & FAQs"
+          className={`${
+            showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2.5 rounded-full'
+          } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer`}
+        >
+          <HelpCircle className="w-5 h-5" />
+          {showIconLabels && <span className="text-xs font-semibold">Help</span>}
         </button>
 
         {/* Settings Button */}

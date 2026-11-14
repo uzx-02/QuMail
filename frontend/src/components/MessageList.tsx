@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, Mail, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
 import UseAnimations from 'react-useanimations';
 import checkBox from 'react-useanimations/lib/checkBox';
 import star from 'react-useanimations/lib/star';
+import trash2 from 'react-useanimations/lib/trash2';
+import mail from 'react-useanimations/lib/mail';
 import { EmailMessage, ListDensityOption, LanguageOption } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 import { resolveDisplaySubject } from '../lib/privacy';
@@ -277,30 +279,30 @@ export const MessageList: React.FC<MessageListProps> = ({
                   title={t(language, 'mark_as_read')}
                   className={`${
                     showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
-                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer`}
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer flex items-center justify-center`}
                 >
-                  <MailOpen className="w-4 h-4" />
-                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'mark_as_read')}</span>}
+                  <UseAnimations animation={mail} size={22} strokeColor="currentColor" />
+                  {showIconLabels && <span className="text-xs font-medium ml-1">{t(language, 'mark_as_read')}</span>}
                 </button>
                 <button
                   onClick={() => handleBatchMarkRead(false)}
                   title={t(language, 'mark_as_unread')}
                   className={`${
                     showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
-                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer`}
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#F2F6FC] dark:hover:bg-[#1E2740] transition-colors cursor-pointer flex items-center justify-center`}
                 >
-                  <Mail className="w-4 h-4" />
-                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'mark_as_unread')}</span>}
+                  <UseAnimations animation={mail} size={22} strokeColor="currentColor" />
+                  {showIconLabels && <span className="text-xs font-medium ml-1">{t(language, 'mark_as_unread')}</span>}
                 </button>
                 <button
                   onClick={handleBatchDelete}
                   title={t(language, 'delete_selected')}
                   className={`${
                     showIconLabels ? 'px-2.5 py-1 rounded-full flex items-center space-x-1' : 'p-2 rounded-full'
-                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors cursor-pointer`}
+                  } text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-600 transition-colors cursor-pointer flex items-center justify-center`}
                 >
-                  <Trash2 className="w-4 h-4" />
-                  {showIconLabels && <span className="text-xs font-medium">{t(language, 'delete_selected')}</span>}
+                  <UseAnimations animation={trash2} size={22} strokeColor="currentColor" />
+                  {showIconLabels && <span className="text-xs font-medium ml-1">{t(language, 'delete_selected')}</span>}
                 </button>
                 <button
                   onClick={() => setSelectedIds(new Set())}
@@ -737,9 +739,9 @@ export const MessageList: React.FC<MessageListProps> = ({
                       type="button"
                       onClick={(e) => onMarkRead(msg.id, !msg.seen, e)}
                       title={msg.seen ? 'Mark as unread (U)' : 'Mark as read (U)'}
-                      className="p-1.5 rounded-full text-gray-500 dark:text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer"
+                      className="p-1 rounded-full text-gray-500 dark:text-gray-400 hover:text-[#0B57D0] dark:hover:text-[#818CF8] hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors cursor-pointer flex items-center justify-center shrink-0"
                     >
-                      {msg.seen ? <Mail className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
+                      <UseAnimations animation={mail} size={20} strokeColor="currentColor" />
                     </button>
                     <button
                       type="button"
@@ -752,13 +754,13 @@ export const MessageList: React.FC<MessageListProps> = ({
                       }}
                       disabled={!isQuMail}
                       title={isQuMail ? 'Delete QuMail message' : 'Protected: Standard emails cannot be deleted'}
-                      className={`p-1.5 rounded-full transition-colors ${
+                      className={`p-1 rounded-full transition-colors flex items-center justify-center shrink-0 ${
                         isQuMail
                           ? 'text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer'
                           : 'text-gray-300 dark:text-gray-600 opacity-20 cursor-not-allowed hover:bg-transparent'
                       }`}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <UseAnimations animation={trash2} size={20} strokeColor="currentColor" />
                     </button>
                   </div>
                 </div>
@@ -785,7 +787,7 @@ export const MessageList: React.FC<MessageListProps> = ({
               }}
               className="w-full px-3.5 py-2 flex items-center space-x-2.5 hover:bg-gray-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer text-left"
             >
-              <Star className={`w-4 h-4 ${ctxMsg.starred ? 'fill-amber-400 text-amber-400' : 'text-gray-500 dark:text-gray-400'}`} />
+              <UseAnimations animation={star} size={18} active={ctxMsg.starred} strokeColor={ctxMsg.starred ? '#f59e0b' : 'currentColor'} fillColor={ctxMsg.starred ? '#f59e0b' : 'transparent'} />
               <span>{ctxMsg.starred ? 'Remove star' : 'Add star'}</span>
             </button>
             <button
@@ -797,12 +799,12 @@ export const MessageList: React.FC<MessageListProps> = ({
             >
               {ctxMsg.seen ? (
                 <>
-                  <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <UseAnimations animation={mail} size={18} strokeColor="currentColor" />
                   <span>Mark as unread</span>
                 </>
               ) : (
                 <>
-                  <MailOpen className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  <UseAnimations animation={mail} size={18} strokeColor="currentColor" />
                   <span>Mark as read</span>
                 </>
               )}
@@ -825,7 +827,7 @@ export const MessageList: React.FC<MessageListProps> = ({
                   : 'text-gray-400 dark:text-gray-500 opacity-50 cursor-not-allowed'
               }`}
             >
-              <Trash2 className="w-4 h-4" />
+              <UseAnimations animation={trash2} size={18} strokeColor="currentColor" />
               <span>{ctxIsQuMail ? 'Move to Trash' : 'Move to Trash (Protected)'}</span>
             </button>
           </div>

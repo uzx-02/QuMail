@@ -3371,6 +3371,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {/* FAQ Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#94A3B8]">
+                    Frequently Asked Questions
+                  </h4>
+                  <span className="text-[11px] text-indigo-500 dark:text-indigo-400 font-medium">Help & Support</span>
+                </div>
+                {[
+                  {
+                    q: 'How does Post-Quantum encryption work?',
+                    a: 'QuMail uses ML-KEM-768 (NIST FIPS 203) for key encapsulation and ML-DSA-65 (NIST FIPS 204) for digital signatures, ensuring your emails are protected against both classical and future quantum computer attacks.',
+                  },
+                  {
+                    q: 'What is a Secure Private Link?',
+                    a: 'A zero-knowledge web portal protected with AES-256-GCM encryption. Recipients can access their message via a unique link without needing a QuMail account. The content is decrypted in-browser using a one-time key embedded in the URL fragment.',
+                  },
+                  {
+                    q: 'Can anyone read my emails in transit?',
+                    a: 'No. Message bodies are encrypted on your device before sending, using the recipient\'s public key. Only the recipient\'s private key can decrypt the content — not even QuMail servers can read it.',
+                  },
+                  {
+                    q: 'What data can my email provider see?',
+                    a: 'Sender/recipient addresses and delivery timestamps (required for routing). Message content, subject (when Subject Cloaking is enabled), and attachments are fully encrypted before leaving your device.',
+                  },
+                  {
+                    q: 'What is Burn on Read?',
+                    a: 'When enabled on a Secure Private Link, the portal self-destructs after the first successful decryption. The message cannot be accessed a second time, ensuring one-time-only delivery.',
+                  },
+                  {
+                    q: 'What happens if OTP is required?',
+                    a: 'The recipient must enter a one-time password (sent separately by you) to decrypt and view the message on the portal. This adds a second authentication factor beyond just having the link.',
+                  },
+                  {
+                    q: 'Is my Google account token stored securely?',
+                    a: 'Yes. QuMail uses Windows DPAPI (CryptProtectData) to wrap your OAuth master key, binding it to your Windows user account and hardware. The key cannot be decrypted on a different machine.',
+                  },
+                  {
+                    q: 'What happens when I send to a non-QuMail user?',
+                    a: 'QuMail automatically falls back to Secure Private Link mode. The recipient gets a standard email with a link to a secure portal where they can read the encrypted content without installing any software.',
+                  },
+                ].map((faq, i) => (
+                  <details
+                    key={i}
+                    className="group rounded-xl border border-gray-200/90 dark:border-gray-700/80 bg-white dark:bg-white/[0.02] overflow-hidden"
+                  >
+                    <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-colors">
+                      <span className="text-xs font-semibold text-[#202124] dark:text-[#F1F5F9] pr-4">{faq.q}</span>
+                      <ChevronDown className="w-3.5 h-3.5 text-[#5F6368] dark:text-[#94A3B8] shrink-0 transition-transform duration-200 group-open:rotate-180" />
+                    </summary>
+                    <div className="px-4 pb-3.5 pt-0.5 text-[11px] text-[#5F6368] dark:text-[#94A3B8] leading-relaxed border-t border-gray-100 dark:border-gray-700/60">
+                      {faq.a}
+                    </div>
+                  </details>
+                ))}
+              </div>
             </div>
           )}
         </div>
