@@ -363,6 +363,7 @@ class QuMailJsApi:
         self.account_subject = ""
         self._account_avatar_url = ""
         self.key_fingerprint = ""
+        self._window: Optional[Any] = None
         self.hsm = HSMManager.get()
         self.vault_service = None
         self.active_context = None
@@ -3500,6 +3501,40 @@ class QuMailJsApi:
             return {"status": "error", "error": "Vault is locked. Unlock mailbox to manage logs."}
         return self.translator_service.delete_translation_log(message_id)
 
+    def set_window(self, window: Any) -> None:
+        """Store reference to pywebview window handle."""
+        self._window = window
+
+    def minimize_window(self) -> Dict[str, Any]:
+        """Minimize the desktop window."""
+        if getattr(self, "_window", None):
+            try:
+                self._window.minimize()
+                return {"success": True}
+            except Exception as e:
+                logger.warning("minimize_window error: %s", e)
+        return {"success": False, "message": "Window handle not available."}
+
+    def close_window(self) -> Dict[str, Any]:
+        """Close and exit the desktop application."""
+        if getattr(self, "_window", None):
+            try:
+                self._window.destroy()
+                return {"success": True}
+            except Exception as e:
+                logger.warning("close_window error: %s", e)
+        return {"success": False, "message": "Window handle not available."}
+
+    def toggle_fullscreen(self) -> Dict[str, Any]:
+        """Toggle fullscreen mode for the borderless window."""
+        if getattr(self, "_window", None):
+            try:
+                self._window.toggle_fullscreen()
+                return {"success": True}
+            except Exception as e:
+                logger.warning("toggle_fullscreen error: %s", e)
+        return {"success": False, "message": "Window handle not available."}
+
 
 # Direct alias for bridge consumer compatibility
 QuMailBridge = QuMailJsApi
@@ -3577,7 +3612,7 @@ def main() -> int:
     # 2. Initialize JS-to-Python bridge
     js_api = QuMailJsApi(account_email=args.account, vault_path=args.vault)
 
-    # 3. Create pywebview window
+    # 3. Create borderless fullscreen pywebview window
     window = webview.create_window(
         title="QuMail 1.0 — Post-Quantum Secure Corporate Email",
         url=target_url,
@@ -3586,7 +3621,11 @@ def main() -> int:
         height=840,
         min_size=(1024, 680),
         text_select=True,
+        frameless=True,
+        fullscreen=True,
     )
+    if hasattr(js_api, "set_window"):
+        js_api.set_window(window)
 
     is_debug = bool(args.dev and not getattr(sys, "frozen", False))
     webview_storage = str(get_user_data_dir() / "webview_profile")

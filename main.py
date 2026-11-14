@@ -100,7 +100,11 @@ def _launch_react_desktop(
         height=840,
         min_size=(1024, 680),
         text_select=True,
+        frameless=True,
+        fullscreen=True,
     )
+    if hasattr(js_api, "set_window"):
+        js_api.set_window(window)
 
     logger.info("Launching Microsoft Edge WebView2 modern desktop shell...")
     webview.start(debug=False)

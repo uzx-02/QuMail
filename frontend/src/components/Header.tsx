@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check, HelpCircle, Sparkles, FileText } from 'lucide-react';
+import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check, HelpCircle, Sparkles, FileText, Minus, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShinyText } from './reactbits/ShinyText';
 import { HSMStatus, AccountSession, SearchFilters, countActiveFilters, DEFAULT_SEARCH_FILTERS, LanguageOption } from '../types';
 import { SearchFilterPopover } from './SearchFilterPopover';
 import { t } from '../lib/i18n';
+import { api } from '../lib/api';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -109,6 +110,10 @@ export const Header: React.FC<HeaderProps> = ({
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsFilterOpen(false);
+      if (e.key === 'F11') {
+        e.preventDefault();
+        api.toggleFullscreen();
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
@@ -424,6 +429,34 @@ export const Header: React.FC<HeaderProps> = ({
             <span>{t(language, 'sign_in')}</span>
           </button>
         )}
+
+        {/* Window controls for frameless borderless fullscreen */}
+        <div className="flex items-center space-x-0.5 pl-2 ml-1 border-l border-gray-200/80 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => api.minimizeWindow()}
+            title="Minimize QuMail"
+            className="p-2 rounded-lg text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer"
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => api.toggleFullscreen()}
+            title="Toggle Fullscreen (F11)"
+            className="p-2 rounded-lg text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => api.closeWindow()}
+            title="Close QuMail (Alt+F4)"
+            className="p-2 rounded-lg text-[#5F6368] dark:text-[#94A3B8] hover:bg-red-500 hover:text-white transition-colors outline-none cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </header>
   );

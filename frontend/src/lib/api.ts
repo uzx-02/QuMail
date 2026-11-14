@@ -74,6 +74,9 @@ declare global {
         deleteTranslationLog: (messageId?: string) => Promise<{ status: string; remaining: number }>;
         refreshAccountAvatar?: () => Promise<{ success: boolean; avatarUrl?: string }>;
         fetchStandardEmailBody?: (messageId: string) => Promise<{ success: boolean; body?: string; subject?: string }>;
+        minimize_window?: () => Promise<{ success: boolean; message?: string }>;
+        close_window?: () => Promise<{ success: boolean; message?: string }>;
+        toggle_fullscreen?: () => Promise<{ success: boolean; message?: string }>;
       };
     };
   }
@@ -925,6 +928,42 @@ class ApiService {
       );
     }
     return { status: 'ok', remaining: 0 };
+  }
+
+  async minimizeWindow(): Promise<{ success: boolean }> {
+    if (window.pywebview?.api?.minimize_window) {
+      return callBridgeWithTimeout(
+        () => window.pywebview!.api.minimize_window!(),
+        3000,
+        { success: false },
+        'minimizeWindow'
+      );
+    }
+    return { success: false };
+  }
+
+  async closeWindow(): Promise<{ success: boolean }> {
+    if (window.pywebview?.api?.close_window) {
+      return callBridgeWithTimeout(
+        () => window.pywebview!.api.close_window!(),
+        3000,
+        { success: false },
+        'closeWindow'
+      );
+    }
+    return { success: false };
+  }
+
+  async toggleFullscreen(): Promise<{ success: boolean }> {
+    if (window.pywebview?.api?.toggle_fullscreen) {
+      return callBridgeWithTimeout(
+        () => window.pywebview!.api.toggle_fullscreen!(),
+        3000,
+        { success: false },
+        'toggleFullscreen'
+      );
+    }
+    return { success: false };
   }
 }
 
