@@ -22,10 +22,9 @@ from cryptography.fernet import Fernet
 
 import stat
 from core.config import CUSTOM_ACCOUNT_PATH, get_oauth_master_key_path
+from transport.oauth2_gmail import _get_fernet
 
 logger = logging.getLogger("transport.custom_mailbox")
-
-_CUSTOM_MASTER_KEY_PATH = str(get_oauth_master_key_path())
 
 def _secure_file_permissions(path: str) -> None:
     try:
@@ -43,17 +42,15 @@ def _ensure_secret_dir(path: str) -> None:
     except OSError:
         pass
 
-def _get_fernet() -> Fernet:
-    _ensure_secret_dir(_CUSTOM_MASTER_KEY_PATH)
-    if os.path.exists(_CUSTOM_MASTER_KEY_PATH):
-        with open(_CUSTOM_MASTER_KEY_PATH, "rb") as f:
-            key = f.read()
-    else:
-        key = Fernet.generate_key()
-        with open(_CUSTOM_MASTER_KEY_PATH, "wb") as f:
-            f.write(key)
-        _secure_file_permissions(_CUSTOM_MASTER_KEY_PATH)
-    return Fernet(key)
+def _account_path_for_email(email: Optional[str] = None) -> Path:
+    canon = Path(CUSTOM_ACCOUNT_PATH)
+    if not email:
+        return canon
+    safe_name = "".join(c if c.isalnum() else "_" for c in email.lower())
+    specific = canon.parent / f"custom_account_{safe_name}.json"
+    if specific.is_file():
+        return specific
+    return canon
 
 # Known provider host defaults
 PROVIDER_HOST_DEFAULTS = {
@@ -145,7 +142,7 @@ def save_custom_account(
 ) -> bool:
     """Save encrypted custom mailbox credentials locally."""
     try:
-        _ensure_secret_dir(CUSTOM_ACCOUNT_PATH)
+        _ensure_secret_dir(str(CUSTOM_ACCOUNT_PATH))
         data = {
             "email": email.strip(),
             "password": password,
@@ -157,9 +154,19 @@ def save_custom_account(
             "smtpPort": int(smtp_port),
         }
         encrypted = _get_fernet().encrypt(json.dumps(data).encode("utf-8"))
+
+        # Save to canonical active custom account path
         with open(CUSTOM_ACCOUNT_PATH, "wb") as f:
             f.write(encrypted)
-        _secure_file_permissions(CUSTOM_ACCOUNT_PATH)
+        _secure_file_permissions(str(CUSTOM_ACCOUNT_PATH))
+
+        # Also save to per-account specific path to preserve credentials across multi-account switches
+        safe_name = "".join(c if c.isalnum() else "_" for c in email.strip().lower())
+        specific_path = Path(CUSTOM_ACCOUNT_PATH).parent / f"custom_account_{safe_name}.json"
+        with open(specific_path, "wb") as f:
+            f.write(encrypted)
+        _secure_file_permissions(str(specific_path))
+
         logger.info("Saved encrypted custom account credentials for %s", email)
         return True
     except Exception as exc:
@@ -169,14 +176,25 @@ def save_custom_account(
 
 def load_custom_account(expected_email: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Load and decrypt custom mailbox credentials."""
-    if not os.path.exists(CUSTOM_ACCOUNT_PATH):
-        return None
+    target_path = _account_path_for_email(expected_email)
+    if not target_path.is_file():
+        target_path = Path(CUSTOM_ACCOUNT_PATH)
+        if not target_path.is_file():
+            return None
     try:
-        with open(CUSTOM_ACCOUNT_PATH, "rb") as f:
+        with open(target_path, "rb") as f:
             encrypted = f.read()
         decrypted = _get_fernet().decrypt(encrypted).decode("utf-8")
         data = json.loads(decrypted)
         if expected_email and data.get("email", "").lower() != expected_email.lower():
+            safe_name = "".join(c if c.isalnum() else "_" for c in expected_email.lower())
+            spec = Path(CUSTOM_ACCOUNT_PATH).parent / f"custom_account_{safe_name}.json"
+            if spec.is_file() and spec != target_path:
+                with open(spec, "rb") as f2:
+                    dec2 = _get_fernet().decrypt(f2.read()).decode("utf-8")
+                data2 = json.loads(dec2)
+                if data2.get("email", "").lower() == expected_email.lower():
+                    return data2
             return None
         return data
     except Exception as exc:
@@ -184,9 +202,17 @@ def load_custom_account(expected_email: Optional[str] = None) -> Optional[Dict[s
         return None
 
 
-def clear_custom_account() -> bool:
+def clear_custom_account(email: Optional[str] = None) -> bool:
     """Remove custom account credentials file."""
     try:
+        if email:
+            safe_name = "".join(c if c.isalnum() else "_" for c in email.lower())
+            specific = Path(CUSTOM_ACCOUNT_PATH).parent / f"custom_account_{safe_name}.json"
+            if specific.is_file():
+                try:
+                    specific.unlink()
+                except OSError:
+                    pass
         if os.path.exists(CUSTOM_ACCOUNT_PATH):
             os.remove(CUSTOM_ACCOUNT_PATH)
         return True

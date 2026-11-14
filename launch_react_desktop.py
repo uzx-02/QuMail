@@ -1764,7 +1764,7 @@ class QuMailJsApi:
 
             # Save verified credentials locally with Fernet encryption
             domain_name = email_addr.split("@")[1].capitalize()
-            save_custom_account(
+            saved = save_custom_account(
                 email=email_addr,
                 password=password,
                 display_name=display_name,
@@ -1774,6 +1774,8 @@ class QuMailJsApi:
                 smtp_host=smtp_host,
                 smtp_port=smtp_port,
             )
+            if not saved:
+                return {"success": False, "message": "Failed to encrypt and store account credentials locally."}
 
             self.account_email = email_addr
             self.account_display_name = display_name or email_addr.split("@")[0]
