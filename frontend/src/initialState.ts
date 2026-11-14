@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS: QuMailSettings = {
   fontFamily: 'sans',
   fontSize: 'medium',
   showSenderAvatars: true,
+  tourCompleted: false,
   autoSyncMinutes: 5,
   desktopNotifications: 'sender_only',
   markAsReadDelay: '3s',

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check, HelpCircle } from 'lucide-react';
+import { Menu, Search, SlidersHorizontal, Sun, Moon, Settings, ShieldCheck, X, LogIn, Languages, Check, HelpCircle, Sparkles, FileText } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ShinyText } from './reactbits/ShinyText';
 import { HSMStatus, AccountSession, SearchFilters, countActiveFilters, DEFAULT_SEARCH_FILTERS, LanguageOption } from '../types';
 import { SearchFilterPopover } from './SearchFilterPopover';
@@ -21,6 +22,7 @@ interface HeaderProps {
   showIconLabels?: boolean;
   language?: LanguageOption;
   onUpdateLanguage?: (lang: LanguageOption) => void;
+  onReactivateTour?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,14 +41,17 @@ export const Header: React.FC<HeaderProps> = ({
   showIconLabels = false,
   language,
   onUpdateLanguage,
+  onReactivateTour,
 }) => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [tempFilters, setTempFilters] = useState<SearchFilters>(searchFilters);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
+  const helpMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setAvatarError(false);
@@ -74,6 +79,25 @@ export const Header: React.FC<HeaderProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isLanguageOpen]);
+
+  // Click outside listener for help dropdown
+  useEffect(() => {
+    if (!isHelpOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (helpMenuRef.current && !helpMenuRef.current.contains(e.target as Node)) {
+        setIsHelpOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsHelpOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isHelpOpen]);
 
   // Click outside listener for search filter popover
   useEffect(() => {
@@ -287,18 +311,76 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </button>
 
-        {/* Help Button */}
-        <button
-          onClick={() => onOpenSettings('about')}
-          title="Help & FAQs"
-          data-tour="tour-help"
-          className={`${
-            showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2.5 rounded-full'
-          } text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9] transition-colors outline-none cursor-pointer`}
-        >
-          <HelpCircle className="w-5 h-5" />
-          {showIconLabels && <span className="text-xs font-semibold">Help</span>}
-        </button>
+        {/* Help Button with Animated Dropdown */}
+        <div className="relative" ref={helpMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsHelpOpen((prev) => !prev)}
+            title="Help & Resources"
+            data-tour="tour-help"
+            className={`${
+              showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2.5 rounded-full'
+            } ${
+              isHelpOpen
+                ? 'bg-[#EAEAEA] dark:bg-[#1E2740] text-[#202124] dark:text-[#F1F5F9]'
+                : 'text-[#5F6368] dark:text-[#94A3B8] hover:bg-[#EAEAEA] dark:hover:bg-[#1E2740] hover:text-[#202124] dark:hover:text-[#F1F5F9]'
+            } transition-colors outline-none cursor-pointer flex items-center`}
+          >
+            <HelpCircle className="w-5 h-5" />
+            {showIconLabels && <span className="text-xs font-semibold">Help</span>}
+          </button>
+
+          <AnimatePresence>
+            {isHelpOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-white/95 dark:bg-[#161F33]/95 backdrop-blur-md border border-gray-200 dark:border-gray-700/80 shadow-2xl p-1.5 z-50 select-none"
+              >
+                <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#94A3B8] border-b border-gray-100 dark:border-gray-800">
+                  Help & Support
+                </div>
+                <div className="py-1 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      onOpenSettings('about');
+                    }}
+                    className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs text-[#202124] dark:text-[#F1F5F9] hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer text-left group"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-xs text-[#202124] dark:text-[#F1F5F9]">FAQs & Documentation</div>
+                      <div className="text-[10px] text-[#5F6368] dark:text-[#94A3B8]">Security details & common answers</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsHelpOpen(false);
+                      onReactivateTour?.();
+                    }}
+                    className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs text-[#202124] dark:text-[#F1F5F9] hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors cursor-pointer text-left group"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-xs text-[#202124] dark:text-[#F1F5F9]">Reactivate Tour Guide</div>
+                      <div className="text-[10px] text-[#5F6368] dark:text-[#94A3B8]">Step-by-step feature walkthrough</div>
+                    </div>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Settings Button */}
         <button

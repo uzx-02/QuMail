@@ -31,47 +31,47 @@ interface TourStep {
 const STEPS: TourStep[] = [
   {
     id: '__welcome__',
-    title: 'Welcome to QuMail 👋',
-    body: 'The world\'s first post-quantum secure email client. This quick tour will show you the key features — it only takes 30 seconds.',
+    title: 'Welcome to QuMail',
+    body: 'QuMail is an email client designed with post-quantum encryption standards. This brief walkthrough introduces the core interface and security controls.',
     icon: <Sparkles className="w-5 h-5 text-indigo-400" />,
     placement: 'center',
   },
   {
     id: 'tour-compose',
-    title: 'Compose a New Email',
-    body: 'Click here to write a new message. You can send standard emails, post-quantum encrypted mail, or a Secure Private Link — all from one button.',
+    title: 'Compose Messages',
+    body: 'Create and dispatch emails using your chosen security mode: Standard email, Post-Quantum sealed (ML-KEM-768), or a zero-knowledge Secure Private Link.',
     icon: <Pencil className="w-5 h-5 text-indigo-400" />,
     placement: 'right',
     padding: 10,
   },
   {
     id: 'tour-inbox',
-    title: 'Your Inbox',
-    body: 'All your messages live here. QuMail-encrypted emails show a green shield badge, Secure Private Links show a lock icon. Click any message to read it.',
+    title: 'Inbox & Mail Folders',
+    body: 'Access your messages and folders from the sidebar. Messages indicate their encryption status with cryptographic badges in the list.',
     icon: <Mail className="w-5 h-5 text-indigo-400" />,
     placement: 'right',
     padding: 14,
   },
   {
     id: 'tour-search',
-    title: 'Search Your Mail',
-    body: 'Find any message instantly. Use the filter icon beside the search bar for advanced options like date range, sender, or security tier.',
+    title: 'Search & Filtering',
+    body: 'Search across message subjects, senders, and content. The filter menu provides granular filters for date ranges, folders, and security tiers.',
     icon: <ShieldCheck className="w-5 h-5 text-indigo-400" />,
     placement: 'bottom',
     padding: 10,
   },
   {
     id: 'tour-security',
-    title: 'Post-Quantum Security',
-    body: 'This badge shows the security level of your connection. QuMail uses ML-KEM-768 and ML-DSA-65 — NIST-approved algorithms safe against quantum computers.',
+    title: 'Post-Quantum Security Status',
+    body: 'Displays connection security and active cryptographic primitives. QuMail implements NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65).',
     icon: <Lock className="w-5 h-5 text-indigo-400" />,
     placement: 'bottom',
     padding: 10,
   },
   {
     id: 'tour-settings',
-    title: 'Settings',
-    body: 'Customise QuMail — themes, language, font size, security options, and more. Your settings are stored locally and synced to your device.',
+    title: 'Settings & Customization',
+    body: 'Configure mailbox preferences, dark/light themes, typography, key management, security policies, and offline translation.',
     icon: <Settings className="w-5 h-5 text-indigo-400" />,
     placement: 'bottom',
     padding: 10,
@@ -79,16 +79,16 @@ const STEPS: TourStep[] = [
   {
     id: 'tour-help',
     title: 'Help & FAQs',
-    body: 'Need help? Click here anytime to open the FAQ section in About QuMail. Answers to common questions about encryption, Private Links, and more.',
+    body: 'Access detailed documentation, cryptographic architecture FAQs, or replay this interactive walkthrough at any time.',
     icon: <HelpCircle className="w-5 h-5 text-indigo-400" />,
     placement: 'bottom',
     padding: 10,
   },
   {
     id: '__done__',
-    title: "You're all set! 🚀",
-    body: 'That\'s the tour. Your emails are now protected by post-quantum cryptography. Compose your first secure message whenever you\'re ready.',
-    icon: <Sparkles className="w-5 h-5 text-amber-400" />,
+    title: 'Walkthrough Complete',
+    body: 'You are ready to use QuMail. If you need documentation or wish to revisit this tour, use the Help menu in the top bar.',
+    icon: <Sparkles className="w-5 h-5 text-emerald-400" />,
     placement: 'center',
   },
 ];
@@ -223,7 +223,7 @@ interface OnboardingTourProps {
   onClose: () => void;
 }
 
-const STORAGE_KEY = 'qumail-tour-done';
+const STORAGE_KEY = 'qumail-tour-completed';
 
 export function OnboardingTour({ isOpen, onClose }: OnboardingTourProps) {
   const [stepIndex, setStepIndex] = useState(0);
@@ -287,7 +287,7 @@ export function OnboardingTour({ isOpen, onClose }: OnboardingTourProps) {
   }, [isOpen, stepIndex]);
 
   const handleClose = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, 'true');
+    markTourCompleted();
     onClose();
     setTimeout(() => setStepIndex(0), 400);
   }, [onClose]);
@@ -463,11 +463,24 @@ export function OnboardingTour({ isOpen, onClose }: OnboardingTourProps) {
 }
 
 /** Returns true if the user has NOT completed the tour yet */
-export function shouldShowTour(): boolean {
-  return !localStorage.getItem(STORAGE_KEY);
+export function shouldShowTour(settings?: { tourCompleted?: boolean }): boolean {
+  if (settings?.tourCompleted) return false;
+  try {
+    if (localStorage.getItem(STORAGE_KEY) === 'true') return false;
+  } catch {}
+  return true;
 }
 
-/** Programmatically reset the tour (useful for testing or "replay tour" button) */
+/** Mark tour completed in local storage */
+export function markTourCompleted(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, 'true');
+  } catch {}
+}
+
+/** Programmatically reset the tour (useful for "replay tour" button) */
 export function resetTour(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
 }

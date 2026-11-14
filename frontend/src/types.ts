@@ -112,6 +112,7 @@ export interface QuMailSettings {
   fontFamily: FontFamilyOption;
   fontSize: FontSizeOption;
   showSenderAvatars: boolean;
+  tourCompleted?: boolean;
 
   // 1. Sync & Inbox Behavior
   autoSyncMinutes: 0 | 2 | 5 | 15;

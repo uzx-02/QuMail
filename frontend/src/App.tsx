@@ -12,7 +12,7 @@ import { ReadingPane } from './components/ReadingPane';
 import { ComposeModal } from './components/ComposeModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SignInModal } from './components/SignInModal';
-import { OnboardingTour, shouldShowTour, resetTour } from './components/OnboardingTour';
+import { OnboardingTour, shouldShowTour, resetTour, markTourCompleted } from './components/OnboardingTour';
 import { api } from './lib/api';
 import { EmailMessage, HSMStatus, AccountSession, QuMailSettings, SearchFilters, DEFAULT_SEARCH_FILTERS, countActiveFilters } from './types';
 import { INITIAL_ACCOUNT, INITIAL_HSM, DEFAULT_SETTINGS } from './initialState';
@@ -322,10 +322,6 @@ export const App: React.FC = () => {
             setIsRefreshing(false);
             setIsInitialSyncing(false);
             setSyncStatus(null);
-            // Show tour for returning users who haven't seen it yet
-            if (shouldShowTour()) {
-              setTimeout(() => setShowTour(true), 1200);
-            }
           });
       }
     } catch (e: any) {
@@ -888,8 +884,10 @@ export const App: React.FC = () => {
       setSyncStatus('Fetching real messages from mail server...');
       const msgs = await api.fetchInbox();
       setMessages(msgs);
-      // Show onboarding tour for first-time users (slight delay so the UI settles)
-      if (shouldShowTour()) {
+      // Show onboarding tour ONLY on the app's first installation opening after login
+      if (shouldShowTour(settings)) {
+        markTourCompleted();
+        handleUpdateSettings({ tourCompleted: true });
         setTimeout(() => setShowTour(true), 800);
       }
     } catch (err: any) {
@@ -898,6 +896,11 @@ export const App: React.FC = () => {
       setIsRefreshing(false);
       setSyncStatus(null);
     }
+  }, [settings, handleUpdateSettings]);
+
+  const handleReactivateTour = useCallback(() => {
+    resetTour();
+    setShowTour(true);
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -1291,6 +1294,7 @@ export const App: React.FC = () => {
             const toastKey = `lang_changed_${lang}` as const;
             setToastNotice(t(lang, toastKey));
           }}
+          onReactivateTour={handleReactivateTour}
         />
 
       {/* Bridge Readiness Alert Banners */}
