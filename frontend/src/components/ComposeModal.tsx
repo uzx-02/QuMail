@@ -857,7 +857,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   >
                     <UseAnimations
                       animation={checkBox}
-                      size={28}
+                      size={22}
                       active={burnAfterRead}
                       strokeColor={burnAfterRead ? '#f43f5e' : 'currentColor'}
                     />
@@ -878,7 +878,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                   >
                     <UseAnimations
                       animation={checkBox}
-                      size={28}
+                      size={22}
                       active={requireEmailOtp}
                       strokeColor={requireEmailOtp ? '#06b6d4' : 'currentColor'}
                     />

@@ -21,7 +21,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   onChange,
   onClick,
   disabled = false,
-  size = 32,
+  size = 22,
   label,
   title,
   className = '',

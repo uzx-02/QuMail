@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
 import UseAnimations from 'react-useanimations';
 import checkBox from 'react-useanimations/lib/checkBox';
+import star from 'react-useanimations/lib/star';
 import { EmailMessage, ListDensityOption, LanguageOption } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 import { resolveDisplaySubject } from '../lib/privacy';
@@ -13,7 +14,8 @@ const CustomCheckbox: React.FC<{
   onClick: (e: React.MouseEvent) => void;
   title?: string;
   className?: string;
-}> = ({ checked, indeterminate, onClick, title, className = '' }) => {
+  size?: number;
+}> = ({ checked, indeterminate, onClick, title, className = '', size = 22 }) => {
   const isChecked = checked || Boolean(indeterminate);
   return (
     <div
@@ -32,7 +34,7 @@ const CustomCheckbox: React.FC<{
     >
       <UseAnimations
         animation={checkBox}
-        size={32}
+        size={size}
         active={isChecked}
         strokeColor={isChecked ? 'var(--qumail-accent, #0B57D0)' : 'currentColor'}
       />
@@ -593,14 +595,19 @@ export const MessageList: React.FC<MessageListProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={(e) => onToggleStar(msg.id, e)}
-                    className="p-1 text-gray-400 hover:text-amber-400 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleStar(msg.id, e);
+                    }}
+                    className="p-0.5 text-gray-400 hover:text-amber-400 transition-colors cursor-pointer rounded flex items-center justify-center shrink-0"
                     title={msg.starred ? 'Starred' : 'Not starred'}
                   >
-                    <Star
-                      className={`w-4 h-4 ${
-                        msg.starred ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-gray-600'
-                      }`}
+                    <UseAnimations
+                      animation={star}
+                      size={22}
+                      active={msg.starred}
+                      strokeColor={msg.starred ? '#f59e0b' : 'currentColor'}
+                      fillColor={msg.starred ? '#f59e0b' : 'transparent'}
                     />
                   </button>
                 </div>

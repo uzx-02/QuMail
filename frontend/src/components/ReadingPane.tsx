@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import UseAnimations from 'react-useanimations';
+import star from 'react-useanimations/lib/star';
 import {
   ArrowLeft,
   Reply,
@@ -502,13 +504,15 @@ export const ReadingPane: React.FC<ReadingPaneProps> = ({
               onClick={(e) => onToggleStar(message.id, e)}
               title={message.starred ? `${t(language, 'star')} (S)` : `${t(language, 'star')} (S)`}
               className={`${
-                showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-2 rounded-full'
+                showIconLabels ? 'px-3 py-1.5 rounded-full flex items-center space-x-1.5' : 'p-1.5 rounded-full'
               } text-[#5F6368] dark:text-[#94A3B8] hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-500 transition-colors cursor-pointer`}
             >
-              <Star
-                className={`w-4 h-4 ${
-                  message.starred ? 'fill-amber-400 text-amber-400' : ''
-                }`}
+              <UseAnimations
+                animation={star}
+                size={22}
+                active={message.starred}
+                strokeColor={message.starred ? '#f59e0b' : 'currentColor'}
+                fillColor={message.starred ? '#f59e0b' : 'transparent'}
               />
               {showIconLabels && (
                 <span className="text-xs font-semibold">
