@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, Trash2, Mail, MailOpen, Star, Paperclip, ShieldCheck, AlertTriangle, ShieldAlert, Inbox, Shield, Lock, CheckCircle2, RotateCw, ChevronLeft, ChevronRight, Check, X, SlidersHorizontal } from 'lucide-react';
+import UseAnimations from 'react-useanimations';
+import checkBox from 'react-useanimations/lib/checkBox';
 import { EmailMessage, ListDensityOption, LanguageOption } from '../types';
 import { SpotlightCard } from './reactbits/SpotlightCard';
 import { resolveDisplaySubject } from '../lib/privacy';
@@ -11,24 +13,32 @@ const CustomCheckbox: React.FC<{
   onClick: (e: React.MouseEvent) => void;
   title?: string;
   className?: string;
-}> = ({ checked, indeterminate, onClick, title, className = '' }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    title={title}
-    className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all cursor-pointer outline-none shrink-0 ${
-      checked || indeterminate
-        ? 'qumail-accent-bg border-transparent text-white shadow-sm'
-        : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1E293B] hover:border-gray-400 dark:hover:border-gray-400'
-    } ${className}`}
-  >
-    {checked ? (
-      <Check className="w-3 h-3 stroke-[3]" />
-    ) : indeterminate ? (
-      <div className="w-2 h-0.5 bg-white rounded-full" />
-    ) : null}
-  </button>
-);
+}> = ({ checked, indeterminate, onClick, title, className = '' }) => {
+  const isChecked = checked || Boolean(indeterminate);
+  return (
+    <div
+      role="checkbox"
+      aria-checked={indeterminate ? 'mixed' : checked}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
+      title={title}
+      className={`inline-flex items-center justify-center cursor-pointer select-none transition-transform active:scale-95 shrink-0 ${
+        isChecked
+          ? 'text-[#0B57D0] dark:text-sky-400'
+          : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+      } ${className}`}
+    >
+      <UseAnimations
+        animation={checkBox}
+        size={32}
+        active={isChecked}
+        strokeColor={isChecked ? 'var(--qumail-accent, #0B57D0)' : 'currentColor'}
+      />
+    </div>
+  );
+};
 
 interface MessageListProps {
   messages: EmailMessage[];

@@ -24,6 +24,7 @@ import UseAnimations from 'react-useanimations';
 import send from 'react-useanimations/lib/send';
 import trash2 from 'react-useanimations/lib/trash2';
 import lock from 'react-useanimations/lib/lock';
+import checkBox from 'react-useanimations/lib/checkBox';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmailMessage, Attachment, FontFamilyOption, FontSizeOption, LanguageOption } from '../types';
 import { FONT_FAMILY_STYLE, FONT_SIZE_STYLE } from '../lib/appearance';
@@ -843,36 +844,46 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                     </select>
                   </div>
 
-                  {/* Interactive Burn-on-Read Toggle Pill */}
+                  {/* Interactive Burn-on-Read with Styled Checkbox */}
                   <button
                     type="button"
                     onClick={() => setBurnAfterRead(!burnAfterRead)}
                     title="Burn message immediately after first recipient decodes it"
-                    className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                    className={`inline-flex items-center space-x-1.5 pl-1.5 pr-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border select-none ${
                       burnAfterRead
                         ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/40 shadow-xs'
                         : 'bg-white dark:bg-[#161F33] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-700 dark:hover:text-slate-200'
                     }`}
                   >
+                    <UseAnimations
+                      animation={checkBox}
+                      size={28}
+                      active={burnAfterRead}
+                      strokeColor={burnAfterRead ? '#f43f5e' : 'currentColor'}
+                    />
                     <Flame className={`w-3.5 h-3.5 ${burnAfterRead ? 'text-rose-500' : 'text-slate-400'}`} />
                     <span>Burn on Read</span>
-                    <span className={`w-1.5 h-1.5 rounded-full ${burnAfterRead ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   </button>
 
-                  {/* Interactive Email OTP Toggle Pill */}
+                  {/* Interactive Email OTP with Styled Checkbox */}
                   <button
                     type="button"
                     onClick={() => setRequireEmailOtp(!requireEmailOtp)}
                     title="Require recipient to verify identity via one-time email passcode"
-                    className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                    className={`inline-flex items-center space-x-1.5 pl-1.5 pr-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border select-none ${
                       requireEmailOtp
                         ? 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/40 shadow-xs'
                         : 'bg-white dark:bg-[#161F33] text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/80 hover:text-slate-700 dark:hover:text-slate-200'
                     }`}
                   >
+                    <UseAnimations
+                      animation={checkBox}
+                      size={28}
+                      active={requireEmailOtp}
+                      strokeColor={requireEmailOtp ? '#06b6d4' : 'currentColor'}
+                    />
                     <KeyRound className={`w-3.5 h-3.5 ${requireEmailOtp ? 'text-cyan-500' : 'text-slate-400'}`} />
                     <span>OTP Required</span>
-                    <span className={`w-1.5 h-1.5 rounded-full ${requireEmailOtp ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   </button>
                 </div>
               </div>
