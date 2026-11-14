@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileCode,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShinyText } from './reactbits/ShinyText';
@@ -50,6 +51,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verificationStep, setVerificationStep] = useState('');
   const [isGoogleAuthenticating, setIsGoogleAuthenticating] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -66,7 +68,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
         defaultImap: 'imap.gmail.com',
         defaultSmtp: 'smtp.gmail.com',
         badgeColor: 'text-red-500 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900',
-        note: 'For Gmail custom login, please generate an App Password from your Google Account Security settings.',
+        note: 'To sign in with a Gmail account using email credentials, generate an App Password in your Google Account Security settings, or use one-click Google Sign In above.',
       };
     }
     if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live') || domain.includes('office365')) {
@@ -106,7 +108,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
       };
     }
     return {
-      name: 'Corporate / Custom IMAP',
+      name: 'Standard / Corporate IMAP',
       defaultImap: `imap.${domain}`,
       defaultSmtp: `smtp.${domain}`,
       badgeColor: 'text-gray-500 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
@@ -117,6 +119,10 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   if (!isOpen) return null;
 
   const handleGoogleAuth = async () => {
+    if (!acceptedTerms) {
+      setError('Please review and check the agreement to the Terms & Conditions and Privacy Policy before continuing.');
+      return;
+    }
     setError('');
     setSuccessMsg('');
     setVerificationStep('Opening secure Google sign-in in your browser...');
@@ -140,8 +146,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleCustomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedTerms) {
+      setError('Please review and check the agreement to the Terms & Conditions and Privacy Policy before continuing.');
+      return;
+    }
     if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email address (e.g. name@domain.com).');
+      setError('Please enter a valid email address (e.g. alex.mercer@company.com).');
       return;
     }
     if (!password) {
@@ -217,7 +227,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
               />
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-sm">
-              Zero-Trust Post-Quantum Secure Mailbox with Live Server Authentication.
+              Sign in or register your account with post-quantum end-to-end security.
             </p>
           </div>
 
@@ -237,6 +247,40 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 <div className="leading-relaxed">{successMsg}</div>
               </div>
             )}
+
+            {/* Terms and Privacy Agreement Checkbox */}
+            <div className="p-3.5 rounded-2xl bg-gray-50/90 dark:bg-[#0E1526]/90 border border-gray-200 dark:border-gray-800 flex items-start space-x-3 transition-colors">
+              <input
+                id="accept-terms-checkbox"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => {
+                  setAcceptedTerms(e.target.checked);
+                  if (e.target.checked) setError('');
+                }}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 dark:border-gray-700 text-[#0B57D0] focus:ring-blue-500/30 cursor-pointer accent-[#0B57D0]"
+              />
+              <label htmlFor="accept-terms-checkbox" className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed cursor-pointer select-none">
+                I have read and agree to the{' '}
+                <button
+                  type="button"
+                  onClick={() => window.open('/terms-and-conditions.html', '_blank', 'noopener,noreferrer')}
+                  className="text-[#0B57D0] dark:text-[#38BDF8] font-semibold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Terms &amp; Conditions</span>
+                  <ExternalLink className="w-3 h-3 inline" />
+                </button>{' '}
+                and{' '}
+                <button
+                  type="button"
+                  onClick={() => window.open('/privacy-policy.html', '_blank', 'noopener,noreferrer')}
+                  className="text-[#0B57D0] dark:text-[#38BDF8] font-semibold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Privacy Policy</span>
+                  <ExternalLink className="w-3 h-3 inline" />
+                </button>.
+              </label>
+            </div>
 
             {/* 1. ONE-CLICK SIGN IN WITH GOOGLE */}
             <div className="space-y-2">
@@ -281,12 +325,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({
             <div className="relative flex py-1 items-center">
               <div className="flex-grow border-t border-gray-200 dark:border-gray-800"></div>
               <span className="flex-shrink mx-3 text-xs text-gray-400 dark:text-gray-500 uppercase font-semibold tracking-wider">
-                Or Authenticate Custom Mailbox
+                Or Sign In / Register with Email
               </span>
               <div className="flex-grow border-t border-gray-200 dark:border-gray-800"></div>
             </div>
 
-            {/* 2. AUTHENTICATED CUSTOM MAILBOX FORM */}
+            {/* 2. AUTHENTICATED EMAIL FORM */}
             <form onSubmit={handleCustomSubmit} className="space-y-4">
               {/* Email Address */}
               <div>
@@ -308,7 +352,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="user@outlook.com, user@gmail.com, or user@company.com"
+                    placeholder="alex.mercer@company.com"
                     required
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-[#0A0E17] text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                   />
@@ -362,7 +406,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                     type="text"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="e.g. Alice Smith"
+                    placeholder="e.g. Alex Mercer"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-[#0A0E17] text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                   />
                 </div>
@@ -398,7 +442,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                           type="text"
                           value={customImapHost}
                           onChange={(e) => setCustomImapHost(e.target.value)}
-                          placeholder={providerInfo?.defaultImap || 'imap.domain.com'}
+                          placeholder={providerInfo?.defaultImap || 'imap.company.com'}
                           className="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-[#070B13] text-xs text-gray-900 dark:text-white"
                         />
                       </div>
@@ -424,7 +468,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                           type="text"
                           value={customSmtpHost}
                           onChange={(e) => setCustomSmtpHost(e.target.value)}
-                          placeholder={providerInfo?.defaultSmtp || 'smtp.domain.com'}
+                          placeholder={providerInfo?.defaultSmtp || 'smtp.company.com'}
                           className="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-[#070B13] text-xs text-gray-900 dark:text-white"
                         />
                       </div>
@@ -460,17 +504,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({
               <button
                 type="submit"
                 disabled={isSubmitting || isGoogleAuthenticating}
-                className="w-full py-3.5 rounded-2xl bg-[#0B57D0] hover:bg-[#0842A0] text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
+                className="w-full py-3.5 rounded-2xl bg-[#0B57D0] hover:bg-[#0842A0] text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center space-x-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{verificationStep || 'Authenticating Mailbox...'}</span>
+                    <span>{verificationStep || 'Connecting Account...'}</span>
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    <span>Authenticate &amp; Connect Mailbox</span>
+                    <span>Sign In / Register with Email</span>
                   </>
                 )}
               </button>

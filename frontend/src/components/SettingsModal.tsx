@@ -3351,7 +3351,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </SectionCard>
 
-              {/* 4. Client Information & Scope Modal Trigger */}
+              {/* 4. Legal Documentation & Policies */}
+              <SectionCard
+                title="Legal Documentation & Policies"
+                subtitle="Review binding software licenses, privacy frameworks, and terms governing prototype evaluation"
+                icon={<FileText className="w-4 h-4 text-indigo-500" />}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Privacy Policy Card */}
+                  <div className="p-4 rounded-xl border border-gray-200/90 dark:border-gray-700/80 bg-white dark:bg-white/[0.02] shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                          <span className="font-bold text-[#202124] dark:text-white text-xs">Privacy Policy</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          Active
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] leading-relaxed">
+                        Details how QuMail enforces local-first encryption, protects private keys via DPAPI, and governs third-party email provider telemetry.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => window.open('/privacy-policy.html', '_blank', 'noopener,noreferrer')}
+                      className="inline-flex items-center justify-center space-x-1.5 w-full py-2 px-3 rounded-lg border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <span>Read Privacy Policy</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Terms & Conditions Card */}
+                  <div className="p-4 rounded-xl border border-gray-200/90 dark:border-gray-700/80 bg-white dark:bg-white/[0.02] shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <FileText className="w-4 h-4 text-blue-500" />
+                          <span className="font-bold text-[#202124] dark:text-white text-xs">Terms &amp; Conditions</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          Binding
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] leading-relaxed">
+                        Covers prototype testing rules, acceptable use, limitation of liability, post-quantum warranties, and recipient WebLink terms.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => window.open('/terms-and-conditions.html', '_blank', 'noopener,noreferrer')}
+                      className="inline-flex items-center justify-center space-x-1.5 w-full py-2 px-3 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50/70 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <span>Read Terms &amp; Conditions</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </SectionCard>
+
+              {/* 5. Client Information & Scope Modal Trigger */}
               <div className="p-4 rounded-xl border border-gray-200/90 dark:border-gray-700/80 bg-gray-50/70 dark:bg-white/[0.02] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <div className="font-semibold text-[#202124] dark:text-[#F1F5F9]">
