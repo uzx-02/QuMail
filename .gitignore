@@ -40,3 +40,5 @@ audit_report.md
 cloud_run_migration_plan.md
 qumail_audit_report.md
 QuMail_Project_Abstract.md
+.cloudflare/
+*_audit.json

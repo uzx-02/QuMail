@@ -18,14 +18,32 @@ import logging
 import os
 import secrets
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from core.config import get_directory_server_url, get_user_data_dir
 from core.logging_config import get_logger
 
 logger = get_logger("cloud_directory")
+
+
+def _validated_https_url(url: str) -> str:
+    """Accept a direct HTTPS endpoint only; reject SSRF-prone URL forms."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Directory endpoint must be an absolute HTTPS URL.")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("Directory endpoint must not include credentials.")
+    return url
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not silently follow a redirect to an unchecked authority."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
 
 
 def normalize_email(raw_email: str) -> str:
@@ -57,6 +75,37 @@ class KeyMismatchWarning(Exception):
 
 class DeviceAddedNotice(Exception):
     """Raised when an existing contact enrolls an additional device."""
+
+
+class DirectoryAuthRequired(RuntimeError):
+    """An account-scoped directory session must be re-established by the UI."""
+
+
+class DirectoryProofUnavailable(RuntimeError):
+    """The local provider cannot yet create the required ML-DSA PoP signature."""
+
+
+@dataclass(frozen=True)
+class DirectoryAccountContext:
+    """Immutable owner for a directory operation.
+
+    OAuth credentials remain in the local account-specific credential store.  The
+    directory receives only the opaque QuMail identity and a short-lived opaque
+    directory session; it never receives a refresh token or uses a process-wide
+    default Google credential.
+    """
+
+    email: str
+    issuer: str
+    subject: str
+    qumail_identity_id: str
+    device_id: str
+
+    def __post_init__(self) -> None:
+        if (not self.email.strip() or "@" not in self.email or
+                self.issuer != "https://accounts.google.com" or
+                not self.subject or not self.qumail_identity_id or not self.device_id):
+            raise ValueError("Directory operations require a verified account context.")
 
 
 class ContactPinningStore:
@@ -150,116 +199,58 @@ class CloudDirectoryClient:
         base_url: Optional[str] = None,
         session_token: Optional[str] = None,
         http_timeout: float = 8.0,
+        account: Optional[DirectoryAccountContext] = None,
     ):
         self.base_url = (base_url or get_directory_server_url()).rstrip("/")
-        self.session_token = session_token or os.environ.get("QUMAIL_SESSION_TOKEN", "")
-        if not self.session_token:
-            try:
-                from transport.oauth2_gmail import _load_credentials
-                _, token_meta = _load_credentials()
-                if token_meta and token_meta.get("directory_session_token"):
-                    self.session_token = token_meta["directory_session_token"]
-            except Exception:
-                pass
+        self.account = account
+        # A caller may inject a short-lived token (for tests or an already-owned
+        # request), but this class no longer reads environment/default OAuth
+        # credentials.  Persistent sessions are loaded only for ``account``.
+        self.session_token = session_token or ""
+        if not self.session_token and self.account:
+            self._load_account_session()
         self.timeout = http_timeout
         self.pinning_store = ContactPinningStore()
 
-    def _ensure_session_token(self) -> None:
-        """Ensure a valid session token exists by auto-enrolling if Google id_token is sealed."""
-        if self.session_token:
+    def _load_account_session(self) -> None:
+        if not self.account:
             return
         try:
-            from transport.oauth2_gmail import _load_credentials, _save_credentials
-            creds, token_meta = _load_credentials()
-            id_token = getattr(creds, "id_token", None) or (token_meta or {}).get("id_token")
-            if not id_token and creds and creds.refresh_token:
-                try:
-                    from google.auth.transport.requests import Request
-                    creds.refresh(Request())
-                    id_token = getattr(creds, "id_token", None)
-                    if id_token and token_meta is not None:
-                        token_meta["id_token"] = id_token
-                        _save_credentials(creds, token_meta)
-                except Exception as ref_err:
-                    logger.debug("OIDC token refresh note: %s", ref_err)
-
-            if not id_token:
+            from transport.oauth2_gmail import _load_credentials
+            _, token_meta = _load_credentials(self.account.email)
+            if not token_meta:
                 return
-
-            user_email = (token_meta or {}).get("email", "")
-
-            from core.config import get_vault_path
-            from core.provider_resolver import resolve_provider
-            from core.identity_service import IdentityService
-
-            def _to_bytes(v: Any) -> bytes:
-                if isinstance(v, str):
-                    try:
-                        return bytes.fromhex(v)
-                    except ValueError:
-                        return v.encode("utf-8")
-                elif isinstance(v, (list, tuple)):
-                    return bytes(v)
-                elif isinstance(v, bytes):
-                    return v
-                return b""
-
-            helper = resolve_provider("qumail-vault-provider")
-            v_service = IdentityService.configured(get_vault_path(), helper)
-            v_service.unlock(create=False)
-            vault = v_service.vault
-            summaries = vault.summaries() if vault else []
-            if summaries:
-                # Prefer entry matching user_email if available
-                clean_email = user_email.strip().lower()
-                chosen = summaries[0]
-                for s in summaries:
-                    if len(s) > 2 and s[2].strip().lower() == clean_email:
-                        chosen = s
-                        break
-
-                ctx = chosen[0]
-                h_key = chosen[1]
-                data = vault._read(ctx)
-                key_rec = vault.key(data, ctx, h_key, active=True)
-
-                device_id = str(ctx.device.value)
-                device_label = f"Windows Workstation ({user_email.split('@')[0]})"
-                kem_bytes = _to_bytes(key_rec.get("encryption", b""))
-                dsa_bytes = _to_bytes(key_rec.get("signing", b""))
-                raw_pub = _to_bytes(key_rec.get("public", b""))
-
-                try:
-                    srv_nonce = self.get_challenge()
-                except Exception:
-                    srv_nonce = secrets.token_hex(16)
-
-                kem_b64 = base64.b64encode(kem_bytes).decode("ascii")
-                pop_sig = base64.b64encode(
-                    hashlib.sha256(f"{device_id}:{user_email}:{kem_b64}:{srv_nonce}".encode("utf-8")).digest()
-                ).decode("ascii")
-
-                res = self.register_google(
-                    id_token=id_token,
-                    device_id=device_id,
-                    device_label=device_label,
-                    kem_public_bytes=kem_bytes,
-                    dsa_public_bytes=dsa_bytes,
-                    pop_signature_bytes=pop_sig,
-                    server_nonce=srv_nonce,
-                    raw_public_bytes=raw_pub,
-                )
-                if res.get("session_token"):
-                    self.session_token = res["session_token"]
-                    if token_meta is not None and creds is not None:
-                        token_meta["directory_session_token"] = res["session_token"]
-                        _save_credentials(creds, token_meta)
-                    logger.info("Auto-registered directory session token for %s", user_email)
+            if ((token_meta.get("email") or "").strip().lower() != self.account.email.strip().lower() or
+                    token_meta.get("issuer") != self.account.issuer or
+                    token_meta.get("subject") != self.account.subject):
+                logger.warning("Ignored directory session whose credential owner did not match the account context.")
+                return
+            self.session_token = token_meta.get("directory_session_token") or ""
         except Exception as exc:
-            logger.debug("Could not auto-register session token: %s", exc)
+            logger.debug("Could not load account-scoped directory session: %s", type(exc).__name__)
+
+    def _save_account_session(self, session_token: str) -> None:
+        if not self.account:
+            raise DirectoryAuthRequired("Directory session has no verified account owner.")
+        from transport.oauth2_gmail import _load_credentials, _save_credentials
+        creds, token_meta = _load_credentials(self.account.email)
+        if not creds or not token_meta:
+            raise DirectoryAuthRequired("Google credentials for this account are unavailable.")
+        if ((token_meta.get("email") or "").strip().lower() != self.account.email.strip().lower() or
+                token_meta.get("issuer") != self.account.issuer or
+                token_meta.get("subject") != self.account.subject):
+            raise DirectoryAuthRequired("Google credential ownership changed; reconnect this account.")
+        token_meta["directory_session_token"] = session_token
+        _save_credentials(creds, token_meta, email=self.account.email)
+
+    def _ensure_session_token(self) -> None:
+        """Reload only an owned opaque directory session; never refresh Google here."""
+        if self.session_token:
+            return
+        self._load_account_session()
 
     def _post(self, path: str, payload: Dict[str, Any], require_auth: bool = False) -> Dict[str, Any]:
-        url = f"{self.base_url}{path}"
+        url = _validated_https_url(f"{self.base_url}{path}")
         data = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
@@ -268,14 +259,7 @@ class CloudDirectoryClient:
         if require_auth and not self.session_token:
             self._ensure_session_token()
         if require_auth and not self.session_token:
-            try:
-                from transport.oauth2_gmail import _load_credentials
-                creds, meta = _load_credentials()
-                id_token = getattr(creds, "id_token", None) or (meta or {}).get("id_token")
-                if id_token:
-                    self.session_token = id_token
-            except Exception:
-                pass
+            raise DirectoryAuthRequired("Directory authentication is required. Reconnect this account to continue.")
         if require_auth and self.session_token:
             headers["Authorization"] = f"Bearer {self.session_token}"
 
@@ -284,7 +268,8 @@ class CloudDirectoryClient:
             import ssl
             ctx = ssl.create_default_context()
             try:
-                resp_cm = urllib.request.urlopen(req, context=ctx, timeout=self.timeout)
+                opener = urllib.request.build_opener(_NoRedirect(), urllib.request.HTTPSHandler(context=ctx))
+                resp_cm = opener.open(req, timeout=self.timeout)
             except TypeError:
                 resp_cm = urllib.request.urlopen(req, timeout=self.timeout)
 
@@ -293,39 +278,9 @@ class CloudDirectoryClient:
                 return json.loads(raw)
         except urllib.error.HTTPError as err:
             if err.code == 401 and require_auth:
-                logger.info("Directory session token rejected (401). Forcing token refresh...")
+                logger.info("Directory session token rejected (401); interactive reconnection is required.")
                 self.session_token = ""
-                try:
-                    from transport.oauth2_gmail import _load_credentials, _save_credentials
-                    from google.auth.transport.requests import Request
-                    creds, meta = _load_credentials()
-                    if creds and creds.refresh_token:
-                        creds.refresh(Request())
-                        if getattr(creds, "id_token", None):
-                            self.session_token = creds.id_token
-                            if meta is not None:
-                                meta["id_token"] = creds.id_token
-                                _save_credentials(creds, meta)
-                except Exception as ref_err:
-                    logger.debug("Google token refresh note on 401: %s", ref_err)
-
-                if not self.session_token:
-                    self._ensure_session_token()
-
-                if self.session_token:
-                    headers["Authorization"] = f"Bearer {self.session_token}"
-                    retry_req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-                    try:
-                        import ssl
-                        retry_ctx = ssl.create_default_context()
-                        try:
-                            resp_cm = urllib.request.urlopen(retry_req, context=retry_ctx, timeout=self.timeout)
-                        except TypeError:
-                            resp_cm = urllib.request.urlopen(retry_req, timeout=self.timeout)
-                        with resp_cm as resp:
-                            return json.loads(resp.read().decode("utf-8"))
-                    except Exception as retry_err:
-                        logger.error("Retry after session refresh failed: %s", retry_err)
+                raise DirectoryAuthRequired("Directory session expired. Reconnect this account to continue.") from err
 
             err_body = err.read().decode("utf-8", errors="replace")
             try:
@@ -336,6 +291,44 @@ class CloudDirectoryClient:
             raise RuntimeError(f"Directory request failed ({err.code}): {msg}") from err
         except Exception as exc:
             raise RuntimeError(f"Could not connect to QuMail Directory: {exc}") from exc
+
+    def _put_bytes(self, path: str, payload: bytes, require_auth: bool = False) -> None:
+        """Upload already-encrypted binary data without JSON or base64 expansion."""
+        url = _validated_https_url(f"{self.base_url}{path}")
+        headers = {
+            "Content-Type": "application/octet-stream",
+            "User-Agent": "QuMail-Desktop/1.0",
+        }
+        if require_auth and not self.session_token:
+            self._ensure_session_token()
+        if require_auth and not self.session_token:
+            raise DirectoryAuthRequired("Directory authentication is required. Reconnect this account to continue.")
+        if require_auth:
+            headers["Authorization"] = f"Bearer {self.session_token}"
+
+        req = urllib.request.Request(url, data=payload, headers=headers, method="PUT")
+        try:
+            import ssl
+            ctx = ssl.create_default_context()
+            try:
+                opener = urllib.request.build_opener(_NoRedirect(), urllib.request.HTTPSHandler(context=ctx))
+                response_cm = opener.open(req, timeout=self.timeout)
+            except TypeError:
+                response_cm = urllib.request.urlopen(req, timeout=self.timeout)
+            with response_cm:
+                return
+        except urllib.error.HTTPError as err:
+            if err.code == 401 and require_auth:
+                self.session_token = ""
+                raise DirectoryAuthRequired("Directory session expired. Reconnect this account to continue.") from err
+            err_body = err.read().decode("utf-8", errors="replace")
+            try:
+                message = json.loads(err_body).get("error", err_body)
+            except Exception:
+                message = err_body
+            raise RuntimeError(f"Directory attachment upload failed ({err.code}): {message}") from err
+        except Exception as exc:
+            raise RuntimeError(f"Could not upload encrypted WebLink attachment: {exc}") from exc
 
     def get_challenge(self) -> str:
         """Fetch fresh Proof-of-Possession challenge nonce."""
@@ -352,8 +345,15 @@ class CloudDirectoryClient:
         pop_signature_bytes: bytes | str,
         server_nonce: str,
         raw_public_bytes: Optional[bytes] = None,
+        root_fingerprint: str = "",
+        key_version: int = 1,
+        lifecycle: str = "active",
     ) -> Dict[str, Any]:
         """Enroll device using Google OIDC ID token."""
+        if not self.account:
+            raise DirectoryAuthRequired("Directory enrollment requires an explicit verified account context.")
+        if not id_token:
+            raise DirectoryAuthRequired("A fresh verified Google ID token is required for directory enrollment.")
         cert_bundle = {
             "kem_public_base64": base64.b64encode(kem_public_bytes).decode("ascii") if isinstance(kem_public_bytes, bytes) else str(kem_public_bytes),
             "dsa_public_base64": base64.b64encode(dsa_public_bytes).decode("ascii") if isinstance(dsa_public_bytes, bytes) else str(dsa_public_bytes),
@@ -369,15 +369,23 @@ class CloudDirectoryClient:
 
         payload = {
             "id_token": id_token,
+            "qumail_identity_id": self.account.qumail_identity_id,
             "device_id": device_id,
             "device_label": device_label,
             "public_key_bundle": cert_bundle,
             "pop_signature": pop_sig_str,
             "server_nonce": server_nonce,
+            "key_metadata": {
+                "root_fingerprint": root_fingerprint,
+                "suite": "QUMAIL-OPENPGP-PQ-v1/ML-KEM-768+ML-DSA-65",
+                "key_version": key_version,
+                "lifecycle": lifecycle,
+            },
         }
         res = self._post("/api/v1/auth/google", payload)
         if res.get("session_token"):
             self.session_token = res["session_token"]
+            self._save_account_session(self.session_token)
         return res
 
     def send_custom_otp(self, email: str, turnstile_token: str = "") -> Dict[str, Any]:
@@ -456,6 +464,7 @@ class CloudDirectoryClient:
         max_views: int = 5,
         burn_after_read: bool = False,
         ttl_days: int = 7,
+        attachments: Optional[List[Tuple[bytes, str]]] = None,
     ) -> Dict[str, Any]:
         """
         Generate Ephemeral WebLink (Pillar 2).
@@ -487,7 +496,8 @@ class CloudDirectoryClient:
         else:
             enc_key = raw_aes_key
 
-        # Encrypt payload
+        # Encrypt payload. Attachments use the same effective key but distinct
+        # AES-GCM nonces and opaque, bounded D1 chunks.
         aesgcm = AESGCM(enc_key)
         payload_bytes = plaintext_body.encode("utf-8")
         ciphertext = aesgcm.encrypt(iv, payload_bytes, None)
@@ -505,6 +515,40 @@ class CloudDirectoryClient:
                 (norm_email + recipient_email_salt).encode("utf-8")
             ).hexdigest()
 
+        attachment_specs: List[Dict[str, Any]] = []
+        encrypted_chunks: List[Tuple[str, int, bytes, bytes]] = []
+        total_attachment_bytes = 0
+        chunk_size = 512 * 1024
+        for data_bytes, filename in attachments or []:
+            if not isinstance(data_bytes, bytes):
+                raise ValueError("WebLink attachments must be binary data.")
+            if not data_bytes:
+                continue
+            total_attachment_bytes += len(data_bytes)
+            if total_attachment_bytes > 30 * 1024 * 1024:
+                raise ValueError("Secure Web Link attachments exceed the 30 MB total limit.")
+
+            attachment_id = secrets.token_hex(16)
+            filename_iv = secrets.token_bytes(12)
+            encrypted_filename = aesgcm.encrypt(filename_iv, filename.encode("utf-8"), None)
+            chunk_count = (len(data_bytes) + chunk_size - 1) // chunk_size
+            attachment_specs.append({
+                "attachment_id": attachment_id,
+                "encrypted_filename": base64.b64encode(encrypted_filename).decode("ascii"),
+                "filename_iv_b64": base64.b64encode(filename_iv).decode("ascii"),
+                "plaintext_size": len(data_bytes),
+                "chunk_count": chunk_count,
+            })
+            for chunk_index in range(chunk_count):
+                chunk = data_bytes[chunk_index * chunk_size:(chunk_index + 1) * chunk_size]
+                chunk_iv = secrets.token_bytes(12)
+                encrypted_chunks.append((
+                    attachment_id,
+                    chunk_index,
+                    chunk_iv,
+                    aesgcm.encrypt(chunk_iv, chunk, None),
+                ))
+
         payload: Dict[str, Any] = {
             "encrypted_payload": base64.b64encode(ciphertext).decode("ascii"),
             "iv_hex": iv.hex(),
@@ -516,10 +560,19 @@ class CloudDirectoryClient:
             "ttl_days": ttl_days,
             "recipient_email_hash": recipient_email_hash,
             "recipient_email_salt": recipient_email_salt,
+            "attachments": attachment_specs,
         }
 
         res = self._post("/api/v1/weblinks/create", payload, require_auth=True)
         link_id = res.get("link_id", "")
+        if not link_id:
+            raise RuntimeError("Directory did not return a WebLink identifier.")
+        for attachment_id, chunk_index, chunk_iv, ciphertext_chunk in encrypted_chunks:
+            self._put_bytes(
+                f"/api/v1/weblinks/{link_id}/attachments/{attachment_id}/chunks/{chunk_index}?iv={base64.urlsafe_b64encode(chunk_iv).decode('ascii')}",
+                ciphertext_chunk,
+                require_auth=True,
+            )
         access_url = res.get("access_url", f"{self.base_url}/v/{link_id}")
 
         # The decryption key is appended strictly to the URL fragment (#)

@@ -1,12 +1,14 @@
 {
   "schema_version": "1.0",
-  "generated_utc": "2026-11-11T11:25:49.338870+00:00",
+  "generated_utc": "2026-11-14T08:40:08.141682+00:00",
   "compiler": "rustc 1.99.0 / cargo 1.99.0",
   "toolchain": "nightly-x86_64-pc-windows-msvc",
   "crypto_libraries": {
     "sequoia_openpgp": "2.4.1",
     "openssl": "3.5.9 (29 Sep 2026)",
-    "rpgp": "0.21.0"
+    "ml_dsa": "0.1.2",
+    "rsa": "0.10.0",
+    "crypto_bigint": "0.7.11"
   },
   "build_profile": "release",
   "rustflags": "-C control-flow-guard",
@@ -15,8 +17,8 @@
       "binary": "qumail-vault-provider.exe",
       "version": "0.1.0",
       "purpose": "Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend",
-      "size_bytes": 8380928,
-      "sha256": "b94c95b3c84992124ec910b34e5f1860399c9c48302a3a2a7bf1c4a413566f51",
+      "size_bytes": 8471040,
+      "sha256": "15365c7da6933f95fec81a22d3edb031219edee94bb4fd221490c1306168d319",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,
@@ -30,8 +32,8 @@
       "binary": "qumail-crypto-provider.exe",
       "version": "0.1.0",
       "purpose": "RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification",
-      "size_bytes": 10682368,
-      "sha256": "62c5344d8a2392e2d8656ea9bdb9704698320efdb936645b743048a46d83d1a0",
+      "size_bytes": 6430720,
+      "sha256": "ba115dcf3c772bdac16e896371688422575a2720c29b9882843b649d144ee834",
       "pe_mitigations": {
         "high_entropy_va_64bit_aslr": true,
         "dynamic_base_aslr": true,

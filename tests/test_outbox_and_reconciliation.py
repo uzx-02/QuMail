@@ -68,8 +68,8 @@ from mailbox_client.workflows import Workflows
 
 ROOT = Path(__file__).resolve().parents[1]
 from core.provider_resolver import resolve_provider
-M3_PROVIDER_BIN = resolve_provider("qumail-m3-provider")
-M5_PROVIDER_BIN = resolve_provider("qumail-m5-provider")
+M3_PROVIDER_BIN = resolve_provider("qumail-vault-provider")
+M5_PROVIDER_BIN = resolve_provider("qumail-crypto-provider")
 
 
 # =============================================================================

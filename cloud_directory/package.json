@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@noble/post-quantum": "^0.2.0"
+    "@noble/post-quantum": "^0.2.0",
+    "jose": "^5.10.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",

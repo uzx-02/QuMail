@@ -772,9 +772,21 @@ export const App: React.FC = () => {
       }
       const updated = await api.getMessages();
       setMessages(updated);
+      // Show a contextual success toast once the operation has genuinely succeeded.
+      const secMode = (draft as any).securityMode || 'standard';
+      if (res.dispatched === false) {
+        // Sealed and recorded locally but no SMTP transport — sitting in outbox
+        setToastNotice(res.message || 'Message sealed and queued in Outbox (no SMTP transport configured).');
+      } else if (secMode === 'pq') {
+        setToastNotice('Quantum Private Mail dispatched and sealed successfully.');
+      } else if (secMode === 'weblink') {
+        setToastNotice('Secure Web Link sent successfully.');
+      } else {
+        setToastNotice('Message sent successfully.');
+      }
       return true;
     },
-    []
+    [setToastNotice]
   );
 
   // Undo Send countdown effect

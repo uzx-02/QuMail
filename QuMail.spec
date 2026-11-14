@@ -6,7 +6,10 @@ Strictly excludes all developer secrets and local private configuration.
 """
 
 from pathlib import Path
+import os
 import sys
+import json
+import shutil
 from PyInstaller.utils.hooks import collect_all
 
 REPO_ROOT = Path.cwd().resolve()
@@ -15,6 +18,54 @@ REPO_ROOT = Path.cwd().resolve()
 added_files = [
     (str(REPO_ROOT / 'frontend' / 'dist'), 'frontend/dist'),
 ]
+
+# A distributable Desktop OAuth client is a public-client resource, not a
+# per-user setting.  The release engineer supplies its local, ignored JSON
+# path at build time; the file is embedded under a stable name without ever
+# being copied into the repository.  Refuse to produce a shareable build
+# without it, preventing the old first-run "import client_secret.json" trap.
+release_oauth_config = os.environ.get('QUMAIL_RELEASE_OAUTH_CONFIG', '').strip()
+if not release_oauth_config:
+    raise SystemExit(
+        'QUMAIL_RELEASE_OAUTH_CONFIG must point to the approved Desktop OAuth '
+        'client JSON for a distributable QuMail build.'
+    )
+release_oauth_path = Path(release_oauth_config).expanduser().resolve()
+if not release_oauth_path.is_file():
+    raise SystemExit(f'Release OAuth configuration not found: {release_oauth_path}')
+
+# The directory endpoint is public configuration.  It is emitted by the build
+# rather than relying on a developer shell environment on recipient machines.
+release_directory_url = os.environ.get('QUMAIL_RELEASE_DIRECTORY_URL', '').strip()
+if not release_directory_url.startswith('https://'):
+    raise SystemExit('QUMAIL_RELEASE_DIRECTORY_URL must be an HTTPS directory endpoint.')
+
+# Create non-secret release metadata before Analysis so PyInstaller includes it
+# in the actual one-directory bundle, regardless of --distpath.
+release_resources_dir = REPO_ROOT / 'build' / 'release_resources'
+release_resources_dir.mkdir(parents=True, exist_ok=True)
+release_oauth_bundle_path = release_resources_dir / 'google_oauth_client.json'
+shutil.copy2(release_oauth_path, release_oauth_bundle_path)
+release_metadata_path = release_resources_dir / 'qumail.release.json'
+release_metadata_path.write_text(
+    json.dumps({'directory_url': release_directory_url}, indent=2), encoding='utf-8'
+)
+default_metadata_path = release_resources_dir / 'qumail.default.json'
+default_metadata_path.write_text(
+    json.dumps({
+        'version': '1.0.0',
+        'default_mode': 'mailbox',
+        'allow_legacy_simulator': False,
+        'log_level': 'INFO',
+        'update_channel': 'Test',
+        'telemetry_enabled': False,
+    }, indent=2), encoding='utf-8'
+)
+added_files.extend([
+    (str(release_oauth_bundle_path), 'resources'),
+    (str(release_metadata_path), 'resources'),
+    (str(default_metadata_path), 'resources'),
+])
 
 # Collect ctranslate2 and sentencepiece runtime assets and DLLs (without model weights)
 ct2_datas, ct2_binaries, ct2_hidden = collect_all('ctranslate2')
@@ -34,18 +85,6 @@ for sp_dir in site.getsitepackages():
                 extra_binaries.append((str(dll), '_internal'))
                 extra_binaries.append((str(dll), libs_name))
                 extra_binaries.append((str(dll), f'_internal/{libs_name}'))
-
-# Embed client_secret JSON for production builds
-for secret_name in [
-    'client_secret_953431543574-t137vvqsic9jbrddt9dr1t3g5hjkj5p3.apps.googleusercontent.com.json',
-    'gmail_client_secret.json',
-    'google_client_secret.json',
-]:
-    p = REPO_ROOT / 'secrets' / secret_name
-    if p.is_file():
-        added_files.append((str(p), 'secrets'))
-        added_files.append((str(p), '.'))
-
 
 # Embed codex-rejected-cas.pem if present in Python Lib
 codex_pem = Path(sys.base_prefix) / 'Lib' / 'codex-rejected-cas.pem'
@@ -164,43 +203,3 @@ coll = COLLECT(
     upx_exclude=[],
     name='QuMail-App',
 )
-
-# Post-build: Ensure native providers and manifest are present in bin/ adjacent to QuMail.exe
-import shutil
-import json
-bin_src = REPO_ROOT / 'bin'
-if bin_src.is_dir():
-    bin_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'bin'
-    bin_dst.mkdir(parents=True, exist_ok=True)
-    for f in bin_src.glob('*'):
-        if f.is_file() and not f.name.endswith('.gitkeep'):
-            shutil.copy2(f, bin_dst / f.name)
-
-# Ensure resources and version.json are present for installer packaging
-res_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'resources'
-res_dst.mkdir(parents=True, exist_ok=True)
-default_cfg = {
-    "version": "1.0.0",
-    "default_mode": "mailbox",
-    "allow_legacy_simulator": False,
-    "log_level": "INFO",
-    "update_channel": "Production",
-    "telemetry_enabled": False,
-}
-with (res_dst / "qumail.default.json").open("w", encoding="utf-8") as f:
-    json.dump(default_cfg, f, indent=2)
-
-version_dst = REPO_ROOT / 'dist' / 'QuMail-App' / 'version.json'
-version_data = {
-    "app_name": "QuMail",
-    "display_name": "QuMail Secure Email",
-    "version": "1.0.0",
-    "build_utc": "2026-11-11T09:00:00Z",
-    "commit_sha": "3a9171f",
-    "platform": "win32-x64",
-    "provider_schema": "1.0",
-    "rust_profile": "release-cfg",
-    "pe_mitigations_verified": True,
-}
-with version_dst.open("w", encoding="utf-8") as f:
-    json.dump(version_data, f, indent=2)

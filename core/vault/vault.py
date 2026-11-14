@@ -204,6 +204,43 @@ class Vault:
                 raise BoundaryError(Code.IDENTITY)
             data['oauth']=tokens
 
+    def bind_provider_identity(self,ctx,identity):
+        """Atomically bind a legacy account record to verified Google identity.
+
+        This migration keeps the account, device, root fingerprint, key records,
+        contacts, and encrypted history intact.  It never guesses another row:
+        a verified issuer/subject already owned by a different record is a hard
+        conflict.  A subject-stable Google email rename updates only public
+        address metadata on the same cryptographic identity.
+        """
+        if (type(identity) is not VerifiedProviderIdentity or identity.expires<=int(time.time()) or
+            identity.issuer != "https://accounts.google.com" or not identity.subject or
+            not identity.addresses):
+            raise BoundaryError(Code.IDENTITY)
+        master=self.store.get(self.ident)
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            try:
+                revision,data=self.load(db,ctx.account,master)
+                self.check(data,ctx)
+                if (data['issuer']=="https://accounts.google.com" and
+                    data['subject']!=identity.subject and not data['subject'].startswith('local-')):
+                    raise BoundaryError(Code.CONFLICT)
+                for (ident,) in db.execute('SELECT id FROM accounts WHERE id!=?',(ctx.account.value,)).fetchall():
+                    _,other=self.load(db,AccountId(ident),master)
+                    if (other['issuer'],other['subject'])==(identity.issuer,identity.subject):
+                        raise BoundaryError(Code.CONFLICT)
+                data['issuer']=identity.issuer
+                data['subject']=identity.subject
+                data['addresses']=[a.value for a in identity.addresses]
+                data['address']=identity.addresses[0].value
+                blob=protect(master,encode(data),self.aad(ctx.account.value,revision+1))
+                db.execute('UPDATE accounts SET revision=?,blob=? WHERE id=?',(revision+1,blob,ctx.account.value))
+                self.commit(db)
+            except BaseException:
+                db.execute('ROLLBACK'); raise
+        return AccountContext(ctx.account,ctx.device,identity.issuer,identity.subject)
+
     @staticmethod
     def validate_tokens(tokens):
         if (not isinstance(tokens,dict) or set(tokens)-{'access_token','refresh_token','expiry','scopes'} or

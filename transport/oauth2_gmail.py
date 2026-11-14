@@ -1,21 +1,30 @@
 """
 transport/oauth2_gmail.py — Google OAuth2 token acquisition, refresh, and profile retrieval.
 
-Restored clean architecture inspired by legacy QuMail:
 Uses Google's official `google-auth-oauthlib` and `google-auth` libraries with
-standard Fernet token encryption at rest. Eliminates custom socket servers,
-ctypes errno tampering, and Windows OpenSSL errno leaks.
+Fernet token encryption at rest.  The app owns a narrow, single-use loopback
+receiver so it can enforce callback state, host, timeout, and replay checks
+without patching private library internals.
 """
 
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
 from pathlib import Path
+import secrets
+import hashlib
 import stat
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import parse_qs, urlparse
+import webbrowser
 
 from cryptography.fernet import Fernet, InvalidToken
 from google.auth.transport.requests import Request
@@ -23,46 +32,48 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 from core.config import (
-    GMAIL_CLIENT_SECRETS_PATH,
     GMAIL_SCOPES,
     GMAIL_TOKEN_PATH,
-    OAUTH_MASTER_KEY_PATH,
-    get_google_client_secrets_path,
     get_gmail_token_path,
     get_oauth_master_key_path,
-    get_user_config_dir,
 )
 
 logger = logging.getLogger("transport.oauth2_gmail")
 
-# Immunize against codex-rejected-cas.pem FileNotFoundError during TLS handshakes
-try:
-    import ssl
-    if not getattr(ssl.SSLContext, "_is_qumail_patched", False):
-        from _ssl import _SSLContext
-
-        def _safe_ssl_context_new(cls, protocol=None, *args, **kwargs):
-            if protocol is None:
-                protocol = getattr(ssl, "PROTOCOL_TLS_CLIENT", ssl.PROTOCOL_TLS)
-            self = _SSLContext.__new__(cls, protocol)
-            try:
-                ssl_dir = os.path.dirname(getattr(ssl, "__file__", ""))
-                pem_path = os.path.join(ssl_dir, "codex-rejected-cas.pem")
-                if pem_path and os.path.isfile(pem_path):
-                    _SSLContext.load_verify_locations(self, cafile=pem_path)
-            except Exception:
-                pass
-            return self
-
-        ssl.SSLContext.__new__ = _safe_ssl_context_new
-        ssl.SSLContext._is_qumail_patched = True
-except Exception:
-    pass
-
-
 class GmailAuthError(Exception):
     """Raised when Gmail OAuth2 authentication or token refresh fails."""
-    pass
+
+    def __init__(self, message: str, *, code: str = "AUTH_FAILED") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+_OAUTH_CALLBACK_TIMEOUT_SECONDS = 300
+_OAUTH_REQUEST_TIMEOUT_SECONDS = 20
+# A signed Google token can be issued a few seconds ahead of a desktop clock.
+# The identity boundary retries only the maintained verifier's
+# ``Token used too early`` result; it never accepts skew or an expired token.
+_GOOGLE_TOKEN_FUTURE_WAIT_SECONDS = 20
+_ACCOUNT_LOCKS: dict[str, threading.RLock] = {}
+_ACCOUNT_LOCKS_GUARD = threading.Lock()
+
+
+def _account_lock(email: str) -> threading.RLock:
+    """Return the process-local serialization lock for one credential record."""
+    key = email.strip().lower() or "__legacy_default__"
+    with _ACCOUNT_LOCKS_GUARD:
+        return _ACCOUNT_LOCKS.setdefault(key, threading.RLock())
+
+
+def generate_pkce_verifier() -> str:
+    """Create an RFC 7636 verifier in the permitted 43–128 character range."""
+    return secrets.token_urlsafe(64)[:96]
+
+
+def pkce_s256_challenge(verifier: str) -> str:
+    """Return the RFC 7636 S256 challenge for ``verifier``."""
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 # -------------------------------------------------------------------------
@@ -99,6 +110,146 @@ def _get_fernet() -> Fernet:
         except OSError:
             pass
     return Fernet(key)
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
+    """Durably replace one encrypted credential record without partial writes."""
+    _ensure_secret_dir(path)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        try:
+            os.chmod(str(path), stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
+    except Exception:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def _normalize_client_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Build an installed-app configuration, retaining an optional local secret.
+
+    Desktop clients are public and PKCE is always used.  Some Google client
+    registrations nevertheless require their generated client secret at the
+    token endpoint.  It is therefore optional input, never bundled, and is
+    kept out of persisted per-account token records.
+    """
+    client_id = str(config.get("client_id") or "").strip()
+    if not client_id:
+        raise GmailAuthError("Google desktop OAuth client ID is missing.", code="CLIENT_CONFIG")
+    installed: Dict[str, Any] = {
+        "client_id": client_id,
+        "project_id": str(config.get("project_id") or ""),
+        "auth_uri": str(config.get("auth_uri") or "https://accounts.google.com/o/oauth2/auth"),
+        "token_uri": str(config.get("token_uri") or "https://oauth2.googleapis.com/token"),
+    }
+    client_secret = config.get("client_secret")
+    if isinstance(client_secret, str) and client_secret.strip():
+        installed["client_secret"] = client_secret.strip()
+    return {"installed": installed}
+
+
+def _load_client_config() -> Dict[str, Any]:
+    """Read a validated client configuration through the canonical config loader."""
+    from core.config import load_google_client_config
+
+    config, source, error = load_google_client_config()
+    if not config:
+        raise GmailAuthError(
+            "Google desktop OAuth configuration was not found. Import a desktop client JSON in Settings.",
+            code="CLIENT_CONFIG",
+        )
+    logger.info("Using Google OAuth client configuration from %s", source)
+    return _normalize_client_config(config)
+
+
+def _credentials_from_token_data(token_data: Dict[str, Any]) -> Credentials:
+    """Deserialize both legacy confidential and current public-client records.
+
+    ``Credentials.from_authorized_user_info`` in some supported google-auth
+    releases insists on a client secret.  Constructing ``Credentials`` directly
+    avoids inventing one while retaining the legacy loader for old records.
+    """
+    if token_data.get("client_secret"):
+        return Credentials.from_authorized_user_info(token_data, GMAIL_SCOPES)
+    client_id = str(token_data.get("client_id") or "").strip()
+    token = token_data.get("token")
+    if not client_id or not token:
+        raise ValueError("Public-client credential record is incomplete.")
+    expiry = None
+    raw_expiry = token_data.get("expiry")
+    if raw_expiry:
+        expiry_text = str(raw_expiry)
+        # google-auth serializes an aware UTC datetime as ``+00:00Z`` in
+        # some releases; RFC 3339's trailing Z is otherwise conventional.
+        if expiry_text.endswith("+00:00Z"):
+            expiry_text = expiry_text[:-1]
+        elif expiry_text.endswith("Z"):
+            expiry_text = expiry_text[:-1] + "+00:00"
+        expiry = datetime.fromisoformat(expiry_text)
+        if expiry.tzinfo is not None:
+            expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
+    return Credentials(
+        token=token,
+        refresh_token=token_data.get("refresh_token"),
+        id_token=token_data.get("id_token"),
+        token_uri=token_data.get("token_uri") or "https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=None,
+        scopes=token_data.get("scopes") or GMAIL_SCOPES,
+        expiry=expiry,
+    )
+
+
+def _refresh_public_client_credentials(creds: Credentials, client_secret: str = "") -> None:
+    """Refresh a desktop-client grant without persisting a client secret.
+
+    google-auth 2.49 requires a client secret for ``Credentials.refresh`` even
+    though RFC 6749 public clients legitimately omit it.  Keep that library path
+    for legacy confidential records; use the documented token endpoint directly
+    for secret-less desktop records.
+    """
+    if not creds.refresh_token or not creds.client_id or not creds.token_uri:
+        raise GmailAuthError("Stored Google credentials cannot be refreshed.", code="AUTH_REQUIRED")
+    import requests
+
+    refresh_data = {
+        "grant_type": "refresh_token",
+        "refresh_token": creds.refresh_token,
+        "client_id": creds.client_id,
+    }
+    if client_secret:
+        refresh_data["client_secret"] = client_secret
+    response = requests.post(
+        creds.token_uri,
+        data=refresh_data,
+        timeout=_OAUTH_REQUEST_TIMEOUT_SECONDS,
+    )
+    if response.status_code != 200:
+        raise GmailAuthError("Google refresh token was rejected. Reconnect this account.", code="AUTH_REQUIRED")
+    try:
+        payload = response.json()
+        access_token = str(payload["access_token"])
+        expires_in = int(payload.get("expires_in", 3600))
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GmailAuthError("Google refresh response was invalid. Reconnect this account.", code="AUTH_REQUIRED") from exc
+    if not access_token or expires_in <= 0:
+        raise GmailAuthError("Google refresh response was invalid. Reconnect this account.", code="AUTH_REQUIRED")
+    creds.token = access_token
+    creds.expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=expires_in)
+    if payload.get("refresh_token"):
+        creds.refresh_token = str(payload["refresh_token"])
+    if payload.get("id_token"):
+        creds.id_token = str(payload["id_token"])
 
 
 def _load_credentials(email: str = "") -> Tuple[Optional[Credentials], Optional[Dict[str, Any]]]:
@@ -141,13 +292,14 @@ def _load_credentials(email: str = "") -> Tuple[Optional[Credentials], Optional[
             if clean_email and not stored_email and target != get_gmail_token_path(clean_email):
                 continue
 
-            if "client_id" not in token_data or "client_secret" not in token_data:
+            if "client_id" not in token_data:
                 from core.config import load_google_client_config
                 cfg, _, _ = load_google_client_config()
                 if cfg:
                     token_data.setdefault("client_id", cfg.get("client_id"))
-                    token_data.setdefault("client_secret", cfg.get("client_secret"))
-            creds = Credentials.from_authorized_user_info(token_data, GMAIL_SCOPES)
+                    if cfg.get("client_secret"):
+                        token_data.setdefault("client_secret", cfg.get("client_secret"))
+            creds = _credentials_from_token_data(token_data)
             return creds, token_data
         except InvalidToken as exc:
             logger.warning("Stored Gmail token in %s cannot be decrypted with master key: %s", target, exc)
@@ -165,47 +317,31 @@ def _save_credentials(creds: Credentials, extra: Optional[Dict[str, Any]] = None
 
     data = json.loads(creds.to_json())
     if extra:
-        data.update(extra)
+        # ``extra`` is durable identity/presentation metadata from the prior
+        # record.  It must never overwrite values just obtained from a refresh;
+        # doing so would re-save the expired token and defeat the per-account
+        # refresh lock on the next caller.
+        credential_fields = {
+            "token", "refresh_token", "expiry", "client_id", "client_secret",
+            "token_uri", "scopes",
+        }
+        data.update({key: value for key, value in extra.items() if key not in credential_fields})
 
     fernet = _get_fernet()
-    encrypted = fernet.encrypt(json.dumps(data, indent=2).encode("utf-8"))
-    token_path.write_bytes(encrypted)
-    try:
-        os.chmod(str(token_path), stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
+    encrypted = fernet.encrypt(json.dumps(data, sort_keys=True).encode("utf-8"))
+    # Validate the exact bytes before replacing the old record.  A failed write
+    # must leave the previous credential readable for recovery/reconnect.
+    json.loads(fernet.decrypt(encrypted).decode("utf-8"))
+    _atomic_write_bytes(token_path, encrypted)
     logger.info("Saved encrypted Google credentials to %s", token_path)
 
     # Also keep default gmail_token.json updated for single-token / legacy fallback
     default_token_path = get_gmail_token_path()
     if default_token_path != token_path:
         try:
-            default_token_path.write_bytes(encrypted)
-        except Exception:
-            pass
-
-
-def _resolve_client_secrets_path() -> Path:
-    """Locate client_secret JSON file across canonical config and workspace secrets."""
-    candidates = [
-        get_google_client_secrets_path(),
-        Path(GMAIL_CLIENT_SECRETS_PATH),
-        Path("secrets/gmail_client_secret.json"),
-        Path("secrets/google_client_secret.json"),
-    ]
-    for c in candidates:
-        if c.is_file():
-            return c
-
-    # Fallback to demo client secret if present in repo
-    demo = Path("secrets/client_secret_953431543574-t137vvqsic9jbrddt9dr1t3g5hjkj5p3.apps.googleusercontent.com.json")
-    if demo.is_file():
-        return demo
-
-    raise GmailAuthError(
-        "Google OAuth client secrets file not found. "
-        "Please provide client_secret.json in Settings or place gmail_client_secret.json in secrets/."
-    )
+            _atomic_write_bytes(default_token_path, encrypted)
+        except Exception as exc:
+            logger.warning("Could not update legacy default Gmail token cache: %s", exc)
 
 
 def _build_oauth_success_html() -> str:
@@ -446,158 +582,316 @@ def _build_oauth_success_html() -> str:
 # Public Interface
 # -------------------------------------------------------------------------
 
-def authorize_google_account(port: int = 0) -> Dict[str, Any]:
-    """
-    Launch local browser OAuth2 consent flow using Google's official InstalledAppFlow.
-    Retrieves authorization tokens and profile email, stores them safely, and returns account info.
-    """
-    secrets_path = _resolve_client_secrets_path()
-    logger.info("Initializing Google OAuth flow via %s", secrets_path)
+class _OAuthCallbackServer(HTTPServer):
+    """A one-use loopback receiver for one OAuth transaction."""
 
+    allow_reuse_address = False
+
+    def __init__(self, port: int, expected_state: str) -> None:
+        super().__init__(("127.0.0.1", port), _OAuthCallbackHandler)
+        self.expected_state = expected_state
+        self.authorization_code: Optional[str] = None
+        self.error: Optional[str] = None
+        self.complete = threading.Event()
+
+
+class _OAuthCallbackHandler(BaseHTTPRequestHandler):
+    server: _OAuthCallbackServer
+
+    def log_message(self, _format: str, *_args: Any) -> None:
+        # The callback query contains an authorization code; never write it to logs.
+        return
+
+    def _reply(self, status: int, html: str) -> None:
+        body = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:  # noqa: N802 - HTTPServer callback method name
+        parsed = urlparse(self.path)
+        expected_host = f"127.0.0.1:{self.server.server_port}"
+        if self.headers.get("Host") != expected_host or parsed.path != "/callback":
+            self._reply(400, "<h1>Invalid OAuth callback.</h1>")
+            return
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        states = query.get("state", [])
+        codes = query.get("code", [])
+        errors = query.get("error", [])
+        if len(states) != 1 or not secrets.compare_digest(states[0], self.server.expected_state):
+            self.server.error = "OAuth callback state validation failed."
+            self.server.complete.set()
+            self._reply(400, "<h1>OAuth callback rejected.</h1>")
+            return
+        if errors:
+            self.server.error = "Google authorization was cancelled or denied."
+            self.server.complete.set()
+            self._reply(400, "<h1>Authorization was not completed.</h1>")
+            return
+        if len(codes) != 1 or not codes[0] or self.server.authorization_code:
+            self.server.error = "OAuth callback was invalid or replayed."
+            self.server.complete.set()
+            self._reply(400, "<h1>OAuth callback rejected.</h1>")
+            return
+        self.server.authorization_code = codes[0]
+        self.server.complete.set()
+        self._reply(200, _build_oauth_success_html())
+
+
+def _wait_for_callback(
+    server: _OAuthCallbackServer,
+    timeout_seconds: int,
+    cancel_event: Optional[threading.Event] = None,
+) -> str:
+    """Wait for one callback with bounded timeout and an optional cancellation hook."""
+    deadline = time.monotonic() + timeout_seconds
+    server.timeout = 0.25
+    while not server.complete.is_set() and time.monotonic() < deadline:
+        if cancel_event is not None and cancel_event.is_set():
+            raise GmailAuthError("Google OAuth authorization was cancelled.", code="CALLBACK_CANCELLED")
+        server.handle_request()
+    if not server.complete.is_set():
+        raise GmailAuthError("Google OAuth callback timed out. Please try connecting again.", code="CALLBACK_TIMEOUT")
+    if server.error or not server.authorization_code:
+        raise GmailAuthError(server.error or "Google OAuth callback failed.", code="CALLBACK_REJECTED")
+    return server.authorization_code
+
+
+def _profile_metadata(access_token: str, verified_email: str) -> tuple[str, str]:
+    """Fetch optional presentation metadata without using it as identity evidence."""
     try:
-        # Patch WSGI server to return text/html so the modern success page renders correctly
-        import wsgiref.util
-        from google_auth_oauthlib import flow as google_flow
-
-        def _qumail_wsgi_call(self, environ, start_response):
-            start_response("200 OK", [("Content-type", "text/html; charset=utf-8")])
-            self.last_request_uri = wsgiref.util.request_uri(environ)
-            return [self._success_message.encode("utf-8")]
-
-        google_flow._RedirectWSGIApp.__call__ = _qumail_wsgi_call
-
-        flow = InstalledAppFlow.from_client_secrets_file(
-            str(secrets_path),
-            scopes=GMAIL_SCOPES,
+        import requests
+        response = requests.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=_OAUTH_REQUEST_TIMEOUT_SECONDS,
         )
-        creds = flow.run_local_server(
-            port=port,
-            prompt="consent",
-            success_message=_build_oauth_success_html(),
-        )
+        if response.status_code != 200:
+            return "", ""
+        profile = response.json()
+        if (profile.get("email") or "").strip().lower() != verified_email:
+            logger.warning("Ignoring UserInfo metadata for a different Google account.")
+            return "", ""
+        return (profile.get("name") or "").strip(), (profile.get("picture") or "").strip()
     except Exception as exc:
-        logger.error("InstalledAppFlow failed: %s", exc)
-        raise GmailAuthError(f"Google OAuth authorization flow failed: {exc}") from exc
+        logger.debug("Optional Google UserInfo lookup failed: %s", exc)
+        return "", ""
 
-    # Query user profile email and avatar using access token and id_token
-    email = ""
-    display_name = ""
-    sub = ""
-    avatar_url = ""
 
-    # 1. First, decode claims from id_token if available (instant, zero network latency)
-    if hasattr(creds, "id_token") and creds.id_token:
-        try:
-            parts = creds.id_token.split(".")
-            if len(parts) >= 2:
-                payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
-                claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
-                email = claims.get("email", "").strip()
-                display_name = claims.get("name", "").strip()
-                sub = claims.get("sub", "").strip()
-                avatar_url = claims.get("picture", "").strip()
-        except Exception as id_exc:
-            logger.debug("Could not parse id_token claims: %s", id_exc)
+def authorize_google_account(
+    port: int = 0,
+    *,
+    timeout_seconds: int = _OAUTH_CALLBACK_TIMEOUT_SECONDS,
+    cancel_event: Optional[threading.Event] = None,
+) -> Dict[str, Any]:
+    """Run Authorization Code + PKCE through a single-use 127.0.0.1 callback.
 
-    # 2. Second, query OpenID Connect userinfo endpoint with access token
-    if not avatar_url or not email:
-        try:
-            import requests
-            resp = requests.get(
-                "https://openidconnect.googleapis.com/v1/userinfo",
-                headers={"Authorization": f"Bearer {creds.token}"},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                profile = resp.json()
-                if not email:
-                    email = profile.get("email", "").strip()
-                if not display_name:
-                    display_name = profile.get("name", "").strip()
-                if not sub:
-                    sub = profile.get("sub", "").strip()
-                if not avatar_url:
-                    avatar_url = profile.get("picture", "").strip()
-        except Exception as oidc_exc:
-            logger.debug("Could not fetch userinfo via OIDC API: %s", oidc_exc)
-
-    # 3. Third, fallback to legacy OAuth2 v2 userinfo
-    if not avatar_url or not email:
-        try:
-            import requests
-            resp = requests.get(
-                "https://www.googleapis.com/oauth2/v2/userinfo",
-                headers={"Authorization": f"Bearer {creds.token}"},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                profile = resp.json()
-                if not email:
-                    email = profile.get("email", "").strip()
-                if not display_name:
-                    display_name = profile.get("name", "").strip()
-                if not sub:
-                    sub = profile.get("id", "").strip()
-                if not avatar_url:
-                    avatar_url = profile.get("picture", "").strip()
-        except Exception as exc:
-            logger.debug("Could not fetch userinfo via Google REST API: %s", exc)
-
-    if not email:
-        raise GmailAuthError("Could not retrieve verified email address for Google account.")
-
-    # Save credentials with verified email, subject, and avatar
-    extra_meta = {
-        "email": email,
-        "displayName": display_name or email.split("@")[0],
-        "subject": sub,
-        "id_token": getattr(creds, "id_token", None),
-        "avatarUrl": avatar_url,
-    }
-    _save_credentials(creds, extra_meta)
-
-    # Immediately ensure Cloudflare Directory session token is enrolled for WebLink creation
+    Identity comes solely from a signature-validated ID token.  UserInfo is only
+    used to enrich display metadata after its email matches the verified claim.
+    """
+    config = _load_client_config()
+    installed = config["installed"]
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    verifier = generate_pkce_verifier()
+    server = _OAuthCallbackServer(port, state)
     try:
-        from core.cloud_directory import CloudDirectoryClient
-        dir_client = CloudDirectoryClient()
-        dir_client._ensure_session_token()
-    except Exception as dir_err:
-        logger.debug("Auto-enrollment on login note: %s", dir_err)
+        redirect_uri = f"http://127.0.0.1:{server.server_port}/callback"
+        flow = InstalledAppFlow.from_client_config(config, scopes=GMAIL_SCOPES, state=state)
+        flow.redirect_uri = redirect_uri
+        flow.code_verifier = verifier
+        authorization_url, returned_state = flow.authorization_url(
+            access_type="offline",
+            prompt="select_account consent",
+            include_granted_scopes="true",
+            nonce=nonce,
+        )
+        if not secrets.compare_digest(returned_state, state):
+            raise GmailAuthError("OAuth state creation failed.", code="CALLBACK_REJECTED")
+        if not webbrowser.open(authorization_url, new=1):
+            raise GmailAuthError("Could not open the browser for Google authorization.", code="BROWSER_LAUNCH")
+        code = _wait_for_callback(
+            server,
+            min(max(int(timeout_seconds), 1), _OAUTH_CALLBACK_TIMEOUT_SECONDS),
+            cancel_event,
+        )
+        if installed.get("client_secret"):
+            # This preserves compatibility with the current Google client
+            # registration, which rejects a secretless exchange. The value is
+            # local configuration only and is stripped before token storage.
+            flow.fetch_token(code=code, timeout=_OAUTH_REQUEST_TIMEOUT_SECONDS)
+        else:
+            # Some installed-client registrations accept a secretless PKCE
+            # exchange. The maintained helper indexes client_secret, so use
+            # its OAuth session directly for this standards-compliant case.
+            flow.oauth2session.fetch_token(
+                installed["token_uri"],
+                code=code,
+                code_verifier=verifier,
+                include_client_id=True,
+                client_id=installed["client_id"],
+                timeout=_OAUTH_REQUEST_TIMEOUT_SECONDS,
+            )
+        creds = flow.credentials
+        # Never persist the optional desktop-client secret in an account token
+        # record. Refresh reads it afresh from local client configuration.
+        creds = Credentials(
+            token=creds.token,
+            refresh_token=creds.refresh_token,
+            id_token=getattr(creds, "id_token", None),
+            token_uri=installed["token_uri"],
+            client_id=installed["client_id"],
+            client_secret=None,
+            scopes=getattr(creds, "scopes", None) or GMAIL_SCOPES,
+            expiry=getattr(creds, "expiry", None),
+        )
+        id_token = getattr(creds, "id_token", None) or flow.oauth2session.token.get("id_token")
+        if not id_token:
+            raise GmailAuthError("Google did not return an ID token for identity verification.", code="ID_TOKEN_MISSING")
+        from core.vault.identity import google_identity
+
+        verified = google_identity(
+            id_token,
+            installed["client_id"],
+            nonce,
+            state,
+            state,
+            request=Request(),
+            wait_seconds=_GOOGLE_TOKEN_FUTURE_WAIT_SECONDS,
+        )
+        email = verified.addresses[0].value
+        display_name, avatar_url = _profile_metadata(creds.token, email)
+        if not display_name and id_token:
+            try:
+                parts = id_token.split(".")
+                if len(parts) >= 2:
+                    payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                    id_claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+                    display_name = (id_claims.get("name") or "").strip()
+            except Exception:
+                pass
+        effective_display = display_name if (display_name and display_name != email.split("@")[0]) else email
+        extra_meta = {
+            "email": email,
+            "displayName": effective_display,
+            "subject": verified.subject,
+            "issuer": verified.issuer,
+            "id_token": id_token,
+            "avatarUrl": avatar_url,
+        }
+        with _account_lock(email):
+            _save_credentials(creds, extra_meta, email=email)
+    except GmailAuthError:
+        raise
+    except Exception as exc:
+        logger.warning("Google OAuth authorization failed: %s", type(exc).__name__)
+        raise GmailAuthError("Google OAuth authorization could not be completed.", code="AUTH_FAILED") from exc
+    finally:
+        server.server_close()
+        try:
+            flow.oauth2session.close()  # type: ignore[name-defined]
+        except Exception:
+            pass
 
     return {
         "success": True,
         "email": email,
-        "displayName": display_name or email.split("@")[0],
+        "displayName": effective_display,
         "avatarUrl": avatar_url,
-        "subject": sub,
+        "subject": verified.subject,
+        "issuer": verified.issuer,
+        # Internal bridge evidence only.  QuMailJsApi consumes it before
+        # returning its JSON-safe result to React; it is never serialized to UI.
+        "_verified_identity": verified,
+        "_id_token": id_token,
         "token": creds.token,
     }
 
 
-def get_access_token(email: str = "") -> str:
+def get_access_token(email: str = "", *, interactive: bool = False) -> str:
     """
-    Return a valid Gmail OAuth2 access token for the specified email, refreshing or re-authorizing as needed.
+    Return a valid Gmail OAuth2 access token for the specified email.
+
+    Mail transport and background work must passively refresh or report a
+    reconnect requirement; only a deliberate UI connection may set
+    ``interactive=True`` and launch a browser.
     """
     clean_email = email.strip().lower() if email else ""
-    creds, token_data = _load_credentials(clean_email)
+    with _account_lock(clean_email):
+        creds, token_data = _load_credentials(clean_email)
 
-    # 1. Valid cached credentials: return immediately
-    if creds and creds.valid:
-        return creds.token
-
-    # 2. Expired credentials with refresh token: refresh silently
-    if creds and creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            _save_credentials(creds, extra=token_data, email=clean_email)
+        # 1. Valid cached credentials: return immediately
+        if creds and creds.valid:
             return creds.token
-        except Exception as refresh_exc:
-            logger.warning("Silent token refresh failed for %s, re-authorizing: %s", clean_email or "default", refresh_exc)
-            creds = None
 
-    # 3. No credentials or refresh failed: trigger consent flow
+        # 2. Expired credentials with refresh token: refresh silently.
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                # Fetch an optional secret only from the local client config;
+                # it is intentionally absent from persisted token records.
+                config = _load_client_config()["installed"]
+                configured_secret = ""
+                if config.get("client_id") == creds.client_id:
+                    configured_secret = str(config.get("client_secret") or "")
+                _refresh_public_client_credentials(creds, configured_secret)
+                if getattr(creds, "id_token", None):
+                    token_data["id_token"] = creds.id_token
+                _save_credentials(creds, extra=token_data, email=clean_email)
+                return creds.token
+            except Exception as refresh_exc:
+                logger.warning("Silent token refresh failed for %s: %s", clean_email or "default", type(refresh_exc).__name__)
+
+    # Never allow a scheduled receive/send/avatar operation to open a browser.
+    if not interactive:
+        raise GmailAuthError(
+            "Google authentication is required. Reconnect this account to continue.",
+            code="AUTH_REQUIRED",
+        )
     auth_res = authorize_google_account()
+    if clean_email and auth_res["email"].strip().lower() != clean_email:
+        raise GmailAuthError("The selected Google account does not match the requested mailbox.", code="ACCOUNT_MISMATCH")
     return auth_res["token"]
+
+
+def get_fresh_id_token(email: str = "") -> Optional[str]:
+    """Retrieve an active, verified Google ID token, refreshing silently if expired."""
+    clean_email = email.strip().lower() if email else ""
+    with _account_lock(clean_email):
+        creds, token_data = _load_credentials(clean_email)
+        if not creds or not token_data:
+            return None
+
+        existing_id = token_data.get("id_token")
+        if existing_id:
+            try:
+                parts = existing_id.split(".")
+                if len(parts) >= 2:
+                    payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+                    claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+                    exp = int(claims.get("exp", 0))
+                    if exp > int(time.time()) + 60:
+                        return existing_id
+            except Exception:
+                pass
+
+        if creds and creds.refresh_token:
+            try:
+                config = _load_client_config()["installed"]
+                configured_secret = ""
+                if config.get("client_id") == creds.client_id:
+                    configured_secret = str(config.get("client_secret") or "")
+                _refresh_public_client_credentials(creds, configured_secret)
+                if getattr(creds, "id_token", None):
+                    token_data["id_token"] = creds.id_token
+                _save_credentials(creds, extra=token_data, email=clean_email)
+                return token_data.get("id_token")
+            except Exception as exc:
+                logger.warning("Silent token refresh for ID token failed for %s: %s", clean_email or "default", exc)
+
+        return token_data.get("id_token")
 
 
 def get_stored_account_info(email: str = "") -> Optional[Dict[str, Any]]:
@@ -620,10 +914,17 @@ def get_stored_account_info(email: str = "") -> Optional[Dict[str, Any]]:
             except Exception:
                 pass
 
+        disp = token_data.get("displayName") or ""
+        email_val = token_data.get("email", "")
+        if not disp or disp == email_val.split("@")[0]:
+            disp = email_val
+
         return {
-            "email": token_data.get("email"),
-            "displayName": token_data.get("displayName") or token_data.get("email", "").split("@")[0],
+            "email": email_val,
+            "displayName": disp,
             "avatarUrl": avatar or "",
+            "subject": token_data.get("subject") or "",
+            "issuer": token_data.get("issuer") or "",
             "tokenExists": True,
         }
     return None
@@ -665,7 +966,7 @@ def fetch_account_avatar_from_provider(email: str = "", force_refresh: bool = Fa
                 pass
 
         # 3. Query Google UserInfo endpoints using valid access token
-        access_token = get_access_token(clean_email)
+        access_token = get_access_token(clean_email, interactive=False)
         if not access_token:
             return token_data.get("avatarUrl", "")
 
@@ -707,25 +1008,33 @@ def revoke_token(email: str = "") -> None:
     """Revoke Google token and delete token file on logout."""
     import requests
     clean_email = email.strip().lower() if email else ""
-    creds, _ = _load_credentials(clean_email)
-    if creds and creds.token:
-        try:
-            requests.post(
-                "https://oauth2.googleapis.com/revoke",
-                params={"token": creds.token},
-                timeout=5,
-            )
-        except Exception:
-            pass
+    with _account_lock(clean_email):
+        creds, _ = _load_credentials(clean_email)
+        if creds and (creds.refresh_token or creds.token):
+            try:
+                requests.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": creds.refresh_token or creds.token},
+                    timeout=5,
+                )
+            except Exception:
+                pass
 
-    token_path = get_gmail_token_path(clean_email)
-    if token_path.is_file():
-        try:
-            token_path.unlink()
-        except OSError:
-            pass
-    if token_path.is_file():
-        try:
-            token_path.unlink()
-        except OSError:
-            pass
+        token_path = get_gmail_token_path(clean_email)
+        if token_path.is_file():
+            try:
+                token_path.unlink()
+            except OSError:
+                pass
+        # The default file is only a backward-compatible mirror.  Remove it
+        # only when its encrypted metadata proves it mirrors this account; an
+        # unknown legacy default must not be destroyed during another account's
+        # logout.
+        default_path = get_gmail_token_path()
+        if clean_email and default_path != token_path and default_path.is_file():
+            try:
+                default_data = json.loads(_get_fernet().decrypt(default_path.read_bytes()).decode("utf-8"))
+                if (default_data.get("email") or "").strip().lower() == clean_email:
+                    default_path.unlink()
+            except Exception:
+                logger.debug("Could not evaluate legacy default token during logout.")

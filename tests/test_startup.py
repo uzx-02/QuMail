@@ -32,7 +32,7 @@ def test_custom_vault_flag_passes_to_launcher():
 def test_check_provider_flag_exits_zero():
     """--check-provider probe verifies native binaries and exits zero."""
     with patch.object(main, "verify_provider", return_value={
-        "path": "bin/qumail-m5-provider.exe",
+        "path": "bin/qumail-crypto-provider.exe",
         "size_bytes": 1000000,
         "sha256": "abcdef",
         "pe_mitigations": {

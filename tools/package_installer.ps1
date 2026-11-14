@@ -7,17 +7,17 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
-$DistDir = Join-Path $ProjectRoot "dist\QuMail"
-$InstallerDir = Join-Path $ProjectRoot "dist\installer"
+$DistDir = Join-Path $ProjectRoot "dist\QuMail-App"
+$InstallerDir = Join-Path $ProjectRoot "dist\Installer"
 $IssFile = Join-Path $ProjectRoot "installer\qumail_setup.iss"
 
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host " QuMail 1.0 - Windows Packaging Pipeline" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 
-# 1. Verify dist\QuMail exists
+# 1. Verify the one-dir PyInstaller bundle exists
 if (-not (Test-Path $DistDir)) {
-    Write-Host "ERROR: dist/QuMail does not exist. Run PyInstaller first." -ForegroundColor Red
+    Write-Host "ERROR: dist/QuMail-App does not exist. Run the release build first." -ForegroundColor Red
     exit 1
 }
 
@@ -27,17 +27,82 @@ if (-not (Test-Path $ExePath)) {
     exit 1
 }
 
-# Ensure resources and version.json are present
-$ProjectRes = Join-Path $ProjectRoot "resources"
-$ResDir = Join-Path $DistDir "resources"
-if (Test-Path $ProjectRes) {
-    if (-not (Test-Path $ResDir)) {
-        New-Item -ItemType Directory -Path $ResDir -Force | Out-Null
+# Ensure bin directory with native providers and manifest is present at bundle root
+$BundleBin = Join-Path $DistDir "bin"
+$InternalBin = Join-Path $DistDir "_internal\bin"
+$RootBin = Join-Path $ProjectRoot "bin"
+if (-not (Test-Path $BundleBin)) {
+    New-Item -ItemType Directory -Path $BundleBin -Force | Out-Null
+    if (Test-Path $InternalBin) {
+        Copy-Item "$InternalBin\*" -Destination $BundleBin -Force
+    } elseif (Test-Path $RootBin) {
+        Copy-Item "$RootBin\*" -Destination $BundleBin -Force
     }
-    Copy-Item "$ProjectRes\*" -Destination $ResDir -Recurse -Force
 }
-if (Test-Path (Join-Path $ProjectRoot "version.json")) {
-    Copy-Item (Join-Path $ProjectRoot "version.json") -Destination $DistDir -Force
+
+# Ensure resources and version.json are present
+$ResDirInternal = Join-Path $DistDir "_internal\resources"
+$ResDirRoot = Join-Path $DistDir "resources"
+
+# Synchronize resources if placed in root or _internal
+if ((Test-Path $ResDirRoot) -and (-not (Test-Path $ResDirInternal))) {
+    New-Item -ItemType Directory -Path $ResDirInternal -Force | Out-Null
+    Copy-Item "$ResDirRoot\*" -Destination $ResDirInternal -Recurse -Force
+} elseif ((Test-Path $ResDirInternal) -and (-not (Test-Path $ResDirRoot))) {
+    New-Item -ItemType Directory -Path $ResDirRoot -Force | Out-Null
+    Copy-Item "$ResDirInternal\*" -Destination $ResDirRoot -Recurse -Force
+}
+
+$ResDir = if (Test-Path (Join-Path $ResDirInternal "google_oauth_client.json")) { $ResDirInternal } else { $ResDirRoot }
+if (-not (Test-Path (Join-Path $ResDir "google_oauth_client.json"))) {
+    Write-Host "ERROR: Bundled Google OAuth release configuration is missing." -ForegroundColor Red
+    exit 1
+}
+if (-not (Test-Path (Join-Path $ResDir "qumail.release.json"))) {
+    Write-Host "ERROR: Bundled directory endpoint configuration is missing." -ForegroundColor Red
+    exit 1
+}
+
+# Ensure version.json is present in bundle root
+$VersionFile = Join-Path $DistDir "version.json"
+if (-not (Test-Path $VersionFile)) {
+    Write-Host "Generating bundle version metadata..." -ForegroundColor Cyan
+    & (Join-Path $ProjectRoot ".venv-m1-clean\Scripts\python.exe") -c @"
+import json, subprocess
+from datetime import datetime, timezone
+try:
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+except Exception:
+    commit = 'UNKNOWN'
+meta = {
+    'app_name': 'QuMail',
+    'display_name': 'QuMail Secure Email',
+    'version': '1.0.0',
+    'build_utc': datetime.now(timezone.utc).isoformat(),
+    'commit_sha': commit,
+    'platform': 'win32-x64',
+    'provider_schema': '1.0',
+    'rust_profile': 'release-cfg',
+    'pe_mitigations_verified': True
+}
+with open(r'$VersionFile', 'w', encoding='utf-8') as f:
+    json.dump(meta, f, indent=2)
+"@
+}
+
+# Run programmatic bundle layout and security verification
+Write-Host "Verifying bundle integrity and PE security mitigations..." -ForegroundColor Cyan
+& (Join-Path $ProjectRoot ".venv-m1-clean\Scripts\python.exe") -c @"
+from pathlib import Path
+from core.packaging import verify_bundle_layout
+res = verify_bundle_layout(Path(r'$DistDir'))
+print('Bundle verification OK:', res['status'], 'Version:', res['version'])
+for prov, data in res['providers'].items():
+    print(f'  - {prov}: sha256={data[\"digest\"][:16]}... CFG={data[\"pe_mitigations\"][\"guard_cf\"]}')
+"@
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Bundle verification failed!" -ForegroundColor Red
+    exit 1
 }
 
 Write-Host "OK: QuMail.exe distribution verified at $DistDir" -ForegroundColor Green
@@ -47,7 +112,7 @@ if (-not $SkipZip) {
     if (-not (Test-Path $InstallerDir)) {
         New-Item -ItemType Directory -Path $InstallerDir -Force | Out-Null
     }
-    $ZipPath = Join-Path $InstallerDir "QuMail-v1.0-Windows-x64-Portable.zip"
+    $ZipPath = Join-Path $InstallerDir "QuMail-Test-v1.0-Windows-x64-Portable.zip"
     Write-Host "INFO: Creating portable ZIP archive: $ZipPath..." -ForegroundColor Yellow
     if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }
     Compress-Archive -Path "$DistDir\*" -DestinationPath $ZipPath -CompressionLevel Optimal

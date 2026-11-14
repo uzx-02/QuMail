@@ -89,6 +89,27 @@ def get_google_client_secrets_path() -> Path:
     """Canonical path to user's Google OAuth client secrets file."""
     return get_user_config_dir() / "google_client_secret.json"
 
+
+def _bundled_resource_path(filename: str) -> Path | None:
+    """Return a read-only release resource when running from a bundle.
+
+    Release resources are deliberately distinct from per-user configuration:
+    users may override the OAuth configuration for recovery or development, but
+    a normal installed build must never require them to import a JSON file.
+    """
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        bundle_root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+        candidates.extend((
+            bundle_root / "resources" / filename,
+            Path(sys.executable).parent / "resources" / filename,
+            Path(sys.executable).parent / "_internal" / "resources" / filename,
+        ))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
 def get_gmail_token_path(email: str = "") -> Path:
     """Canonical path to user's encrypted Gmail OAuth token file (supports per-account tokens)."""
     cfg = get_user_config_dir()
@@ -110,23 +131,27 @@ def get_vault_path() -> Path:
     return get_user_data_dir() / "vault.sqlite"
 
 def validate_google_client_config(content: Any) -> tuple[bool, str, dict | None]:
-    """Validate Google OAuth client secrets format (Installed App / Web Application)."""
+    """Validate a Google desktop OAuth client configuration.
+
+    A desktop OAuth client is a public client.  Older Google downloads include a
+    ``client_secret`` field and QuMail keeps accepting it for compatibility, but
+    authentication must not require that field to be present.
+    """
     if not isinstance(content, dict):
         return False, "Invalid Google client secrets: root must be a JSON object.", None
     cfg = content.get("installed") or content.get("web")
     if not isinstance(cfg, dict):
         return False, "Google client secret must contain an 'installed' or 'web' application block.", None
     client_id = cfg.get("client_id")
-    client_secret = cfg.get("client_secret")
     if not client_id or not isinstance(client_id, str) or not client_id.strip():
         return False, "Google client configuration missing 'client_id'.", None
-    if not client_secret or not isinstance(client_secret, str) or not client_secret.strip():
-        return False, "Google client configuration missing 'client_secret'.", None
+    if "client_secret" in cfg and not isinstance(cfg["client_secret"], str):
+        return False, "Google client configuration contains an invalid 'client_secret'.", None
     return True, "Valid Google Client Configuration", cfg
 
 
 def load_google_client_config() -> tuple[dict | None, str, str | None]:
-    """Load and validate the local Google client secrets configuration."""
+    """Load a user override first, then the immutable release OAuth resource."""
     candidates = [
         Path(GMAIL_CLIENT_SECRETS_PATH),
         get_user_config_dir() / "gmail_client_secret.json",
@@ -137,7 +162,6 @@ def load_google_client_config() -> tuple[dict | None, str, str | None]:
     for p in candidates:
         if p.is_file():
             try:
-                import json
                 with open(p, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 valid, msg, cfg = validate_google_client_config(data)
@@ -145,6 +169,17 @@ def load_google_client_config() -> tuple[dict | None, str, str | None]:
                     return cfg, str(p), None
             except Exception as exc:
                 return None, str(p), str(exc)
+    bundled = _bundled_resource_path("google_oauth_client.json")
+    if bundled:
+        try:
+            with bundled.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            valid, msg, cfg = validate_google_client_config(data)
+            if valid and cfg:
+                return cfg, "bundled-release-resource", None
+            return None, "bundled-release-resource", msg
+        except Exception as exc:
+            return None, "bundled-release-resource", str(exc)
     return None, "missing", "No Google client secrets file found."
 
 
@@ -210,8 +245,23 @@ APP_NAME         = "QuMail"
 APP_VERSION      = "1.0.0"
 
 # --- Cloud Public Key Directory & WebLink Gateway ---
-DEFAULT_DIRECTORY_URL = "https://qumail-directory.uzair-shaikh-sec-e24.workers.dev"
+# The retired legacy directory hostname is intentionally not a fallback. The
+# canonical test service is the isolated Worker with the current schema and
+# identity-bound session implementation.
+DEFAULT_DIRECTORY_URL = "https://qumail-directory-dev.uzair-shaikh-sec-e24.workers.dev"
 
 def get_directory_server_url() -> str:
     """Return configured cloud directory server URL."""
-    return os.environ.get("QUMAIL_DIRECTORY_URL", DEFAULT_DIRECTORY_URL).rstrip("/")
+    explicit = os.environ.get("QUMAIL_DIRECTORY_URL")
+    if explicit:
+        return explicit.rstrip("/")
+    release_config = _bundled_resource_path("qumail.release.json")
+    if release_config:
+        try:
+            data = json.loads(release_config.read_text(encoding="utf-8"))
+            configured_url = data.get("directory_url")
+            if isinstance(configured_url, str) and configured_url.startswith("https://"):
+                return configured_url.rstrip("/")
+        except Exception:
+            pass
+    return DEFAULT_DIRECTORY_URL

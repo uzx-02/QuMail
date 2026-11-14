@@ -9,7 +9,7 @@
 #define MyAppPublisher "QuMail Research & Security Team"
 #define MyAppURL "https://qumail.org"
 #define MyAppExeName "QuMail.exe"
-#define MyAppDistDir "..\dist\QuMail"
+#define MyAppDistDir "..\dist\QuMail-App"
 
 [Setup]
 ; Unique App ID for upgrade / uninstall detection
@@ -47,11 +47,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Primary PyInstaller binary and internal dependencies
-Source: "{#MyAppDistDir}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MyAppDistDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#MyAppDistDir}\resources\*"; DestDir: "{app}\resources"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "{#MyAppDistDir}\version.json"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+; Copy the complete one-directory PyInstaller bundle.  In particular, bin/
+; contains the integrity-checked native vault provider required at startup.
+Source: "{#MyAppDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

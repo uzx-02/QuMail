@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ctypes
 import gc
+import hashlib
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import sys
 import threading
 import time
 import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,11 +34,14 @@ logger = logging.getLogger("qumail.offline_translator")
 
 # Model artifacts hosted publicly on Hugging Face (no authentication required)
 HF_BASE_URL = "https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8/resolve/main"
+# Pinned SHA-256 values for Hugging Face revision
+# 302d78f00e6fdb50a1064059df7c392b735e9d05.  A size check is never an
+# integrity check; every artifact is verified before it becomes usable.
 MODEL_FILES = [
-    ("config.json", 1024),                      # ~1 KB
-    ("shared_vocabulary.txt", 1_280_000),         # ~1.2 MB
-    ("sentencepiece.bpe.model", 4_900_000),      # ~4.9 MB
-    ("model.bin", 622_595_991),                 # ~593.7 MB
+    ("config.json", 159, "0c2f6fa2057c7264d052fb4a62ba3476eeae70487acddfa8e779a53a00cbf44c"),
+    ("shared_vocabulary.txt", 2_568_098, "a132a83330f45514c2476eb81d1d69b3c41762264d16ce0a7ea982e5d6c728e5"),
+    ("sentencepiece.bpe.model", 4_852_054, "14bb8dfb35c0ffdea7bc01e56cea38b9e3d5efcdcb9c251d6b40538e1aab555a"),
+    ("model.bin", 622_595_991, "ed1beaf75134de7505315a5223162f56acff397eff6b50638a500d3936fe707b"),
 ]
 
 # FLORES-200 Language Code Mapping for QuMail Indian languages + English
@@ -279,23 +284,33 @@ class OfflineTranslatorService:
     # ------------------------------------------------------------------------
 
     def is_model_installed(self) -> bool:
-        """Verify that all 4 required files exist and model.bin is non-empty."""
+        """Fast presence check; cryptographic verification occurs before use."""
         if not self.model_dir.is_dir():
             return False
 
-        required = ["config.json", "shared_vocabulary.txt", "sentencepiece.bpe.model", "model.bin"]
-        for f in required:
+        for f, expected_size, _expected_sha256 in MODEL_FILES:
             p = self.model_dir / f
-            if not p.is_file():
+            if not p.is_file() or p.stat().st_size != expected_size:
                 return False
-        # Sanity check model.bin size (> 500 MB)
-        model_bin = self.model_dir / "model.bin"
-        try:
-            if model_bin.stat().st_size < 500 * 1024 * 1024:
-                return False
-        except Exception:
-            return False
         return True
+
+    @staticmethod
+    def _sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def verify_model_integrity(self) -> tuple[bool, str]:
+        """Verify every installed artifact against the pinned release digest."""
+        for filename, expected_size, expected_sha256 in MODEL_FILES:
+            artifact = self.model_dir / filename
+            if not artifact.is_file() or artifact.stat().st_size != expected_size:
+                return False, f"{filename} is missing or has an unexpected size."
+            if self._sha256_file(artifact) != expected_sha256:
+                return False, f"{filename} failed its SHA-256 integrity check."
+        return True, "Model integrity verified."
 
     def get_installed_size_mb(self) -> float:
         """Return total size of the installed model directory in MB."""
@@ -402,33 +417,40 @@ class OfflineTranslatorService:
     def _run_download_worker(self) -> None:
         """Download artifacts sequentially via standard HTTPS streaming."""
         self.model_dir.mkdir(parents=True, exist_ok=True)
-        total_expected_bytes = sum(size for _, size in MODEL_FILES)
+        total_expected_bytes = sum(size for _, size, _ in MODEL_FILES)
         total_downloaded_bytes = 0
 
         try:
-            for filename, expected_size in MODEL_FILES:
+            for filename, expected_size, expected_sha256 in MODEL_FILES:
                 if self._cancel_requested:
                     break
 
                 target_file = self.model_dir / filename
                 part_file = self.model_dir / f"{filename}.part"
 
-                # If already fully downloaded, skip to next file
-                min_valid_size = 500 * 1024 * 1024 if filename == "model.bin" else 100
-                if target_file.is_file() and target_file.stat().st_size >= min_valid_size:
-                    total_downloaded_bytes += target_file.stat().st_size
-                    continue
+                # Never trust an earlier partial or tampered download.  A
+                # correct existing file can be reused without a network call.
+                if target_file.is_file() and target_file.stat().st_size == expected_size:
+                    if self._sha256_file(target_file) == expected_sha256:
+                        total_downloaded_bytes += expected_size
+                        continue
+                    target_file.unlink(missing_ok=True)
 
                 with self._download_lock:
                     self._download_state["currentFile"] = filename
 
                 file_url = f"{HF_BASE_URL}/{filename}"
+                parsed_url = urllib.parse.urlsplit(file_url)
+                if (parsed_url.scheme.lower() != "https" or not parsed_url.hostname or
+                        parsed_url.username is not None or parsed_url.password is not None):
+                    raise RuntimeError("Translation model download endpoint must be a direct HTTPS URL.")
                 req = urllib.request.Request(
                     file_url,
                     headers={"User-Agent": "QuMail/1.0 (Windows; Post-Quantum Mail Client)"},
                 )
 
                 chunk_size = 65536  # 64 KB
+                digest = hashlib.sha256()
                 with urllib.request.urlopen(req, timeout=30) as response, open(part_file, "wb") as out_f:
                     while True:
                         if self._cancel_requested:
@@ -437,6 +459,7 @@ class OfflineTranslatorService:
                         if not chunk:
                             break
                         out_f.write(chunk)
+                        digest.update(chunk)
                         total_downloaded_bytes += len(chunk)
 
                         pct = min(100, int((total_downloaded_bytes / total_expected_bytes) * 100))
@@ -447,6 +470,11 @@ class OfflineTranslatorService:
                 if self._cancel_requested:
                     self._clean_part_files()
                     break
+
+                if not part_file.is_file() or part_file.stat().st_size != expected_size:
+                    raise RuntimeError(f"Downloaded {filename} has an unexpected size.")
+                if digest.hexdigest() != expected_sha256:
+                    raise RuntimeError(f"Downloaded {filename} failed its SHA-256 integrity check.")
 
                 # Atomic replace
                 if part_file.is_file():
@@ -482,6 +510,9 @@ class OfflineTranslatorService:
 
             if not self.is_model_installed():
                 raise RuntimeError("NLLB-200 INT8 model is not installed. Please download it first.")
+            integrity_ok, integrity_message = self.verify_model_integrity()
+            if not integrity_ok:
+                raise RuntimeError(f"NLLB-200 model integrity check failed: {integrity_message} Re-download the model.")
 
             # Ensure Windows resolves extension dependencies in frozen PyInstaller or dev environments
             _ensure_dll_directories()

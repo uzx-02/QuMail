@@ -314,9 +314,12 @@ class ApiService {
         const acc = await window.pywebview.api.getAccount();
         if (acc) {
           const hasPin = Boolean(acc.hasSecurityPin);
+          const emailAddr = acc.email || '';
+          const rawDn = acc.displayName || '';
+          const effectiveDn = (rawDn && rawDn !== emailAddr.split('@')[0]) ? rawDn : (emailAddr || 'User');
           this.account = {
-            email: acc.email || '',
-            displayName: acc.displayName || (acc.email ? acc.email.split('@')[0] : 'User'),
+            email: emailAddr,
+            displayName: effectiveDn,
             avatarUrl: acc.avatarUrl || '',
             provider: acc.organization || 'Google Workspace / Gmail',
             pqcAlgorithm: acc.kemAlgorithm || 'ML-KEM-768 (NIST FIPS 203)',
@@ -377,9 +380,11 @@ class ApiService {
       try {
         const acc = await window.pywebview.api.loginAccount(trimmed, displayName, organization);
         if (acc && acc.email) {
+          const rawDn = acc.displayName || '';
+          const effectiveDn = (rawDn && rawDn !== trimmed.split('@')[0]) ? rawDn : trimmed;
           this.account = {
             email: acc.email,
-            displayName: acc.displayName || trimmed.split('@')[0],
+            displayName: effectiveDn,
             provider: acc.organization || 'QuMail Secure Corporate',
             pqcAlgorithm: acc.kemAlgorithm || 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
             pqcIdentity: `0x${trimmed.slice(0, 4)}...PQ768`,
@@ -410,9 +415,12 @@ class ApiService {
         const res = await window.pywebview.api.authenticateCustomMailbox(config);
         if (res.success && res.account) {
           const domain = config.email.split('@')[1] || 'Custom';
+          const accEmail = res.account.email || config.email;
+          const rawDn = res.account.displayName || config.displayName || '';
+          const effectiveDn = (rawDn && rawDn !== accEmail.split('@')[0]) ? rawDn : accEmail;
           this.account = {
-            email: res.account.email,
-            displayName: res.account.displayName || config.displayName || res.account.email.split('@')[0],
+            email: accEmail,
+            displayName: effectiveDn,
             provider: `${domain.charAt(0).toUpperCase() + domain.slice(1)} (IMAP/TLS)`,
             pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
             pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,
@@ -450,9 +458,12 @@ class ApiService {
       try {
         const res = await window.pywebview.api.googleAuth();
         if (res.success && res.account) {
+          const accEmail = res.account.email || '';
+          const rawDn = res.account.displayName || '';
+          const effectiveDn = (rawDn && rawDn !== accEmail.split('@')[0]) ? rawDn : accEmail;
           this.account = {
-            email: res.account.email,
-            displayName: res.account.displayName || res.account.email.split('@')[0],
+            email: accEmail,
+            displayName: effectiveDn,
             provider: 'Google Workspace / Gmail',
             pqcAlgorithm: 'NIST FIPS 203 (ML-KEM-768) + NIST FIPS 204 (ML-DSA-65)',
             pqcIdentity: `0x${res.account.email.slice(0, 4)}...PQ768`,

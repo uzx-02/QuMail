@@ -124,6 +124,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Accounts Tab state
   const [isGoogleAuthenticating, setIsGoogleAuthenticating] = useState(false);
+  const [googleAuthPhase, setGoogleAuthPhase] = useState('');
   const [googleConfig, setGoogleConfig] = useState<{ configured: boolean; valid?: boolean; clientId?: string } | null>(null);
   const [isImportingClientSecret, setIsImportingClientSecret] = useState(false);
   const [isConnectingCustom, setIsConnectingCustom] = useState(false);
@@ -275,7 +276,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const accountInitials = useMemo(() => {
     if (!account.email) return 'GU';
-    const name = account.displayName || account.email.split('@')[0];
+    const name = (account.displayName && account.displayName !== account.email.split('@')[0]) ? account.displayName : account.email;
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -361,14 +362,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleGoogleAuth = async () => {
+    setGoogleAuthPhase('Opening secure Google sign-in in your browser...');
     setIsGoogleAuthenticating(true);
     try {
       const res = await api.signInWithGoogle();
       if (res.success && res.account) {
+        setGoogleAuthPhase('Verifying the Google identity and restoring the associated QuMail vault...');
         onUpdateAccountEmail(res.account.email);
         showFeedback(`Signed in successfully as ${res.account.email}`);
       } else if (res.needsClientSecret) {
-        showFeedback('Google Client Secret file required. Please import client_secret.json.', 'warn');
+        showFeedback('This QuMail build is missing its bundled Google sign-in configuration. Contact the release maintainer.', 'warn');
       } else {
         showFeedback(res.message || 'Google authentication was not completed.', 'warn');
       }
@@ -376,6 +379,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       showFeedback(`Google authentication encountered an error: ${err?.message || err}`, 'warn');
     } finally {
       setIsGoogleAuthenticating(false);
+      setGoogleAuthPhase('');
     }
   };
 
@@ -1259,25 +1263,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-sm font-bold text-[#202124] dark:text-[#F1F5F9]">
-                            {account.displayName || account.email.split('@')[0]}
+                            {(account.displayName && account.displayName !== account.email.split('@')[0]) ? account.displayName : account.email}
                           </h4>
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
                             {account.provider?.includes('Google') || account.email.endsWith('@gmail.com')
                               ? 'Google OAuth 2.0'
                               : 'App Password'}
                           </span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span>{t(settings.language, 'connected_and_ready')}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${
+                            account.connectionStatus === 'OAUTH_EXPIRED'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${account.connectionStatus === 'OAUTH_EXPIRED' ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`} />
+                            <span>{account.connectionStatus === 'OAUTH_EXPIRED' ? 'Google reconnection required' : t(settings.language, 'connected_and_ready')}</span>
                           </span>
                         </div>
                         <p className="text-xs font-mono text-[#5F6368] dark:text-[#94A3B8]">
                           {account.email}
                         </p>
+                        <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8]">
+                          {account.pqcIdentity
+                            ? `QuMail identity: root fingerprint ${account.pqcIdentity.slice(0, 16)}…`
+                            : 'QuMail identity: vault will be restored when unlocked'}
+                        </p>
                         <div className="flex items-center gap-3 pt-0.5 flex-wrap">
                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                            <span>{t(settings.language, 'vault_keys_enrolled')}</span>
+                            <span>{account.isUnlocked ? t(settings.language, 'vault_keys_enrolled') : 'Vault locked — identity remains protected locally'}</span>
                           </p>
                           {(account.provider?.includes('Google') || account.email.endsWith('@gmail.com')) && (
                             <a
@@ -1301,7 +1314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             type="button"
                             onClick={() => {
                               onLogoutAccount();
-                              showFeedback('Signed out of mailbox session.');
+                              showFeedback('Signed out of mailbox session. Your encrypted local QuMail identity remains on this device.');
                             }}
                             className="px-3.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E293B] text-xs font-semibold text-[#202124] dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
                           >
@@ -1312,6 +1325,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               type="button"
                               onClick={() => {
                                 onLogoutAccount();
+                                showFeedback('Switched mailbox session. Your encrypted local QuMail identity remains on this device.');
                                 onClose();
                                 onOpenSignIn();
                               }}
@@ -1397,8 +1411,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                         <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] mt-0.5">
                           {googleConfig?.configured
-                            ? `Client ID: ${googleConfig.clientId ? googleConfig.clientId.slice(0, 16) + '...' : 'Loaded from client_secret.json'}`
-                            : 'Import your Google Cloud credentials to enable one-click browser authorization.'}
+                            ? `Client ID: ${googleConfig.clientId ? googleConfig.clientId.slice(0, 16) + '...' : 'Bundled release configuration'}`
+                            : 'This build has no bundled Google sign-in configuration. Contact the release maintainer.'}
                         </p>
                       </div>
                     </div>
@@ -1411,7 +1425,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="px-3.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1E293B] text-xs font-semibold text-[#202124] dark:text-white hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer shrink-0 flex items-center space-x-1.5 disabled:opacity-50"
                       >
                         <FileCode className="w-3.5 h-3.5 text-blue-500" />
-                        <span>{isImportingClientSecret ? t(settings.language, 'selecting') : t(settings.language, 'import_client_secret')}</span>
+                        <span>{isImportingClientSecret ? t(settings.language, 'selecting') : 'Advanced override'}</span>
                       </button>
                     </div>
                   </div>
@@ -1450,6 +1464,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </>
                       )}
                     </button>
+                    {isGoogleAuthenticating && googleAuthPhase && (
+                      <p className="text-[11px] text-[#5F6368] dark:text-[#94A3B8] text-right">
+                        {googleAuthPhase}
+                      </p>
+                    )}
                   </div>
 
                   {/* Privacy Guarantee Box */}

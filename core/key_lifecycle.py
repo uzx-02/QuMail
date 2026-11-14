@@ -675,7 +675,9 @@ def verify_rfc3161_token_offline(
                 error="SigningCertificate certs sequence is empty",
             )
         first_ess = certs_seq[0]
-        expected_cert_hash = hashlib.sha1(tsa_cert_der).digest()
+        # RFC 3161's legacy ESSCertID fixes SHA-1 for certificate identity.
+        # It is not used to sign or authenticate QuMail content.
+        expected_cert_hash = hashlib.sha1(tsa_cert_der, usedforsecurity=False).digest()
         actual_cert_hash = bytes(first_ess["certHash"])
         if actual_cert_hash != expected_cert_hash:
             return RFC3161VerificationResult(
@@ -717,7 +719,9 @@ def verify_rfc3161_token_offline(
         elif algo_oid == "2.16.840.1.101.3.4.2.3":  # SHA-512
             expected_cert_hash = hashlib.sha512(tsa_cert_der).digest()
         elif algo_oid == "1.3.14.3.2.26":  # SHA-1
-            expected_cert_hash = hashlib.sha1(tsa_cert_der).digest()
+            # ESSCertIDv2 can explicitly carry SHA-1 for legacy TSA tokens.
+            # Keep it readable while preferring the SHA-256 default above.
+            expected_cert_hash = hashlib.sha1(tsa_cert_der, usedforsecurity=False).digest()
         else:
             return RFC3161VerificationResult(
                 is_valid=False,

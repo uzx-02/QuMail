@@ -7,6 +7,10 @@
     copies the release artifacts to bin/, and updates bin/manifest.json with SHA-256 digests.
 #>
 
+param(
+    [switch]$EnablePeerVerification
+)
+
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repoRoot
@@ -36,25 +40,25 @@ if ($actualOpenSslHash -ne $expectedOpenSslHash) {
     throw "Audited OpenSSL 3.5.9 input hash mismatch: expected $expectedOpenSslHash, got $actualOpenSslHash"
 }
 
-Write-Host "Building qumail-m3-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
-& $cargo build --manifest-path (Join-Path $repoRoot 'native/vault_provider/Cargo.toml') --locked --offline --release
-if ($LASTEXITCODE -ne 0) { throw "Build of qumail-m3-provider failed with exit code $LASTEXITCODE" }
+$featureArgs = if ($EnablePeerVerification) { @('--features', 'peer-verification') } else { @() }
 
-Write-Host "Building qumail-m5-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
-& $cargo build --manifest-path (Join-Path $repoRoot 'native/crypto_provider/Cargo.toml') --locked --offline --release
-if ($LASTEXITCODE -ne 0) { throw "Build of qumail-m5-provider failed with exit code $LASTEXITCODE" }
+Write-Host "Building qumail-vault-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
+& $cargo build --manifest-path (Join-Path $repoRoot 'native/vault_provider/Cargo.toml') --locked --offline --release @featureArgs
+if ($LASTEXITCODE -ne 0) { throw "Build of qumail-vault-provider failed with exit code $LASTEXITCODE" }
+
+Write-Host "Building qumail-crypto-provider (Release, CFG-enabled)..." -ForegroundColor Cyan
+& $cargo build --manifest-path (Join-Path $repoRoot 'native/crypto_provider/Cargo.toml') --locked --offline --release @featureArgs
+if ($LASTEXITCODE -ne 0) { throw "Build of qumail-crypto-provider failed with exit code $LASTEXITCODE" }
 
 # Destination bin directory
 $binDir = Join-Path $repoRoot 'bin'
 if (!(Test-Path $binDir)) { New-Item -ItemType Directory -Path $binDir | Out-Null }
 
-$m3Src = Join-Path $env:CARGO_TARGET_DIR 'release/qumail-m3-provider.exe'
-$m5Src = Join-Path $env:CARGO_TARGET_DIR 'release/qumail-m5-provider.exe'
+$vaultSrc = Join-Path $env:CARGO_TARGET_DIR 'release/qumail-vault-provider.exe'
+$cryptoSrc = Join-Path $env:CARGO_TARGET_DIR 'release/qumail-crypto-provider.exe'
 
-Copy-Item $m3Src (Join-Path $binDir 'qumail-m3-provider.exe') -Force
-Copy-Item $m5Src (Join-Path $binDir 'qumail-m5-provider.exe') -Force
-Copy-Item $m3Src (Join-Path $binDir 'qumail-vault-provider.exe') -Force
-Copy-Item $m5Src (Join-Path $binDir 'qumail-crypto-provider.exe') -Force
+Copy-Item $vaultSrc (Join-Path $binDir 'qumail-vault-provider.exe') -Force
+Copy-Item $cryptoSrc (Join-Path $binDir 'qumail-crypto-provider.exe') -Force
 
 Write-Host "Updating bin/manifest.json with binary digests..." -ForegroundColor Cyan
 & python -c @"
@@ -87,7 +91,9 @@ manifest = {
     'crypto_libraries': {
         'sequoia_openpgp': '2.4.1',
         'openssl': '3.5.9 (29 Sep 2026)',
-        'rpgp': '0.21.0'
+        'ml_dsa': '0.1.2',
+        'rsa': '0.10.0',
+        'crypto_bigint': '0.7.11'
     },
     'build_profile': 'release',
     'rustflags': '-C control-flow-guard',
@@ -107,22 +113,6 @@ manifest = {
             'size_bytes': os.path.getsize('bin/qumail-crypto-provider.exe'),
             'sha256': get_hash('bin/qumail-crypto-provider.exe'),
             'pe_mitigations': inspect_pe('bin/qumail-crypto-provider.exe'),
-        },
-        'qumail-m3-provider': {
-            'binary': 'qumail-m3-provider.exe',
-            'version': '0.1.0',
-            'purpose': 'Identity, root/subkey lifecycle, certification, Windows DPAPI vault backend',
-            'size_bytes': os.path.getsize('bin/qumail-m3-provider.exe'),
-            'sha256': get_hash('bin/qumail-m3-provider.exe'),
-            'pe_mitigations': inspect_pe('bin/qumail-m3-provider.exe'),
-        },
-        'qumail-m5-provider': {
-            'binary': 'qumail-m5-provider.exe',
-            'version': '0.1.0',
-            'purpose': 'RFC 3156 / RFC 9980 OpenPGP-PQ message encryption, composite signing, decryption, verification',
-            'size_bytes': os.path.getsize('bin/qumail-m5-provider.exe'),
-            'sha256': get_hash('bin/qumail-m5-provider.exe'),
-            'pe_mitigations': inspect_pe('bin/qumail-m5-provider.exe'),
         }
     }
 }

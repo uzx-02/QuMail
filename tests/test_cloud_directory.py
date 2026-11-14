@@ -12,16 +12,36 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+import urllib.error
 import pytest
 
 from core.cloud_directory import (
     CloudDirectoryClient,
     ContactPinningStore,
+    DirectoryAccountContext,
+    DirectoryAuthRequired,
     normalize_email,
 )
+
+
+class _MockNoRedirectOpener:
+    """Exercise the production no-redirect transport without real sockets."""
+    def __init__(self, transport):
+        self._transport = transport
+
+    def open(self, request, timeout):
+        return self._transport(request, timeout)
+
+
+def _patch_directory_transport(monkeypatch, transport):
+    monkeypatch.setattr(
+        "urllib.request.build_opener",
+        lambda *_args, **_kwargs: _MockNoRedirectOpener(transport),
+    )
 
 
 def test_email_normalization_domain_rules():
@@ -102,7 +122,7 @@ def test_directory_client_lookup_post_body(tmp_path, monkeypatch):
         }).encode("utf-8")
         return mock_resp
 
-    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    _patch_directory_transport(monkeypatch, mock_urlopen)
 
     res = client.lookup("Alice.Smith+test@gmail.com")
     assert res["found"] is True
@@ -115,6 +135,58 @@ def test_directory_client_lookup_post_body(tmp_path, monkeypatch):
     assert captured_req["method"] == "POST"
     assert captured_req["headers"]["Authorization"] == "Bearer mock-token-xyz"
     assert captured_req["body"]["email"] == "alicesmith@gmail.com"
+
+
+def test_directory_session_is_loaded_only_from_its_verified_account(monkeypatch, tmp_path):
+    """A directory request cannot silently borrow the default/other mailbox token."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    context = DirectoryAccountContext(
+        email="owner@example.com",
+        issuer="https://accounts.google.com",
+        subject="google-subject-1",
+        qumail_identity_id="a" * 32,
+        device_id="b" * 32,
+    )
+    metadata = {
+        "email": "owner@example.com",
+        "issuer": "https://accounts.google.com",
+        "subject": "google-subject-1",
+        "directory_session_token": "account-owned-session",
+    }
+    with patch("transport.oauth2_gmail._load_credentials", return_value=(None, metadata)) as load:
+        client = CloudDirectoryClient(base_url="https://directory.qumail.test", account=context)
+
+    assert client.session_token == "account-owned-session"
+    load.assert_called_once_with("owner@example.com")
+
+    mismatched = dict(metadata, subject="other-google-subject")
+    with patch("transport.oauth2_gmail._load_credentials", return_value=(None, mismatched)):
+        client = CloudDirectoryClient(base_url="https://directory.qumail.test", account=context)
+    assert client.session_token == ""
+
+
+def test_directory_request_without_owned_session_fails_without_google_fallback(tmp_path, monkeypatch):
+    """Background lookup must request reconnect instead of using an ID token as a bearer token."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    client = CloudDirectoryClient(base_url="https://directory.qumail.test")
+    with pytest.raises(DirectoryAuthRequired, match="Directory authentication is required"):
+        client.lookup("recipient@example.com")
+
+
+def test_rejected_directory_session_requires_reconnect_without_google_token_fallback(tmp_path, monkeypatch):
+    """A 401 clears only the opaque session and never retries with a Google JWT."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    client = CloudDirectoryClient(base_url="https://directory.qumail.test", session_token="expired-directory-session")
+
+    def reject(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://directory.qumail.test/api/v1/directory/lookup", 401, "Unauthorized", {}, BytesIO(b'{"error":"expired"}')
+        )
+
+    _patch_directory_transport(monkeypatch, reject)
+    with pytest.raises(DirectoryAuthRequired, match="Directory session expired"):
+        client.lookup("recipient@example.com")
+    assert client.session_token == ""
 
 
 def test_client_weblink_creation_and_fragment_key_delivery(tmp_path, monkeypatch):
@@ -136,7 +208,7 @@ def test_client_weblink_creation_and_fragment_key_delivery(tmp_path, monkeypatch
         }).encode("utf-8")
         return mock_resp
 
-    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    _patch_directory_transport(monkeypatch, mock_urlopen)
 
     # 1. Plain WebLink (no passcode)
     secret_text = "CONFIDENTIAL: Post-Quantum Financial Audit Record"
@@ -172,14 +244,59 @@ def test_client_weblink_creation_and_fragment_key_delivery(tmp_path, monkeypatch
     assert captured_payload["passcode_salt_hex"] is not None
 
 
+def test_client_weblink_attachment_uploads_ciphertext_only(tmp_path, monkeypatch):
+    """Attachment bytes are AES-GCM encrypted and never placed in JSON or the invitation."""
+    monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
+    client = CloudDirectoryClient(base_url="https://directory.qumail.test", session_token="mock-token-xyz")
+    calls = []
+
+    def mock_urlopen(req, *args, **_kwargs):
+        calls.append(req)
+        response = MagicMock()
+        response.__enter__.return_value = response
+        if req.method == "POST":
+            response.read.return_value = json.dumps({
+                "success": True,
+                "link_id": "a" * 32,
+                "access_url": "https://directory.qumail.test/v/" + "a" * 32,
+            }).encode("utf-8")
+        return response
+
+    _patch_directory_transport(monkeypatch, mock_urlopen)
+    plaintext = b"top secret attachment bytes" * 1024
+    result = client.create_weblink(
+        plaintext_body="Encrypted body",
+        sender_email="alice@example.com",
+        recipient_email="bob@example.com",
+        attachments=[(plaintext, "secret-report.pdf")],
+    )
+
+    post_payload = json.loads(calls[0].data.decode("utf-8"))
+    assert plaintext not in calls[0].data
+    assert "secret-report.pdf" not in calls[0].data.decode("utf-8")
+    assert post_payload["attachments"][0]["plaintext_size"] == len(plaintext)
+    upload = next(req for req in calls if req.method == "PUT")
+    assert upload.data != plaintext
+    assert upload.headers["Content-type"] == "application/octet-stream"
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from urllib.parse import parse_qs, urlparse
+    chunk_iv = base64.urlsafe_b64decode(parse_qs(urlparse(upload.full_url).query)["iv"][0])
+    raw_key = bytes.fromhex(result["access_url"].split("#key=")[1])
+    assert AESGCM(raw_key).decrypt(chunk_iv, upload.data, None) == plaintext
+    assert "#key=" in result["access_url"]
+
+
 def test_qumail_bridge_check_recipient(tmp_path, monkeypatch):
     """Verify QuMailJsApi.checkRecipient identifies cloud directory registration and TOFU."""
     monkeypatch.setenv("QUMAIL_DATA_DIR", str(tmp_path))
     from launch_react_desktop import QuMailJsApi
     api = QuMailJsApi(vault_path=tmp_path / "test_vault.db")
 
+    directory_client = MagicMock()
+
     # 1. Unregistered recipient -> defaults to weblink recommendation
-    with patch("core.cloud_directory.CloudDirectoryClient.lookup") as mock_lookup:
+    with patch.object(api, "_directory_client_for_active_account", return_value=directory_client):
+        mock_lookup = directory_client.lookup
         mock_lookup.return_value = {"found": False, "devices": []}
         res = api.checkRecipient("stranger@external.com")
         assert res["registered"] is False
@@ -187,7 +304,8 @@ def test_qumail_bridge_check_recipient(tmp_path, monkeypatch):
         assert "not registered" in res["message"]
 
     # 2. Registered recipient with 2 devices
-    with patch("core.cloud_directory.CloudDirectoryClient.lookup") as mock_lookup:
+    with patch.object(api, "_directory_client_for_active_account", return_value=directory_client):
+        mock_lookup = directory_client.lookup
         mock_lookup.return_value = {
             "found": True,
             "email": "partner@secure.org",
@@ -201,7 +319,8 @@ def test_qumail_bridge_check_recipient(tmp_path, monkeypatch):
         assert "Found 2 active QuMail device(s)" in res["message"]
 
     # 3. Registered recipient with TOFU warning
-    with patch("core.cloud_directory.CloudDirectoryClient.lookup") as mock_lookup:
+    with patch.object(api, "_directory_client_for_active_account", return_value=directory_client):
+        mock_lookup = directory_client.lookup
         mock_lookup.return_value = {
             "found": True,
             "email": "compromised@secure.org",
@@ -213,10 +332,9 @@ def test_qumail_bridge_check_recipient(tmp_path, monkeypatch):
         assert "SECURITY WARNING" in res["warning"]
 
 
-def test_burn_after_read_single_access_and_rejection():
+def test_burn_after_read_single_access_and_rejection(monkeypatch):
     """Verify that a WebLink created with burn_after_read=True passes burn_after_read=True to server and rejects subsequent accesses."""
-    client = CloudDirectoryClient(base_url="https://mock.qumail.directory")
-    client._session_token = "valid-test-token"
+    client = CloudDirectoryClient(base_url="https://mock.qumail.directory", session_token="valid-test-token")
 
     store = {}
     def mock_post(req, *args, **kwargs):
@@ -233,14 +351,14 @@ def test_burn_after_read_single_access_and_rejection():
         mock_resp.__enter__.return_value = mock_resp
         return mock_resp
 
-    with patch("urllib.request.urlopen", side_effect=mock_post):
-        weblink = client.create_weblink(
-            plaintext_body="One-time secret message",
-            sender_email="alice@qumail.sec",
-            recipient_email="bob@external.com",
-            burn_after_read=True,
-            max_views=1,
-        )
+    _patch_directory_transport(monkeypatch, mock_post)
+    weblink = client.create_weblink(
+        plaintext_body="One-time secret message",
+        sender_email="alice@qumail.sec",
+        recipient_email="bob@external.com",
+        burn_after_read=True,
+        max_views=1,
+    )
 
     link_id = "link-burn-123"
     assert link_id in store

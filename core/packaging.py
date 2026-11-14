@@ -169,17 +169,17 @@ def assemble_production_bundle(
     if not src_bin.exists():
         raise PackagingError(f"Native provider source directory missing: {src_bin}")
 
-    m3_exe = src_bin / "qumail-m3-provider.exe"
-    m5_exe = src_bin / "qumail-m5-provider.exe"
+    vault_exe = src_bin / "qumail-vault-provider.exe"
+    crypto_exe = src_bin / "qumail-crypto-provider.exe"
     manifest = src_bin / "manifest.json"
 
-    for f in (m3_exe, m5_exe, manifest):
+    for f in (vault_exe, crypto_exe, manifest):
         if not f.exists():
             raise PackagingError(f"Required binary asset missing from source bin: {f}")
         shutil.copy2(f, bin_dir / f.name)
 
     # Verify native binary security characteristics
-    for exe in (bin_dir / "qumail-m3-provider.exe", bin_dir / "qumail-m5-provider.exe"):
+    for exe in (bin_dir / "qumail-vault-provider.exe", bin_dir / "qumail-crypto-provider.exe"):
         mitigations = inspect_pe_security_characteristics(exe)
         if not mitigations["fully_hardened"]:
             raise BundleVerificationError(
@@ -262,7 +262,7 @@ def verify_bundle_layout(bundle_root: Path) -> dict[str, Any]:
 
     # Check each provider
     results = {}
-    for name in ("qumail-m3-provider", "qumail-m5-provider"):
+    for name in ("qumail-vault-provider", "qumail-crypto-provider"):
         exe_file = bin_dir / f"{name}.exe"
         if not exe_file.is_file():
             raise BundleVerificationError(f"Missing provider binary: {exe_file}")

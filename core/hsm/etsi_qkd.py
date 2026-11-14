@@ -21,11 +21,30 @@ import json
 import logging
 import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger("qumail.hsm.etsi_qkd")
+
+
+def _validate_kme_url(url: str) -> str:
+    """Allow HTTPS KMEs and explicitly scoped loopback HTTP simulator URLs."""
+    parsed = urllib.parse.urlsplit(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.username is not None or parsed.password is not None or not host:
+        raise ValueError("KME URL must have a host and no embedded credentials.")
+    if parsed.scheme.lower() == "https":
+        return url
+    if parsed.scheme.lower() == "http" and host in {"127.0.0.1", "localhost", "::1"}:
+        return url
+    raise ValueError("KME URL must use HTTPS, except for an explicit loopback simulator.")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        return None
 
 
 @dataclass
@@ -51,7 +70,7 @@ class ETSI014Client:
     """REST Client for ETSI GS QKD 014 Key Delivery API."""
 
     def __init__(self, kme_url: str = "http://127.0.0.1:8443/api/v1", timeout_secs: float = 3.0) -> None:
-        self.kme_url = kme_url.rstrip("/")
+        self.kme_url = _validate_kme_url(kme_url.rstrip("/"))
         self.timeout = timeout_secs
 
     def check_status(self) -> KMEStatus:
@@ -59,7 +78,7 @@ class ETSI014Client:
         url = f"{self.kme_url}/status"
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.build_opener(_NoRedirect()).open(req, timeout=self.timeout) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     return KMEStatus(
@@ -100,7 +119,7 @@ class ETSI014Client:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.build_opener(_NoRedirect()).open(req, timeout=self.timeout) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     keys: list[QKDKeyContainer] = []

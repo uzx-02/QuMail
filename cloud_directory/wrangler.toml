@@ -1,4 +1,6 @@
-name = "qumail-directory"
+# Canonical isolated test Worker. The older qumail-directory Worker and its
+# D1 database are retired; unqualified Wrangler commands must not target them.
+name = "qumail-directory-dev"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
@@ -7,8 +9,8 @@ workers_dev = true
 # 1. D1 Database Binding
 [[d1_databases]]
 binding = "DB"
-database_name = "qumail-directory-db"
-database_id = "1504f965-3bf4-48d1-a771-dd6b3839f06b"
+database_name = "qumail-directory-dev-db"
+database_id = "d17df5b4-0c81-44de-af23-2c38e9b4611e"
 
 # 2. Hourly Scheduled Purge Trigger
 [triggers]
@@ -17,7 +19,27 @@ crons = ["0 * * * *"]
 # 3. Environment Variables (Public/Non-secret defaults)
 [vars]
 DIRECTORY_VERSION = "1.0.0"
-ENVIRONMENT = "production"
+ENVIRONMENT = "development"
+DEV_MOCK_OTP = "false"
+MAX_WEBLINK_SIZE_BYTES = 262144 # 256 KB
+
+# Isolated development environment. Its bindings are deliberately repeated
+# because Wrangler environment configuration is not inherited for resources
+# such as D1 databases and variables.
+[env.dev]
+name = "qumail-directory-dev"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "qumail-directory-dev-db"
+database_id = "d17df5b4-0c81-44de-af23-2c38e9b4611e"
+
+[env.dev.triggers]
+crons = ["0 * * * *"]
+
+[env.dev.vars]
+DIRECTORY_VERSION = "1.0.0"
+ENVIRONMENT = "development"
 DEV_MOCK_OTP = "false"
 MAX_WEBLINK_SIZE_BYTES = 262144 # 256 KB
 

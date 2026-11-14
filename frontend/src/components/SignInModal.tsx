@@ -119,10 +119,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   const handleGoogleAuth = async () => {
     setError('');
     setSuccessMsg('');
+    setVerificationStep('Opening secure Google sign-in in your browser...');
     setIsGoogleAuthenticating(true);
     try {
       const res = await api.signInWithGoogle();
       if (res.success && res.account) {
+        setVerificationStep('Verifying the Google identity and restoring your QuMail vault...');
         await onSignIn(res.account.email, res.account.displayName, res.account.provider);
         if (onClose) onClose();
       } else {
@@ -132,6 +134,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
       setError(err?.message || 'Google authentication encountered an error.');
     } finally {
       setIsGoogleAuthenticating(false);
+      setVerificationStep('');
     }
   };
 
@@ -246,7 +249,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({
                 {isGoogleAuthenticating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                    <span>Authorizing in Browser...</span>
+                    <span>{verificationStep || 'Authorizing in browser...'}</span>
                   </>
                 ) : (
                   <>

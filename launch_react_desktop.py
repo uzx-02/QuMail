@@ -346,15 +346,22 @@ class QuMailJsApi:
     Handles data queries, real Google OAuth, IMAP retrieval, and post-quantum cryptographic operations.
     """
 
-    def __init__(self, account_email: str = "", vault_path: str | Path | None = None) -> None:
+    def __init__(self, account_email: str = "", vault_path: str | Path | None = None, account_display_name: str = "") -> None:
         self.vault_path = Path(vault_path) if vault_path else get_vault_path()
         self.session_state = "SIGNED_OUT"
         self.vault_state = "UNINITIALIZED" if not self.vault_path.is_file() else "LOCKED"
         self.active_account: Optional[Dict[str, Any]] = None
         self.last_error: Optional[Dict[str, Any]] = None
         self.account_email = account_email
-        self.account_display_name = account_email.split("@")[0] if account_email else ""
+        clean_email = account_email.strip().lower() if account_email else ""
+        disp = account_display_name.strip() if account_display_name else ""
+        if not disp or (clean_email and disp == clean_email.split("@")[0]):
+            disp = account_email
+        self.account_display_name = disp
         self.account_org = "Google Workspace / Gmail" if "gmail" in account_email else ("Corporate" if account_email else "")
+        self.account_issuer = ""
+        self.account_subject = ""
+        self._account_avatar_url = ""
         self.key_fingerprint = ""
         self.hsm = HSMManager.get()
         self.vault_service = None
@@ -370,6 +377,11 @@ class QuMailJsApi:
         self.is_initial_syncing: bool = False
         self._staged_raw_inbox: List[Any] = []
         self._staged_lock = threading.Lock()
+        # Every account activation, switch, lock, or logout advances this
+        # generation.  Background work captures it and must discard a result
+        # if ownership changed before it reaches shared bridge state.
+        self._session_lock = threading.RLock()
+        self._session_generation = 0
         self._prefetch_thread: Optional[threading.Thread] = None
         self.messages: List[Dict[str, Any]] = self._load_persisted_messages()
         self.translator_service = OfflineTranslatorService(base_data_dir=self.vault_path.parent if self.vault_path else None)
@@ -383,6 +395,44 @@ class QuMailJsApi:
                 threading.Thread(target=self.fetchInbox, daemon=True, name="startup-inbox-sync").start()
             elif self.vault_state == "LOCKED" or self.session_state == "LOCKED":
                 self.start_prefetch_while_locked()
+
+    def _advance_session_generation(self) -> int:
+        """Invalidate asynchronous work owned by the previously active account."""
+        with self._session_lock:
+            self._session_generation += 1
+            return self._session_generation
+
+    def _capture_session_owner(self) -> tuple[int, str]:
+        """Capture immutable account ownership for a background operation."""
+        with self._session_lock:
+            return self._session_generation, (self.account_email or "").strip().lower()
+
+    def _session_owner_is_current(self, generation: int, email: str) -> bool:
+        """True only if an asynchronous result still belongs to the active account."""
+        with self._session_lock:
+            return generation == self._session_generation and email == (self.account_email or "").strip().lower()
+
+    def _directory_client_for_active_account(self):
+        """Create a directory client bound to the currently selected vault identity.
+
+        Directory operations must never infer ownership from a default OAuth
+        token.  The context is deliberately reconstructed from the active
+        account and is safe to retain only for the duration of one operation.
+        """
+        from core.cloud_directory import CloudDirectoryClient, DirectoryAccountContext
+        ctx = self.active_context
+        email = (self.account_email or "").strip().lower()
+        if not ctx or not email:
+            raise RuntimeError("Select and unlock a verified Google account before using the directory.")
+        if (ctx.issuer, ctx.subject) != (self.account_issuer, self.account_subject):
+            raise RuntimeError("The selected vault identity does not match the active Google account.")
+        return CloudDirectoryClient(account=DirectoryAccountContext(
+            email=email,
+            issuer=ctx.issuer,
+            subject=ctx.subject,
+            qumail_identity_id=ctx.account.value,
+            device_id=ctx.device.value,
+        ))
 
     @staticmethod
     def _hydrate_qumail_metadata(msg: Dict[str, Any]) -> Dict[str, Any]:
@@ -399,7 +449,7 @@ class QuMailJsApi:
         is_weblink = (
             sec_mode == "weblink"
             or "[QuMail Secure Link]" in subj
-            or "qumail-directory.uzair-shaikh-sec-e24.workers.dev/v/" in body
+            or "qumail-directory-dev.uzair-shaikh-sec-e24.workers.dev/v/" in body
             or "workers.dev/v/" in body
         )
         is_pq = (
@@ -566,6 +616,8 @@ class QuMailJsApi:
                 data["account_email"] = self.account_email
                 data["account_display_name"] = self.account_display_name
                 data["account_org"] = self.account_org
+                data["account_issuer"] = self.account_issuer
+                data["account_subject"] = self.account_subject
             st_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         except Exception as exc:
             logger.debug("Could not persist vault_locked state: %s", exc)
@@ -585,6 +637,8 @@ class QuMailJsApi:
                 data["account_email"] = self.account_email
                 data["account_display_name"] = self.account_display_name
                 data["account_org"] = self.account_org
+                data["account_issuer"] = self.account_issuer
+                data["account_subject"] = self.account_subject
                 avatars_map = data.get("account_avatars", {})
                 avatars_map[clean_email] = getattr(self, "_account_avatar_url", "")
                 data["account_avatars"] = avatars_map
@@ -636,8 +690,11 @@ class QuMailJsApi:
                 data = json.loads(st_path.read_text(encoding="utf-8"))
                 if data.get("account_email") and not self.account_email:
                     self.account_email = data.get("account_email", "")
-                    self.account_display_name = data.get("account_display_name", "") or self.account_email.split("@")[0]
+                    raw_dn = data.get("account_display_name", "")
+                    self.account_display_name = raw_dn if (raw_dn and raw_dn != self.account_email.split("@")[0]) else self.account_email
                     self.account_org = data.get("account_org", "")
+                    self.account_issuer = data.get("account_issuer", "") or ""
+                    self.account_subject = data.get("account_subject", "") or ""
                     clean_email = self.account_email.strip().lower()
                     avatars_map = data.get("account_avatars", {})
                     self._account_avatar_url = avatars_map.get(clean_email, "")
@@ -658,7 +715,8 @@ class QuMailJsApi:
                 custom_acc = load_custom_account()
                 if custom_acc and custom_acc.get("email"):
                     self.account_email = custom_acc.get("email", "")
-                    self.account_display_name = custom_acc.get("displayName", "") or self.account_email.split("@")[0]
+                    raw_dn = custom_acc.get("displayName", "")
+                    self.account_display_name = raw_dn if (raw_dn and raw_dn != self.account_email.split("@")[0]) else self.account_email
                     self.account_org = custom_acc.get("organization", "Custom Mailbox")
             except Exception:
                 pass
@@ -670,9 +728,12 @@ class QuMailJsApi:
                 info = get_stored_account_info()
                 if info and info.get("email"):
                     self.account_email = info.get("email", "")
-                    self.account_display_name = info.get("displayName") or self.account_email.split("@")[0]
+                    raw_dn = info.get("displayName") or ""
+                    self.account_display_name = raw_dn if (raw_dn and raw_dn != self.account_email.split("@")[0]) else self.account_email
                     self.account_org = "Google Workspace / Gmail"
                     self._account_avatar_url = info.get("avatarUrl", "") or ""
+                    self.account_issuer = info.get("issuer") or ""
+                    self.account_subject = info.get("subject") or ""
             except Exception:
                 pass
 
@@ -683,8 +744,15 @@ class QuMailJsApi:
                 info = get_stored_account_info(clean_email)
                 if info and info.get("avatarUrl"):
                     self._account_avatar_url = info.get("avatarUrl", "")
-                if info and info.get("displayName") and self.account_display_name == self.account_email.split("@")[0]:
-                    self.account_display_name = info.get("displayName")
+                if info and info.get("displayName"):
+                    raw_dn = info.get("displayName", "")
+                    if raw_dn and raw_dn != clean_email.split("@")[0]:
+                        self.account_display_name = raw_dn
+                    elif not self.account_display_name or self.account_display_name == clean_email.split("@")[0]:
+                        self.account_display_name = clean_email
+                if info and info.get("subject"):
+                    self.account_issuer = info.get("issuer") or self.account_issuer
+                    self.account_subject = info.get("subject")
             except Exception:
                 pass
             if not getattr(self, "_account_avatar_url", "") and ("gmail" in (self.account_org or "").lower() or "@gmail.com" in clean_email):
@@ -693,14 +761,18 @@ class QuMailJsApi:
 
     def _background_fetch_avatar(self) -> None:
         """Fetch and cache Google/provider profile picture in background thread."""
+        generation, email = self._capture_session_owner()
         try:
-            if not self.account_email:
+            if not email:
                 return
             from transport.oauth2_gmail import fetch_account_avatar_from_provider
-            avatar = fetch_account_avatar_from_provider(self.account_email, force_refresh=True)
+            avatar = fetch_account_avatar_from_provider(email, force_refresh=True)
+            if not self._session_owner_is_current(generation, email):
+                logger.debug("Discarded stale avatar result for %s", email)
+                return
             self._account_avatar_url = avatar or ""
             self._save_account_state()
-            logger.info("Successfully refreshed provider avatar for %s: %s", self.account_email, bool(self._account_avatar_url))
+            logger.info("Successfully refreshed provider avatar for %s: %s", email, bool(self._account_avatar_url))
         except Exception as exc:
             logger.debug("Background avatar fetch note: %s", exc)
 
@@ -721,8 +793,6 @@ class QuMailJsApi:
             token_p = get_gmail_token_path(self.account_email)
             if token_p.is_file():
                 return True
-            if get_gmail_token_path().is_file():
-                return True
             info = get_stored_account_info(self.account_email)
             if info and (info.get("token") or info.get("refresh_token")):
                 return True
@@ -738,15 +808,19 @@ class QuMailJsApi:
         - Downloads raw RFC 5322 containers into self._staged_raw_inbox.
         - Staged items are decapsulated only when unlockVault() succeeds with valid PIN.
         """
-        if not self.account_email or not self._has_credentials():
-            logger.debug("Prefetch while locked skipped: no credentials for %s", self.account_email)
+        generation, email = self._capture_session_owner()
+        if not email or not self._has_credentials():
+            logger.debug("Prefetch while locked skipped: no credentials for %s", email)
             return
 
         self.is_initial_syncing = True
-        logger.info("Starting background encrypted transport pre-fetch while locked for %s", self.account_email)
+        logger.info("Starting background encrypted transport pre-fetch while locked for %s", email)
         try:
             from transport.imap_receiver import fetch_inbox
-            raw_items = fetch_inbox(self.account_email, max_count=50)
+            raw_items = fetch_inbox(email, max_count=50)
+            if not self._session_owner_is_current(generation, email):
+                logger.debug("Discarded stale locked prefetch for %s", email)
+                return
             with self._staged_lock:
                 if self.vault_state == "LOCKED" or self.session_state == "LOCKED":
                     self._staged_raw_inbox = raw_items
@@ -759,7 +833,7 @@ class QuMailJsApi:
                     logger.info("Vault unlocked during pre-fetch; processing %d items immediately.", len(raw_items))
                     self._process_inbox_items(raw_items)
         except Exception as exc:
-            logger.debug("Background pre-fetch while locked note for %s: %s", self.account_email, exc)
+            logger.debug("Background pre-fetch while locked note for %s: %s", email, exc)
         finally:
             self.is_initial_syncing = False
 
@@ -841,16 +915,39 @@ class QuMailJsApi:
                     vault = self.vault_service.vault
                     rows = vault.summaries() if vault else []
                     if rows:
-                        primary = rows[0]
-                        self.active_context = primary[0]
-                        self.active_key_handle = primary[1]
-                        self.account_email = primary[2]
-                        self.account_display_name = primary[2].split("@")[0]
-                        self.key_fingerprint = primary[3]
-                        self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
-                        token_path = get_gmail_token_path()
-                        if token_path.is_file():
-                            self.session_state = "MAILBOX_READY"
+                        expected = (self.account_issuer, self.account_subject)
+                        primary = next(
+                            (r for r in rows if expected[0] and (r[0].issuer, r[0].subject) == expected),
+                            None,
+                        )
+                        primary = primary or next(
+                            (r for r in rows if self.account_email and r[2].strip().lower() == self.account_email.strip().lower()),
+                            None,
+                        )
+                        primary = primary or (rows[0] if len(rows) == 1 else None)
+                        if primary:
+                            self.active_context = primary[0]
+                            self.active_key_handle = primary[1]
+                            self.account_email = primary[2]
+                            raw_p_dn = None
+                            try:
+                                from transport.oauth2_gmail import get_stored_account_info
+                                _info = get_stored_account_info(primary[2])
+                                if _info and _info.get("displayName"):
+                                    raw_p_dn = _info["displayName"]
+                            except Exception:
+                                pass
+                            self.account_display_name = raw_p_dn if (raw_p_dn and raw_p_dn != primary[2].split("@")[0]) else primary[2]
+                            self.account_issuer = primary[0].issuer
+                            self.account_subject = primary[0].subject
+                            self.key_fingerprint = primary[3]
+                            self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
+                            self.vault_service.select(primary[0].account)
+                            token_path = get_gmail_token_path(self.account_email)
+                            if token_path.is_file():
+                                self.session_state = "MAILBOX_READY"
+                            else:
+                                self.session_state = "VAULT_READY"
                         else:
                             self.session_state = "VAULT_READY"
                     else:
@@ -868,7 +965,7 @@ class QuMailJsApi:
             self.session_state = "SIGNED_OUT"
 
         if self.account_email and self.session_state != "MAILBOX_READY":
-            token_path = get_gmail_token_path()
+            token_path = get_gmail_token_path(self.account_email)
             if token_path.is_file():
                 self.session_state = "MAILBOX_READY"
 
@@ -949,12 +1046,24 @@ class QuMailJsApi:
         except Exception as v_err:
             logger.debug("Vault initialization note: %s", v_err)
 
-    def _ensure_account_session(self, email_addr: str, display_name: str = "") -> None:
-        """Ensure vault is unlocked and an authentic account key is enrolled for this email."""
+    def _ensure_account_session(
+        self,
+        email_addr: str,
+        display_name: str = "",
+        identity: Any = None,
+        google_id_token: str = "",
+    ) -> bool:
+        """Select or enroll a vault account, preferring verified provider identity.
+
+        Legacy callers may only supply an email and retain the historical
+        email-based path.  Google OAuth callers additionally supply verified
+        `(issuer, subject)` evidence, which is authoritative and can safely
+        bind an existing same-email row without regenerating cryptographic keys.
+        """
         try:
             from core.provider_resolver import resolve_provider
             from core.identity_service import IdentityService
-            from core.vault.types import EmailAddress, UserId, AccountId, DeviceId, AccountContext
+            from core.vault.types import EmailAddress, UserId, AccountId, DeviceId, AccountContext, VerifiedProviderIdentity
             from core.vault.vault import protect, encode
 
             if not self.vault_service or not self.vault_service.vault:
@@ -965,9 +1074,95 @@ class QuMailJsApi:
 
             vault = self.vault_service.vault
             if not vault:
-                return
+                return False
 
             clean_email = email_addr.strip().lower()
+            if identity is not None:
+                if type(identity) is not VerifiedProviderIdentity or not identity.addresses:
+                    raise ValueError("Verified Google identity is required for identity-bound vault selection.")
+                if identity.addresses[0].value.lower() != clean_email:
+                    raise ValueError("Verified Google identity does not match the selected mailbox.")
+
+                rows = vault.summaries()
+                exact = next(
+                    (row for row in rows if (row[0].issuer, row[0].subject) == (identity.issuer, identity.subject)),
+                    None,
+                )
+                same_email = next((row for row in rows if row[2].lower() == clean_email), None)
+                # Only the historical synthetic ``local-*`` subject is safe to
+                # claim by email.  A different already-verified Google subject
+                # for the same address must never inherit this vault identity.
+                if (not exact and same_email and
+                    (same_email[0].issuer, same_email[0].subject) != (identity.issuer, identity.subject) and
+                    not same_email[0].subject.startswith("local-")):
+                    raise ValueError("This mailbox is already bound to a different verified Google identity.")
+                legacy = same_email if same_email and same_email[0].subject.startswith("local-") else None
+                selected = exact or legacy
+                if selected:
+                    ctx, handle, address, fingerprint, _state = selected
+                    # An exact subject with a changed Google email address and
+                    # an email-only legacy row both migrate in place.  The vault
+                    # operation only changes provider/address metadata.
+                    if (ctx.issuer, ctx.subject) != (identity.issuer, identity.subject) or address.lower() != clean_email:
+                        ctx = vault.bind_provider_identity(ctx, identity)
+                    self.active_context = ctx
+                    self.active_key_handle = handle
+                    self.key_fingerprint = fingerprint
+                    try:
+                        self.vault_service.reload(ctx)
+                    except Exception:
+                        pass
+                    try:
+                        data_existing = vault._read(ctx)
+                        key_rec = vault.key(data_existing, ctx, handle, active=True)
+                        material_existing = {
+                            "encryption": key_rec.get("encryption", b""),
+                            "signing": key_rec.get("signing", b""),
+                            "secret": key_rec.get("secret", b""),
+                            "public": key_rec.get("public", b""),
+                            "fingerprint": fingerprint,
+                        }
+                        generation, _ = self._capture_session_owner()
+                        threading.Thread(
+                            target=self._register_pq_key_to_directory,
+                            args=(clean_email, str(ctx.device.value), material_existing, generation,
+                                  ctx.account.value, ctx.issuer, ctx.subject, google_id_token),
+                            daemon=True,
+                            name="directory-pq-push-existing",
+                        ).start()
+                    except Exception as ex_err:
+                        logger.warning("Existing vault key re-push note: %s", ex_err)
+                    return True
+
+                # No existing identity owns this verified Google subject or
+                # mailbox: enroll through the vault's canonical identity path.
+                ctx, handle = vault.enroll(identity, identity.addresses[0], UserId.new())
+                data = vault._read(ctx)
+                key_rec = vault.key(data, ctx, handle, active=True)
+                self.active_context = ctx
+                self.active_key_handle = handle
+                self.key_fingerprint = data["root"]
+                try:
+                    self.vault_service.reload(ctx)
+                except Exception:
+                    pass
+                material = {
+                    "encryption": key_rec.get("encryption", b""),
+                    "signing": key_rec.get("signing", b""),
+                    "secret": key_rec.get("secret", b""),
+                    "public": key_rec.get("public", b""),
+                    "fingerprint": data["root"],
+                }
+                generation, _ = self._capture_session_owner()
+                threading.Thread(
+                    target=self._register_pq_key_to_directory,
+                    args=(clean_email, str(ctx.device.value), material, generation,
+                          ctx.account.value, ctx.issuer, ctx.subject, google_id_token),
+                    daemon=True,
+                    name="directory-pq-push",
+                ).start()
+                return True
+
             for row in vault.summaries():
                 if row[2].lower() == clean_email:
                     self.active_context = row[0]
@@ -983,18 +1178,21 @@ class QuMailJsApi:
                         material_existing = {
                             "encryption": key_rec.get("encryption", b""),
                             "signing":    key_rec.get("signing", b""),
+                            "secret":     key_rec.get("secret", b""),
                             "public":     key_rec.get("public", b""),
                             "fingerprint": row[3],
                         }
+                        generation, _ = self._capture_session_owner()
                         threading.Thread(
                             target=self._register_pq_key_to_directory,
-                            args=(clean_email, str(ctx.device.value), material_existing),
+                            args=(clean_email, str(ctx.device.value), material_existing, generation,
+                                  ctx.account.value, ctx.issuer, ctx.subject, google_id_token),
                             daemon=True,
                             name="directory-pq-push-existing",
                         ).start()
                     except Exception as ex_err:
                         logger.warning("Existing vault key re-push note: %s", ex_err)
-                    return
+                    return True
 
             # Enroll new account with genuine post-quantum keys from vault provider
             master = vault.store.get(vault.ident)
@@ -1042,24 +1240,49 @@ class QuMailJsApi:
                 daemon=True,
                 name="directory-pq-push",
             ).start()
+            return True
         except Exception as exc:
             logger.warning("Account vault session setup note: %s", exc)
+            return False
 
-    def _register_pq_key_to_directory(self, email: str, device_id: str, material: Dict[str, Any]) -> None:
+    def _register_pq_key_to_directory(
+        self,
+        email: str,
+        device_id: str,
+        material: Dict[str, Any],
+        session_generation: Optional[int] = None,
+        qumail_identity_id: str = "",
+        issuer: str = "",
+        subject: str = "",
+        google_id_token: str = "",
+    ) -> None:
         """Push this account's Post-Quantum public key bundle to the Cloudflare Directory.
 
         Called in a background thread after local vault enrollment. Allows other QuMail
         users to discover and encrypt to this account via Maximum Security mode.
         """
         try:
-            import base64
-            import hashlib
-            import secrets
-            from core.cloud_directory import CloudDirectoryClient
-
-            client = CloudDirectoryClient()
-            # Acquire auth token (Google id_token or existing session)
-            client._ensure_session_token()
+            if session_generation is None:
+                session_generation, _ = self._capture_session_owner()
+            if not self._session_owner_is_current(session_generation, email.strip().lower()):
+                logger.debug("Skipped stale directory registration for %s", email)
+                return
+            from core.cloud_directory import CloudDirectoryClient, DirectoryAccountContext, DirectoryProofUnavailable
+            if not qumail_identity_id or not issuer or not subject:
+                # Legacy/email-only vault rows cannot prove which verified
+                # Google identity owns a directory registration.
+                logger.info("Directory registration deferred until this vault identity is verified with Google.")
+                return
+            client = CloudDirectoryClient(account=DirectoryAccountContext(
+                email=email,
+                issuer=issuer,
+                subject=subject,
+                qumail_identity_id=qumail_identity_id,
+                device_id=device_id,
+            ))
+            if not self._session_owner_is_current(session_generation, email.strip().lower()):
+                logger.debug("Discarded stale directory registration for %s", email)
+                return
 
             def _to_bytes(v: Any) -> bytes:
                 if isinstance(v, str):
@@ -1074,55 +1297,101 @@ class QuMailJsApi:
                 return b""
 
             kem_bytes = _to_bytes(material.get("encryption", b""))
-            dsa_bytes = _to_bytes(material.get("signing", b""))
+            secret_certificate = _to_bytes(material.get("secret", b""))
             raw_pub   = _to_bytes(material.get("public", b""))
 
-            if not kem_bytes or not dsa_bytes:
+            if not kem_bytes or not secret_certificate:
                 logger.warning("PQ key registration skipped: empty key material for %s", email)
                 return
-
-            try:
-                srv_nonce = client.get_challenge()
-            except Exception:
-                srv_nonce = secrets.token_hex(16)
-
-            kem_b64 = base64.b64encode(kem_bytes).decode("ascii")
-            # accountId used in PoP = HMAC-SHA256(normalizedEmail, pepper) — but we use email as stand-in
-            # The Worker computes its own accountId from the verified id_token email claim.
-            pop_input = f"{device_id}:{email}:{kem_b64}:{srv_nonce}"
-            pop_sig   = base64.b64encode(
-                hashlib.sha256(pop_input.encode("utf-8")).digest()
-            ).decode("ascii")
-
-            # Acquire genuine Google OIDC ID token JWT for directory authentication
-            from transport.oauth2_gmail import _load_credentials
-            creds, meta = _load_credentials()
-            id_token = getattr(creds, "id_token", None) or (meta or {}).get("id_token") or client.session_token
-
-            res = client.register_google(
-                id_token=id_token,
-                device_id=device_id,
-                device_label=f"QuMail Desktop ({email.split('@')[0]})",
-                kem_public_bytes=kem_bytes,
-                dsa_public_bytes=dsa_bytes,
-                pop_signature_bytes=pop_sig,
-                server_nonce=srv_nonce,
-                raw_public_bytes=raw_pub,
-            )
-            if res.get("session_token"):
-                # Persist fresh session token so WebLink creation is instant
+            if not google_id_token:
                 try:
-                    from transport.oauth2_gmail import _load_credentials, _save_credentials
-                    creds, meta = _load_credentials()
-                    if meta is not None and creds is not None:
-                        meta["directory_session_token"] = res["session_token"]
-                        _save_credentials(creds, meta)
-                    client.session_token = res["session_token"]
-                except Exception:
-                    pass
-            logger.info("Registered Post-Quantum public key in Cloud Directory for %s", email)
+                    from transport.oauth2_gmail import get_fresh_id_token
+                    google_id_token = get_fresh_id_token(email) or ""
+                except Exception as id_err:
+                    logger.debug("Could not fetch fresh Google ID token: %s", id_err)
+            if not google_id_token:
+                logger.info("Directory registration deferred until a fresh Google ID token is available.")
+                return
+
+            nonce = client.get_challenge()
+            if not nonce or len(nonce) != 64:
+                raise DirectoryProofUnavailable("Directory did not provide a valid proof-of-possession challenge.")
+            # The Worker binds the signature to exactly this canonical byte
+            # sequence.  Its fingerprint component is SHA-256(Base64(raw
+            # ML-DSA public key)), not the OpenPGP certificate fingerprint.
+            provider = self.vault_service.vault.provider
+            provisional = provider.call("pop", certificate=secret_certificate, message=b"probe")
+            dsa_bytes = _to_bytes(provisional.get("public", b"") or provisional.get("dsa_public", b""))
+            if len(dsa_bytes) != 1952:
+                raise DirectoryProofUnavailable("Native provider returned invalid ML-DSA public material.")
+            dsa_b64 = base64.b64encode(dsa_bytes).decode("ascii")
+            directory_fingerprint = hashlib.sha256(dsa_b64.encode("ascii")).hexdigest()
+            proof_message = (
+                f"QUMAIL-DIRECTORY-POP-v1\0{qumail_identity_id}\0{device_id}\0"
+                f"{directory_fingerprint}\0{nonce}"
+            ).encode("utf-8")
+            proof = provider.call("pop", certificate=secret_certificate, message=proof_message)
+            proof_dsa = _to_bytes(proof.get("public", b"") or proof.get("dsa_public", b""))
+            signature = _to_bytes(proof.get("signature", b""))
+            if proof_dsa != dsa_bytes or len(signature) != 3309:
+                raise DirectoryProofUnavailable("Native provider returned invalid ML-DSA proof material.")
+            if not self._session_owner_is_current(session_generation, email.strip().lower()):
+                logger.debug("Discarded stale directory registration for %s", email)
+                return
+            client.register_google(
+                google_id_token, device_id, "QuMail Windows device", kem_bytes, dsa_bytes,
+                signature, nonce, raw_public_bytes=raw_pub,
+                root_fingerprint=str(material.get("fingerprint", "")),
+            )
+            logger.info("Cloud Directory PQ key registration completed for %s", email)
         except Exception as reg_err:
             logger.warning("Cloud Directory PQ key registration note: %s", reg_err)
+
+    def _ensure_directory_session(self, client: Optional[Any] = None) -> bool:
+        """Ensure active account has a valid directory session token, establishing one if needed."""
+        try:
+            if client is None:
+                client = self._directory_client_for_active_account()
+            client._ensure_session_token()
+            if getattr(client, "session_token", ""):
+                return True
+
+            # If not yet authenticated, attempt initialization using active vault identity
+            if not (self.vault_service and self.vault_service.vault and self.active_context and self.active_key_handle):
+                return False
+
+            email = (self.account_email or "").strip().lower()
+            ctx = self.active_context
+            data_existing = self.vault_service.vault._read(ctx)
+            key_rec = self.vault_service.vault.key(data_existing, ctx, self.active_key_handle, active=True)
+            material = {
+                "encryption": key_rec.get("encryption", b""),
+                "signing": key_rec.get("signing", b""),
+                "secret": key_rec.get("secret", b""),
+                "public": key_rec.get("public", b""),
+                "fingerprint": str(data_existing.get("root", "")),
+            }
+            from transport.oauth2_gmail import get_fresh_id_token
+            id_token = get_fresh_id_token(email)
+            if not id_token:
+                return False
+
+            gen, _ = self._capture_session_owner()
+            self._register_pq_key_to_directory(
+                email=email,
+                device_id=str(ctx.device.value),
+                material=material,
+                session_generation=gen,
+                qumail_identity_id=ctx.account.value,
+                issuer=ctx.issuer,
+                subject=ctx.subject,
+                google_id_token=id_token,
+            )
+            client._ensure_session_token()
+            return bool(getattr(client, "session_token", ""))
+        except Exception as exc:
+            logger.warning("Directory session establishment note: %s", exc)
+            return False
 
     def getMessages(self) -> List[Dict[str, Any]]:
         """Return list of email messages with guaranteed QuMail security metadata."""
@@ -1160,8 +1429,8 @@ class QuMailJsApi:
 
         # 2. Query Cloud Directory
         try:
-            from core.cloud_directory import CloudDirectoryClient
-            client = CloudDirectoryClient()
+            client = self._directory_client_for_active_account()
+            self._ensure_directory_session(client)
             lookup_res = client.lookup(clean_email)
             if lookup_res.get("found") and lookup_res.get("devices"):
                 return {
@@ -1234,15 +1503,17 @@ class QuMailJsApi:
             inst = content[0] if isinstance(content, list) and content else content
             inst = inst.get("installed") or inst.get("web") or inst
             cid = inst.get("client_id", "").strip()
-            csec = inst.get("client_secret", "").strip()
-            if not cid or not csec:
-                return {"success": False, "message": "Selected JSON does not contain valid client_id and client_secret."}
+            if not cid:
+                return {"success": False, "message": "Selected JSON does not contain a valid desktop OAuth client ID."}
 
             from core.config import get_google_client_secrets_path
             target = get_google_client_secrets_path()
             target.parent.mkdir(parents=True, exist_ok=True)
+            # Retain endpoint metadata from Google's download.  The optional
+            # client_secret is accepted only for legacy library compatibility;
+            # QuMail's desktop OAuth flow does not require it.
             with open(target, "w", encoding="utf-8") as tf:
-                json.dump({"installed": {"client_id": cid, "client_secret": csec}}, tf, indent=2)
+                json.dump({"installed": inst}, tf, indent=2)
 
             return {"success": True, "message": "Google Client Credentials verified and saved.", "clientId": cid}
         except Exception as exc:
@@ -1344,19 +1615,22 @@ class QuMailJsApi:
             logger.error("Failed to save attachment binary: %s", exc)
             return {"success": False, "error": str(exc), "message": f"Failed to save attachment: {exc}"}
 
-    def saveGoogleCredentials(self, client_id: str, client_secret: str) -> Dict[str, Any]:
-        """Manually save client_id and client_secret."""
+    def saveGoogleCredentials(self, client_id: str, client_secret: str = "") -> Dict[str, Any]:
+        """Manually save a public Google desktop client ID (legacy secret optional)."""
         try:
             cid = client_id.strip()
             csec = client_secret.strip()
-            if not cid or not csec:
-                return {"success": False, "message": "Both Client ID and Client Secret are required."}
+            if not cid:
+                return {"success": False, "message": "A Google desktop Client ID is required."}
 
             from core.config import get_google_client_secrets_path
             target = get_google_client_secrets_path()
             target.parent.mkdir(parents=True, exist_ok=True)
+            installed = {"client_id": cid}
+            if csec:
+                installed["client_secret"] = csec
             with open(target, "w", encoding="utf-8") as tf:
-                json.dump({"installed": {"client_id": cid, "client_secret": csec}}, tf, indent=2)
+                json.dump({"installed": installed}, tf, indent=2)
 
             return {"success": True, "message": "Google Client Credentials saved.", "clientId": cid}
         except Exception as exc:
@@ -1364,6 +1638,19 @@ class QuMailJsApi:
 
     def connectGoogle(self) -> Dict[str, Any]:
         """Execute Google OAuth 2.0 flow using official InstalledAppFlow and restore account session."""
+        previous_session_state = self.session_state
+        previous_account = (
+            self.account_email,
+            self.account_display_name,
+            self.account_org,
+            self.account_issuer,
+            self.account_subject,
+            self._account_avatar_url,
+            self.key_fingerprint,
+            self.active_context,
+            self.active_key_handle,
+            self.messages,
+        )
         self.session_state = "AUTHENTICATING"
         try:
             from transport.oauth2_gmail import authorize_google_account
@@ -1371,22 +1658,26 @@ class QuMailJsApi:
             logger.info("Initiating Google OAuth flow via InstalledAppFlow...")
             auth_res = authorize_google_account()
             user_email = auth_res["email"]
-            display_name = auth_res.get("displayName") or user_email.split("@")[0]
+            raw_res_dn = auth_res.get("displayName") or ""
+            display_name = raw_res_dn if (raw_res_dn and raw_res_dn != user_email.split("@")[0]) else user_email
             logger.info("Google OAuth successfully completed for: %s", user_email)
 
             # Establish local user session
+            self._advance_session_generation()
             self.account_email = user_email
             self.account_display_name = display_name
             self.account_org = "Google Workspace / Gmail"
+            self.account_issuer = auth_res.get("issuer") or ""
+            self.account_subject = auth_res.get("subject") or ""
             self._account_avatar_url = auth_res.get("avatarUrl", "") or ""
             self.session_state = "MAILBOX_READY"
             self.vault_state = "UNLOCKED"
             self.messages = self._load_persisted_messages(user_email)
 
-            try:
-                self._ensure_account_session(user_email, display_name)
-            except Exception as v_err:
-                logger.debug("Vault session enrollment note: %s", v_err)
+            if not self._ensure_account_session(
+                user_email, display_name, auth_res.get("_verified_identity"), auth_res.get("_id_token", "")
+            ):
+                raise RuntimeError("Could not bind the verified Google identity to the local vault.")
 
             # Asynchronously sync inbox in background so UI finishes login instantly
             def _async_inbox_sync():
@@ -1407,7 +1698,24 @@ class QuMailJsApi:
             }
         except Exception as exc:
             logger.error("Google OAuth authentication error: %s", exc, exc_info=True)
-            self.session_state = "ERROR"
+            # A rejected/failed connection attempt must not replace an already
+            # usable active account or its vault context.
+            if previous_account[0]:
+                (
+                    self.account_email,
+                    self.account_display_name,
+                    self.account_org,
+                    self.account_issuer,
+                    self.account_subject,
+                    self._account_avatar_url,
+                    self.key_fingerprint,
+                    self.active_context,
+                    self.active_key_handle,
+                    self.messages,
+                ) = previous_account
+                self.session_state = previous_session_state
+            else:
+                self.session_state = "ERROR"
             self.last_error = {"code": "AUTH_FAILED", "message": str(exc), "timestamp": int(time.time())}
             return {
                 "success": False,
@@ -1574,9 +1882,8 @@ class QuMailJsApi:
                             # 4. Query Cloudflare Public Key Directory
                             if not signer_public:
                                 try:
-                                    from core.cloud_directory import CloudDirectoryClient
                                     from core.vault.types import EmailAddress, RootIdentity
-                                    client = CloudDirectoryClient()
+                                    client = self._directory_client_for_active_account()
                                     lookup_res = client.lookup(sender_addr)
                                     if lookup_res.get("found") and lookup_res.get("devices"):
                                         for dev in lookup_res["devices"]:
@@ -1819,7 +2126,8 @@ class QuMailJsApi:
             logger.warning("fetchInbox rejected: mailbox vault is locked")
             raise PermissionError("Mailbox vault is locked. Please unlock with Security PIN.")
 
-        if not self.account_email:
+        generation, email = self._capture_session_owner()
+        if not email:
             return self.messages
 
         # If any staged raw items exist, process them first
@@ -1828,7 +2136,8 @@ class QuMailJsApi:
             self._staged_raw_inbox = []
         if staged:
             try:
-                self._process_inbox_items(staged)
+                if self._session_owner_is_current(generation, email):
+                    self._process_inbox_items(staged)
             except Exception as dec_err:
                 logger.debug("Processing staged items before live fetch: %s", dec_err)
 
@@ -1840,14 +2149,20 @@ class QuMailJsApi:
                     max_count = max(10, min(int(limit or 50), 100))
                 except (TypeError, ValueError):
                     max_count = 50
-                inbox_items = fetch_inbox(self.account_email, max_count=max_count)
+                inbox_items = fetch_inbox(email, max_count=max_count)
+                if not self._session_owner_is_current(generation, email):
+                    logger.debug("Discarded stale inbox sync result for %s", email)
+                    return self.messages
                 self.connection_status = "ONLINE"
                 self.last_sync_error = None
 
                 return self._process_inbox_items(inbox_items)
             except Exception as exc:
+                if not self._session_owner_is_current(generation, email):
+                    logger.debug("Discarded stale inbox sync failure for %s", email)
+                    return self.messages
                 err_str = str(exc).lower()
-                if any(k in err_str for k in ("invalid_grant", "refresherror", "token has been expired", "revoked", "401", "oauth authentication failed")):
+                if any(k in err_str for k in ("auth_required", "invalid_grant", "refresherror", "token has been expired", "revoked", "401", "oauth authentication failed")):
                     self.connection_status = "OAUTH_EXPIRED"
                     self.last_sync_error = "Google session expired — reconnect your account to sync and send."
                     logger.warning("OAuth credentials expired or revoked: %s", exc)
@@ -1889,7 +2204,7 @@ class QuMailJsApi:
         try:
             from transport.custom_mailbox import load_custom_account
             custom_acc = load_custom_account(sender_email)
-            has_google_token = get_gmail_token_path().is_file() or Path("secrets/gmail_token.json").is_file()
+            has_google_token = get_gmail_token_path(sender_email).is_file()
 
             # Process attachment data (supports up to 30 MB base64 or raw bytes)
             total_att_bytes = 0
@@ -1936,7 +2251,9 @@ class QuMailJsApi:
                         )
             elif security_mode == "weblink":
                 # Pillar 2: Ephemeral Secure Web Link with zero-knowledge URL-fragment key delivery
-                from core.cloud_directory import CloudDirectoryClient
+                # Attachments are encrypted client-side and uploaded as bounded
+                # ciphertext chunks. They are never attached to the plaintext
+                # invitation email.
                 passcode = draft.get("passcode")
                 max_views = int(draft.get("maxViews", 5))
                 burn_after_read = bool(draft.get("burnAfterRead", False))
@@ -1945,7 +2262,8 @@ class QuMailJsApi:
                 ttl_days = max(1, round(expires_in_hours / 24))
 
                 try:
-                    client = CloudDirectoryClient()
+                    client = self._directory_client_for_active_account()
+                    self._ensure_directory_session(client)
                     client._ensure_session_token()
                     weblink_res = client.create_weblink(
                         plaintext_body=body,
@@ -1956,6 +2274,7 @@ class QuMailJsApi:
                         max_views=max_views,
                         burn_after_read=burn_after_read,
                         ttl_days=ttl_days,
+                        attachments=processed_attachments,
                     )
                     access_url = weblink_res.get("access_url")
                 except Exception as wl_err:
@@ -1969,28 +2288,20 @@ class QuMailJsApi:
                 py_msg = PyEmailMessage(policy=email_default_policy)
                 py_msg["From"] = sender_email
                 py_msg["To"] = ", ".join(recipients)
-                py_msg["Subject"] = f"[QuMail Secure Link] {subject}"
+                # Mail subjects are plaintext metadata.  Do not disclose a
+                # confidential subject outside the encrypted link payload.
+                py_msg["Subject"] = "[QuMail Secure Link] Confidential message"
 
-                # --- Plain-text fallback ---
+                # The non-HTML alternative intentionally contains no message
+                # content, original subject, or attachments.
                 invitation_body = (
                     f"You have received a confidential communication via QuMail Secure Link.\n\n"
-                    f"Subject: {subject}\n\n"
                     f"Open the secure link below to decrypt and read the message:\n"
                     f"{access_url}\n\n"
                     f"The decryption key is embedded in the URL fragment (#) and is never sent to any server.\n"
                     f"Powered by QuMail · Post-Quantum Encryption (ML-KEM-768 / ML-DSA-65)"
                 )
                 py_msg.set_content(invitation_body)
-
-                # Append attachments to web link notification email
-                for data_bytes, fn in processed_attachments:
-                    if data_bytes:
-                        py_msg.add_attachment(
-                            data_bytes,
-                            maintype="application",
-                            subtype="octet-stream",
-                            filename=fn,
-                        )
 
                 # --- Rich HTML version ---
                 _short_link = access_url[:72] + "…" if len(access_url) > 72 else access_url
@@ -2038,12 +2349,12 @@ class QuMailJsApi:
             You have received a <strong style="color:#e8f4ff;">confidential communication</strong> secured with Post-Quantum encryption.
           </p>
 
-          <!-- Subject pill -->
+          <!-- Generic metadata only: original subject stays inside encrypted payload -->
           <table cellpadding="0" cellspacing="0" style="margin:24px 0;">
             <tr>
               <td style="background:#0a2040;border:1px solid #1e4080;border-radius:8px;padding:12px 20px;">
-                <span style="color:#8ba8cc;font-size:12px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:4px;">Subject</span>
-                <span style="color:#e8f4ff;font-size:15px;font-weight:600;">{subject}</span>
+                <span style="color:#8ba8cc;font-size:12px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;display:block;margin-bottom:4px;">Message</span>
+                <span style="color:#e8f4ff;font-size:15px;font-weight:600;">Confidential communication</span>
               </td>
             </tr>
           </table>
@@ -2110,7 +2421,7 @@ class QuMailJsApi:
             🔒 The decryption key is embedded in the URL <code style="color:#4fb8d0;">#fragment</code> and is <strong>never</strong> transmitted to any server.
           </p>
           <p style="color:#3d5270;font-size:11px;margin:0;">
-            Sent via QuMail &nbsp;·&nbsp; Post-Quantum Secure Email &nbsp;·&nbsp; <a href="https://qumail-directory.uzair-shaikh-sec-e24.workers.dev" style="color:#3d5270;text-decoration:none;">qumail.sec</a>
+            Sent via QuMail &nbsp;·&nbsp; Post-Quantum Secure Email &nbsp;·&nbsp; <a href="https://qumail-directory-dev.uzair-shaikh-sec-e24.workers.dev" style="color:#3d5270;text-decoration:none;">qumail.sec</a>
           </p>
         </td>
       </tr>
@@ -2134,8 +2445,8 @@ class QuMailJsApi:
 
                     # 1. Query Cloud Directory for all registered active devices of recipient
                     try:
-                        from core.cloud_directory import CloudDirectoryClient
-                        client = CloudDirectoryClient()
+                        client = self._directory_client_for_active_account()
+                        self._ensure_directory_session(client)
                         lookup_res = client.lookup(r_addr)
                         if lookup_res.get("found") and lookup_res.get("devices"):
                             for dev in lookup_res["devices"]:
@@ -2670,9 +2981,12 @@ class QuMailJsApi:
         is_active = bool(snapshot.is_hardware_active)
         now = time.time()
         cooldown_remaining = max(0, int(self._pin_cooldown_until - now)) if self._pin_cooldown_until > now else 0
+        disp = self.account_display_name
+        if not disp or (self.account_email and disp == self.account_email.split("@")[0]):
+            disp = self.account_email or "Guest"
         return {
             "email": self.account_email,
-            "displayName": self.account_display_name or (self.account_email.split("@")[0] if self.account_email else "Guest"),
+            "displayName": disp,
             "avatarUrl": getattr(self, "_account_avatar_url", ""),
             "organization": self.account_org or ("Corporate" if self.account_email else "Not Signed In"),
             "isEnrolled": bool(self.account_email),
@@ -2692,10 +3006,16 @@ class QuMailJsApi:
         """Log into or initialize a user account session."""
         clean_email = (email or "").strip().lower()
         if clean_email != (getattr(self, "account_email", "") or "").strip().lower():
+            self._advance_session_generation()
             self._account_avatar_url = ""
+            self.account_issuer = ""
+            self.account_subject = ""
         self.account_email = clean_email
         clean_display = (display_name or "").strip() if display_name else ""
-        self.account_display_name = clean_display or (clean_email.split("@")[0] if clean_email else "User")
+        if clean_display and (not clean_email or clean_display != clean_email.split("@")[0]):
+            self.account_display_name = clean_display
+        else:
+            self.account_display_name = clean_email or "User"
         clean_org = (organization or "").strip() if organization else ""
         self.account_org = clean_org or ("Google Workspace / Gmail" if "gmail" in clean_email else "Corporate")
         if self.account_email:
@@ -2709,7 +3029,22 @@ class QuMailJsApi:
             if not getattr(self, "_account_avatar_url", "") and ("gmail" in (self.account_org or "").lower() or "@gmail.com" in clean_email):
                 threading.Thread(target=self._background_fetch_avatar, daemon=True).start()
             self.messages = self._load_persisted_messages(self.account_email)
-            self._ensure_account_session(self.account_email, self.account_display_name)
+            # ``connectGoogle`` has already selected an identity-bound vault
+            # context before React calls this legacy bridge method to refresh
+            # its account snapshot. Re-running the email-only path would lose
+            # the verified issuer/subject evidence and launch a redundant
+            # directory-registration attempt.
+            active_ctx = self.active_context
+            has_current_verified_context = bool(
+                active_ctx
+                and self.account_subject
+                and (active_ctx.issuer, active_ctx.subject) == (
+                    self.account_issuer,
+                    self.account_subject,
+                )
+            )
+            if not has_current_verified_context:
+                self._ensure_account_session(self.account_email, self.account_display_name)
         self.session_state = "MAILBOX_READY"
         self._set_vault_lock_flag(False)
         self._clear_pin_lockout()
@@ -2719,6 +3054,7 @@ class QuMailJsApi:
 
     def lockVault(self) -> bool:
         """Lock local cryptographic vault."""
+        self._advance_session_generation()
         self.vault_state = "LOCKED"
         if self.vault_service:
             try:
@@ -2787,19 +3123,24 @@ class QuMailJsApi:
             self.vault_state = "UNLOCKED"
             vault = service.vault
             rows = vault.summaries() if vault else []
-            if rows:
-                current_email = (self.account_email or "").strip().lower()
-                matched = next(
-                    (r for r in rows if r[2].strip().lower() == current_email),
-                    rows[0]
-                )
-                primary = matched
+            current_email = (self.account_email or "").strip().lower()
+            expected = (self.account_issuer, self.account_subject)
+            primary = next(
+                (r for r in rows if expected[0] and (r[0].issuer, r[0].subject) == expected),
+                None,
+            )
+            primary = primary or next((r for r in rows if r[2].strip().lower() == current_email), None)
+            primary = primary or (rows[0] if len(rows) == 1 else None)
+            if primary:
                 self.active_context = primary[0]
                 self.active_key_handle = primary[1]
                 if not current_email:
                     self.account_email = primary[2]
+                self.account_issuer = primary[0].issuer
+                self.account_subject = primary[0].subject
                 self.key_fingerprint = primary[3]
                 self.account_org = "Google Workspace / Gmail" if "gmail" in self.account_email else "Corporate"
+                service.select(primary[0].account)
                 self.session_state = "MAILBOX_READY"
 
                 # Restore full display name and avatar from stored OAuth info
@@ -2811,10 +3152,13 @@ class QuMailJsApi:
                             self.account_display_name = _info["displayName"]
                         if _info.get("avatarUrl"):
                             self._account_avatar_url = _info["avatarUrl"]
+                        if _info.get("subject"):
+                            self.account_issuer = _info.get("issuer") or self.account_issuer
+                            self.account_subject = _info["subject"]
                 except Exception:
                     pass
                 if not getattr(self, "account_display_name", ""):
-                    self.account_display_name = self.account_email.split("@")[0]
+                    self.account_display_name = self.account_email or "User"
 
                 # If staged inbox items exist from locked pre-fetch, decapsulate immediately
                 with self._staged_lock:
@@ -2836,7 +3180,12 @@ class QuMailJsApi:
                 except Exception:
                     pass
             else:
-                self.session_state = "MAILBOX_READY" if self.account_email else "SIGNED_OUT"
+                # Do not unlock an arbitrary identity when a multi-account
+                # vault has no persisted subject/email selection.
+                self.active_context = None
+                self.active_key_handle = None
+                self.key_fingerprint = ""
+                self.session_state = "VAULT_READY" if rows else ("MAILBOX_READY" if self.account_email else "SIGNED_OUT")
             self._set_vault_lock_flag(False)
             self._save_account_state()
             return {
@@ -2850,9 +3199,13 @@ class QuMailJsApi:
 
     def logout(self) -> Dict[str, Any]:
         """Sign out active user session and purge local token material."""
+        departing_email = self.account_email
+        self._advance_session_generation()
         self.account_email = ""
         self.account_display_name = ""
         self.account_org = ""
+        self.account_issuer = ""
+        self.account_subject = ""
         self._account_avatar_url = ""
         self.key_fingerprint = ""
         self.active_context = None
@@ -2864,7 +3217,7 @@ class QuMailJsApi:
 
         try:
             from transport.oauth2_gmail import revoke_token
-            revoke_token()
+            revoke_token(departing_email)
         except Exception as rev_err:
             logger.debug("Google token revocation note: %s", rev_err)
 
@@ -2893,14 +3246,20 @@ class QuMailJsApi:
         clean_email = (email or "").strip().lower()
         if clean_email and "@" in clean_email:
             if clean_email != (getattr(self, "account_email", "") or "").strip().lower():
+                self._advance_session_generation()
                 self._account_avatar_url = ""
+                self.account_issuer = ""
+                self.account_subject = ""
             self.account_email = clean_email
             try:
                 from transport.oauth2_gmail import get_stored_account_info
                 _info = get_stored_account_info(clean_email)
                 if _info:
-                    self.account_display_name = _info.get("displayName") or clean_email.split("@")[0]
+                    raw_up_dn = _info.get("displayName") or ""
+                    self.account_display_name = raw_up_dn if (raw_up_dn and raw_up_dn != clean_email.split("@")[0]) else clean_email
                     self._account_avatar_url = _info.get("avatarUrl", "")
+                    self.account_issuer = _info.get("issuer") or ""
+                    self.account_subject = _info.get("subject") or ""
             except Exception:
                 pass
             self.messages = self._load_persisted_messages(clean_email)

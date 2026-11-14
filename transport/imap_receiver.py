@@ -157,7 +157,7 @@ def _get_imap_credentials(provider: str, account_email: str) -> tuple[str, str]:
     """
     try:
         if provider == "gmail":
-            return _GMAIL_IMAP_HOST, get_gmail_token(account_email)
+            return _GMAIL_IMAP_HOST, get_gmail_token(account_email, interactive=False)
         else:
             return _YAHOO_IMAP_HOST, get_yahoo_token()
     except (GmailAuthError, YahooAuthError) as exc:

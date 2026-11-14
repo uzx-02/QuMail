@@ -7,8 +7,10 @@ PRAGMA foreign_keys = ON;
 
 -- 1. Accounts Table (Strictly zero plaintext emails)
 CREATE TABLE IF NOT EXISTS accounts (
-    account_id TEXT PRIMARY KEY,               -- HMAC-SHA256(normalized_email, PEPPER)
+    account_id TEXT PRIMARY KEY,               -- domain-separated HMAC-SHA256(normalized_email, PEPPER)
     auth_provider TEXT NOT NULL,               -- 'google' or 'custom'
+    google_binding_id TEXT UNIQUE,             -- HMAC-SHA256(issuer || subject, PEPPER), never raw Google sub
+    qumail_identity_id TEXT NOT NULL UNIQUE,   -- opaque local QuMail AccountId (not an email)
     created_at INTEGER NOT NULL,               -- Unix epoch timestamp (seconds)
     updated_at INTEGER NOT NULL
 );
@@ -33,12 +35,30 @@ CREATE TABLE IF NOT EXISTS sessions (
     session_token_hash TEXT PRIMARY KEY,       -- SHA-256 of raw opaque bearer token
     account_id TEXT NOT NULL,
     device_id TEXT NOT NULL,
+    scope TEXT NOT NULL,                       -- currently: directory:access
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     FOREIGN KEY(account_id) REFERENCES accounts(account_id) ON DELETE CASCADE,
     FOREIGN KEY(device_id) REFERENCES devices(device_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+
+-- 3b. Single-use, short-lived directory proof-of-possession challenges.
+-- Store only a hash of the 256-bit nonce so database disclosure cannot replay it.
+CREATE TABLE IF NOT EXISTS directory_nonces (
+    nonce_hash TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_directory_nonces_expiry ON directory_nonces(expires_at);
+
+-- 3c. Authenticated lookup quota; no target mailbox values are retained.
+CREATE TABLE IF NOT EXISTS directory_lookup_limits (
+    requester_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_directory_lookup_limits_requester
+    ON directory_lookup_limits(requester_id, created_at);
 
 -- 4. Email OTP Challenges (Custom Mailbox Verification)
 CREATE TABLE IF NOT EXISTS email_challenges (
@@ -47,7 +67,9 @@ CREATE TABLE IF NOT EXISTS email_challenges (
     otp_hash TEXT NOT NULL,                    -- HMAC-SHA256(otp_code, PEPPER)
     attempts INTEGER NOT NULL DEFAULT 0,       -- Maximum 3 attempts
     expires_at INTEGER NOT NULL,               -- 5-minute TTL
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    challenge_salt TEXT,                       -- Required by WebLink OTP verification
+    challenge_type TEXT NOT NULL DEFAULT 'custom_mailbox'
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_expiry ON email_challenges(expires_at);
 
@@ -74,6 +96,49 @@ CREATE TABLE IF NOT EXISTS weblinks (
     view_count INTEGER NOT NULL DEFAULT 0,     -- Increments only on explicit user Reveal click
     burn_after_read INTEGER NOT NULL DEFAULT 0,-- 1 if destroyed immediately on first reveal
     expires_at INTEGER NOT NULL,               -- Default: created_at + 7 days
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    is_burned INTEGER NOT NULL DEFAULT 0,      -- Terminal burn state used by reveal and purge paths
+    recipient_email_hash TEXT,                 -- HMAC/hash only; never plaintext recipient email
+    recipient_email_salt TEXT,
+    has_email_otp INTEGER NOT NULL DEFAULT 0,
+    otp_verified INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_weblinks_expiry ON weblinks(expires_at);
+
+-- 7. Development-only encrypted WebLink attachment transport.  D1 receives
+-- ciphertext and encrypted filenames only; 512 KiB client chunks keep every
+-- BLOB below the service's per-value limit.
+CREATE TABLE IF NOT EXISTS weblink_attachments (
+    link_id TEXT NOT NULL,
+    attachment_id TEXT NOT NULL,
+    encrypted_filename TEXT NOT NULL,
+    filename_iv_b64 TEXT NOT NULL,
+    plaintext_size INTEGER NOT NULL,
+    chunk_count INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (link_id, attachment_id),
+    FOREIGN KEY(link_id) REFERENCES weblinks(link_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS weblink_attachment_chunks (
+    link_id TEXT NOT NULL,
+    attachment_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    iv_b64 TEXT NOT NULL,
+    ciphertext BLOB NOT NULL,
+    PRIMARY KEY (link_id, attachment_id, chunk_index),
+    FOREIGN KEY(link_id, attachment_id)
+        REFERENCES weblink_attachments(link_id, attachment_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_weblink_attachment_chunks_link
+    ON weblink_attachment_chunks(link_id, attachment_id, chunk_index);
+
+CREATE TABLE IF NOT EXISTS weblink_access_grants (
+    grant_hash TEXT PRIMARY KEY,
+    link_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(link_id) REFERENCES weblinks(link_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_weblink_access_grants_expiry
+    ON weblink_access_grants(expires_at);

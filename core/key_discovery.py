@@ -278,7 +278,10 @@ def zbase32_encode(data: bytes) -> str:
 def compute_wkd_hash(local_part: str) -> str:
     """Compute the 32-character z-base-32 SHA-1 hash of a lowercase local-part."""
     cleaned = local_part.strip().lower().encode("utf-8")
-    digest = hashlib.sha1(cleaned).digest()
+    # WKD (draft-koch-openpgp-webkey-service) mandates SHA-1 here as a
+    # protocol identifier, not as a security primitive. Changing it breaks
+    # interoperability with every conforming WKD host.
+    digest = hashlib.sha1(cleaned, usedforsecurity=False).digest()
     encoded = zbase32_encode(digest)
     return encoded[:32]
 

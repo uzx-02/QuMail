@@ -151,6 +151,8 @@ if __name__ == "__main__":
     log = get_logger("test")
     log.info("Centralized logging initialized successfully.")
     # Test redaction
-    log.info("Testing token scrubbing: Bearer ya29.a0AfH6SMD_EXAMPLE_TOKEN_1234567890")
-    log.info("Testing key scrubbing: client_secret='GOCSPX-SecretExampleValue987'")
+    # Deliberately invalid fixture values: this exercises the generic Bearer
+    # and key-value scrubbers without resembling a usable provider credential.
+    log.info("Testing token scrubbing: Bearer synthetic-token-redaction-fixture")
+    log.info("Testing key scrubbing: client_secret='synthetic-redaction-fixture'")
     print("[OK] Logging self-test completed.")

@@ -96,7 +96,7 @@ class DiagnosticsCollector:
 
         # 3. Native Providers
         provider_meta: dict[str, Any] = {}
-        for pname in ("qumail-m3-provider", "qumail-m5-provider"):
+        for pname in ("qumail-vault-provider", "qumail-crypto-provider"):
             try:
                 p_path = resolve_provider(pname)
                 pe_info = inspect_pe_security_characteristics(p_path)

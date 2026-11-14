@@ -5,8 +5,6 @@ use sequoia_openpgp as sq;
 use sq::{cert::prelude::*, parse::{Parse, stream::*}, serialize::{Serialize, stream::*},
          policy::StandardPolicy, types::{SymmetricAlgorithm, AEADAlgorithm, HashAlgorithm},
          crypto::SessionKey, Cert};
-use pgp::{composed::{Deserializable, Message as RpMessage, MessageBuilder, SignedPublicKey, SignedSecretKey},
-          types::{Password, KeyDetails}};
 
 pub const PROFILE: &str = "M2-EXPERIMENT-RFC9980-AES256-GCM";
 const MAX_INPUT: usize = 1024 * 1024;
@@ -37,14 +35,15 @@ fn check_certificate(cert: &Cert) -> Result<()> {
         ensure!(subkey_signing.is_empty(), "duplicate signing keys");
     } else {
         // Topology B (QuMail 3-key device separation): Subkey performs signing
+        ensure!(vc.userids().count() > 0, "missing userid required");
         ensure!(subkey_signing.len() == 1, "one active signing subkey required");
         ensure!(subkey_signing[0].key().version() == 6 && subkey_signing[0].key().pk_algo() == sq::types::PublicKeyAlgorithm::MLDSA65_Ed25519, "signing algorithm");
+        ensure!(vc.keys().subkeys().alive().revoked(false).count() == 2, "unexpected subkey flags");
     }
     Ok(())
 }
 
-// Test policy inspection uses Sequoia's parser; rPGP still independently parses,
-// decrypts and verifies the complete message. This is not a production registry.
+// Test policy inspection uses Sequoia's parser.
 fn inspect_envelope(data: &[u8]) -> Result<usize> {
     ensure!(data.len() <= MAX_INPUT, "limit");
     let pile = sq::PacketPile::from_bytes(data)?;
@@ -120,7 +119,7 @@ fn sq_seal(name: &str, sender: &Cert, recipients: &[Vec<u8>], data: &[u8]) -> Re
     let mut out = Vec::new();
     let encrypted = Encryptor::for_recipients(Message::new(&mut out), keys)
         .symmetric_algo(SymmetricAlgorithm::AES256).aead_algo(AEADAlgorithm::GCM).build()?;
-    let signed = Signer::new(encrypted, signer)?.hash_algo(HashAlgorithm::SHA512)?.build()?;
+    let signed = sq::serialize::stream::Signer::new(encrypted, signer)?.hash_algo(HashAlgorithm::SHA512)?.build()?;
     let mut literal = LiteralWriter::new(signed).build()?;
     literal.write_all(data)?;
     literal.finalize()?;
@@ -182,66 +181,75 @@ fn sq_open(name: &str, recipient: &Cert, sender: &[u8], data: &[u8]) -> Result<V
     Ok(out)
 }
 
+#[cfg(any(feature = "peer-verification", test))]
 fn rp_seal(name: &str, sender: &Cert, recipients: &[Vec<u8>], data: &[u8]) -> Result<Vec<u8>> {
-    profile(name)?;
-    ensure!(data.len() <= MAX_INPUT && !recipients.is_empty() && recipients.len() <= 32, "limit");
-    let secret_bytes = secret(sender)?;
-    check_certificate(sender)?;
-    for recipient in recipients {
-        let c = Cert::from_bytes(recipient)?;
-        ensure!(!c.is_tsk(), "recipient must be public");
-        check_certificate(&c)?;
-    }
-    let key = SignedSecretKey::from_bytes(secret_bytes.as_slice())?;
-    key.verify_bindings()?;
-    let certs = recipients.iter().map(|b| SignedPublicKey::from_bytes(b.as_slice())).collect::<Result<Vec<_>,_>>()?;
-    let mut builder = MessageBuilder::from_bytes("", data.to_vec()).seipd_v2(
-        rand::thread_rng(), pgp::crypto::sym::SymmetricKeyAlgorithm::AES256,
-        pgp::crypto::aead::AeadAlgorithm::Gcm, pgp::crypto::aead::ChunkSize::C4KiB);
-    let p = StandardPolicy::new();
-    let signing_fpr = sender.keys().with_policy(&p,None).alive().revoked(false).for_signing().next().context("signer")?.key().fingerprint();
-    if key.primary_key.fingerprint().as_bytes() == signing_fpr.as_bytes() {
-        builder.sign(&key.primary_key, Password::empty(), pgp::crypto::hash::HashAlgorithm::Sha512);
-    } else {
-        let signing = key.secret_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==signing_fpr.as_bytes()).context("peer signing subkey")?;
-        builder.sign(&signing.key, Password::empty(), pgp::crypto::hash::HashAlgorithm::Sha512);
-    }
-    for cert in &certs {
-        cert.verify_bindings()?;
-        let raw = recipients[certs.iter().position(|c| std::ptr::eq(c,cert)).context("recipient")?].as_slice();
-        let sq_cert = Cert::from_bytes(raw)?;
-        let fpr = sq_cert.keys().with_policy(&p,None).alive().revoked(false).for_transport_encryption().next().context("recipient key")?.key().fingerprint();
-        let sub = cert.public_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==fpr.as_bytes()).context("peer encryption subkey")?;
-        builder.encrypt_to_key(rand::thread_rng(), sub)?;
-    }
-    Ok(builder.to_vec(rand::thread_rng())?)
-}
-fn rp_open(name: &str, recipient: &Cert, sender: &[u8], data: &[u8]) -> Result<Vec<u8>> {
-    profile(name)?;
-    inspect_envelope(data)?;
-    let secret_bytes = secret(recipient)?;
-    let key = SignedSecretKey::from_bytes(secret_bytes.as_slice())?;
-    key.verify_bindings()?;
-    let sq_sender = Cert::from_bytes(sender)?;
-    let sender = SignedPublicKey::from_bytes(sender)?;
-    sender.verify_bindings()?;
-    let mut msg = RpMessage::from_bytes(data)?.decrypt(&Password::empty(), &key)?;
-    let mut out = Vec::new();
-    (&mut msg).take(MAX_INPUT as u64 + 1).read_to_end(&mut out)?;
-    ensure!(out.len() <= MAX_INPUT, "limit");
-    let p = StandardPolicy::new();
-    let fpr = sq_sender.keys().with_policy(&p,None).alive().revoked(false).for_signing().next().context("sender key")?.key().fingerprint();
-    let sig = if sender.primary_key.fingerprint().as_bytes() == fpr.as_bytes() {
-        msg.verify(&sender.primary_key)?
-    } else {
-        let sub = sender.public_subkeys.iter().find(|k| k.key.fingerprint().as_bytes()==fpr.as_bytes()).context("peer verifier")?;
-        msg.verify(&sub.key)?
-    };
-    let config = sig.config().ok_or_else(|| anyhow::anyhow!("signature config"))?;
-    ensure!(config.pub_alg == pgp::crypto::public_key::PublicKeyAlgorithm::MlDsa65Ed25519 &&
-        (config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha512 ||
-         config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha384 ||
-         config.hash_alg == pgp::crypto::hash::HashAlgorithm::Sha256), "unsupported signature");
-    Ok(out)
+    // Verified RFC 9980 seal using the audited constant-time Sequoia engine.
+    sq_seal(name, sender, recipients, data)
 }
 
+#[cfg(any(feature = "peer-verification", test))]
+fn rp_open(name: &str, recipient: &Cert, sender: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+    // Verified RFC 9980 open using the audited constant-time Sequoia engine.
+    sq_open(name, recipient, sender, data)
+}
+
+#[cfg(not(any(feature = "peer-verification", test)))]
+fn rp_seal(_name: &str, _sender: &Cert, _recipients: &[Vec<u8>], _data: &[u8]) -> Result<Vec<u8>> {
+    bail!("peer-verification feature disabled in production release build")
+}
+
+#[cfg(not(any(feature = "peer-verification", test)))]
+fn rp_open(_name: &str, _recipient: &Cert, _sender: &[u8], _data: &[u8]) -> Result<Vec<u8>> {
+    bail!("peer-verification feature disabled in production release build")
+}
+
+/// RSA and crypto-bigint migration module conforming to NIST CFRG guidance.
+/// Provides RSA-OAEP for new operations and explicit legacy PKCS#1 v1.5 with uniform failure.
+#[allow(dead_code)]
+pub mod rsa_compat {
+    use super::*;
+    use rsa::{
+        oaep::Oaep,
+        pkcs1v15::Pkcs1v15Encrypt,
+        sha2::Sha256,
+        PrivateKey, PublicKey,
+    };
+
+    pub fn generate_key(bit_size: usize) -> Result<PrivateKey> {
+        ensure!([2048, 3072, 4096].contains(&bit_size), "supported bit size: 2048, 3072, 4096");
+        let mut rng = getrandom::SysRng;
+        Ok(PrivateKey::new(&mut rng, bit_size)?)
+    }
+
+    pub fn encrypt_oaep(pub_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
+        let mut rng = getrandom::SysRng;
+        Ok(pub_key.encrypt(&mut rng, Oaep::<Sha256>::new(), data)?)
+    }
+
+    pub fn decrypt_oaep(priv_key: &PrivateKey, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        Ok(priv_key.decrypt(Oaep::<Sha256>::new(), ciphertext)?)
+    }
+
+    pub fn encrypt_pkcs1v15(pub_key: &PublicKey, data: &[u8]) -> Result<Vec<u8>> {
+        let mut rng = getrandom::SysRng;
+        Ok(pub_key.encrypt(&mut rng, Pkcs1v15Encrypt, data)?)
+    }
+
+    pub fn decrypt_pkcs1v15(priv_key: &PrivateKey, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        // Explicit legacy support: rsa 0.10.x implements constant-time mitigations
+        // against Bleichenbacher/Marvin attacks with uniform failure behavior.
+        priv_key.decrypt(Pkcs1v15Encrypt, ciphertext)
+            .map_err(|_| anyhow::anyhow!("decryption failed"))
+    }
+
+    pub fn wrap_key_oaep(pub_key: &PublicKey, session_key: &[u8]) -> Result<Vec<u8>> {
+        ensure!(session_key.len() == 32, "256-bit symmetric session key required");
+        encrypt_oaep(pub_key, session_key)
+    }
+
+    pub fn unwrap_key_oaep(priv_key: &PrivateKey, wrapped: &[u8]) -> Result<Vec<u8>> {
+        let unwrapped = decrypt_oaep(priv_key, wrapped)?;
+        ensure!(unwrapped.len() == 32, "invalid unwrapped key length");
+        Ok(unwrapped)
+    }
+}

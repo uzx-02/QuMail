@@ -88,7 +88,7 @@ def _get_smtp_credentials(provider: str, sender_email: str) -> tuple[str, str]:
     """Obtain the SMTP host and a valid access token for the detected provider."""
     try:
         if provider == "gmail":
-            return _GMAIL_SMTP_HOST, get_gmail_token(sender_email)
+            return _GMAIL_SMTP_HOST, get_gmail_token(sender_email, interactive=False)
         else:
             return _YAHOO_SMTP_HOST, get_yahoo_token()
     except (GmailAuthError, YahooAuthError) as exc:

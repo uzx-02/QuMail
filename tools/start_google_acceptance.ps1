@@ -19,11 +19,11 @@ if ($SettingsOnly -and $EnableGmailSubmit) {
 
 $repoPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $pythonPath = Join-Path $repoPath '.venv-m1-clean\Scripts\python.exe'
-$m3Helper = Join-Path $repoPath 'tmp\m2\target\debug\qumail-m3-provider.exe'
-$m5Helper = Join-Path $repoPath 'tmp\m2\target\debug\qumail-m5-provider.exe'
+$vaultHelper = Join-Path $repoPath 'bin\qumail-vault-provider.exe'
+$cryptoHelper = Join-Path $repoPath 'bin\qumail-crypto-provider.exe'
 $vaultPath = [System.IO.Path]::GetFullPath($Vault)
 
-foreach ($requiredPath in @($pythonPath, $m3Helper, $m5Helper)) {
+foreach ($requiredPath in @($pythonPath, $vaultHelper, $cryptoHelper)) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "Required runtime component is missing or inaccessible: $requiredPath."
     }

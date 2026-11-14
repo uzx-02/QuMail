@@ -161,3 +161,28 @@ def test_status_reporting_clears_is_downloading_when_installed(temp_service, mon
     assert status["error"] is None
 
 
+def test_model_integrity_rejects_tampered_artifact(temp_service, monkeypatch):
+    """Presence and size alone must never make a model artifact trusted."""
+    import hashlib
+    import core.offline_translator as translator_module
+
+    contents = b"known-good-test-model"
+    monkeypatch.setattr(
+        translator_module,
+        "MODEL_FILES",
+        [("model.bin", len(contents), hashlib.sha256(contents).hexdigest())],
+    )
+    temp_service.model_dir.mkdir(parents=True)
+    model_path = temp_service.model_dir / "model.bin"
+    model_path.write_bytes(b"X" * len(contents))
+
+    ok, message = temp_service.verify_model_integrity()
+    assert ok is False
+    assert "SHA-256" in message
+
+    model_path.write_bytes(contents)
+    ok, message = temp_service.verify_model_integrity()
+    assert ok is True
+    assert message == "Model integrity verified."
+
+

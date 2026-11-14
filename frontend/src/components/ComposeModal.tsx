@@ -73,7 +73,31 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   language,
 }) => {
   const [draftId, setDraftId] = useState<string | undefined>(initialDraftId);
-  const [to, setTo] = useState(initialTo);
+  const [recipientsList, setRecipientsList] = useState<string[]>(() =>
+    initialTo ? initialTo.split(/[,;]+/).map((s) => s.trim()).filter(Boolean) : []
+  );
+  const [recipientInput, setRecipientInput] = useState('');
+  const toInputRef = useRef<HTMLInputElement>(null);
+
+  const cleanRecipients = useMemo(() => {
+    const list = [...recipientsList];
+    const pending = recipientInput.trim().replace(/^[,;\s]+|[,;\s]+$/g, '');
+    if (pending && !list.includes(pending)) {
+      list.push(pending);
+    }
+    return list;
+  }, [recipientsList, recipientInput]);
+
+  const to = useMemo(() => cleanRecipients.join(', '), [cleanRecipients]);
+
+  useEffect(() => {
+    if (initialTo !== undefined) {
+      const parsed = initialTo ? initialTo.split(/[,;]+/).map((s) => s.trim()).filter(Boolean) : [];
+      setRecipientsList(parsed);
+      setRecipientInput('');
+    }
+  }, [initialTo, isOpen]);
+
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [securityMode, setSecurityMode] = useState<'pq' | 'weblink' | 'standard'>(initialSecurityMode);
@@ -100,14 +124,13 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const toContainerRef = useRef<HTMLDivElement>(null);
 
   const currentRecipientSegment = useMemo(() => {
-    const parts = to.split(',');
-    return parts[parts.length - 1].trim().toLowerCase();
-  }, [to]);
+    return recipientInput.trim().toLowerCase();
+  }, [recipientInput]);
 
   const recipientSuggestions = useMemo(() => {
     if (!currentRecipientSegment || currentRecipientSegment.length < 1) return [];
     const existingRecipients = new Set(
-      to.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean)
+      recipientsList.map((p) => p.trim().toLowerCase()).filter(Boolean)
     );
     return (knownContacts || [])
       .filter((c) => {
@@ -119,18 +142,36 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
         );
       })
       .slice(0, 5);
-  }, [currentRecipientSegment, knownContacts, to]);
+  }, [currentRecipientSegment, knownContacts, recipientsList]);
 
-  const applyRecipientSuggestion = (email: string) => {
-    const parts = to.split(',');
-    parts[parts.length - 1] = ' ' + email;
-    const cleaned = parts
-      .map((p) => p.trim())
-      .filter(Boolean)
-      .join(', ') + ', ';
-    setTo(cleaned);
+  const commitRecipientInput = (text: string) => {
+    const candidates = text.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
+    if (candidates.length === 0) return;
+    setRecipientsList((prev) => {
+      const next = [...prev];
+      for (const c of candidates) {
+        if (!next.includes(c)) next.push(c);
+      }
+      return next;
+    });
+    setRecipientInput('');
     setToAutocompleteOpen(false);
     setSelectedSuggestionIdx(0);
+  };
+
+  const removeRecipient = (index: number) => {
+    setRecipientsList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const applyRecipientSuggestion = (email: string) => {
+    const trimmed = email.trim();
+    if (trimmed) {
+      setRecipientsList((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    }
+    setRecipientInput('');
+    setToAutocompleteOpen(false);
+    setSelectedSuggestionIdx(0);
+    toInputRef.current?.focus();
   };
 
   // Close dropdowns on click outside
@@ -280,7 +321,9 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
     if (isOpen) {
       hasSentRef.current = false;
       setDraftId(initialDraftId);
-      setTo(initialTo);
+      const parsedTo = initialTo ? initialTo.split(/[,;]+/).map((s) => s.trim()).filter(Boolean) : [];
+      setRecipientsList(parsedTo);
+      setRecipientInput('');
       setSubject(initialSubject);
       setBody(initialBody);
       setSecurityMode(initialSecurityMode);
@@ -397,7 +440,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
 
       if (res !== false) {
         setDraftId(undefined);
-        setTo('');
+        setRecipientsList([]);
+        setRecipientInput('');
         setSubject('');
         setBody('');
         setAttachments([]);
@@ -806,21 +850,67 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               </div>
             )}
 
-            {/* Recipients Field with Email Autocomplete */}
+            {/* Recipients Field with Email Autocomplete & Removable Chips */}
             <div
               ref={toContainerRef}
-              className="relative flex items-center px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60"
+              onClick={() => toInputRef.current?.focus()}
+              className="relative flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-[#F2F2F2] dark:border-[#1F2C47]/60 cursor-text min-h-[44px]"
             >
-              <span className="w-12 text-xs font-semibold text-[#5F6368] dark:text-[#94A3B8]">To</span>
+              <span className="text-xs font-semibold text-[#5F6368] dark:text-[#94A3B8] shrink-0 mr-1 select-none">
+                To
+              </span>
+
+              {/* Recipient Chips */}
+              {recipientsList.map((rEmail, idx) => (
+                <span
+                  key={`${rEmail}-${idx}`}
+                  className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full text-xs font-medium bg-blue-50/90 dark:bg-blue-950/70 border border-blue-200/90 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-sm transition-all animate-in fade-in zoom-in-95 duration-100"
+                >
+                  <span className="max-w-[220px] truncate select-all font-mono text-[11px]" title={rEmail}>
+                    {rEmail}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRecipient(idx);
+                    }}
+                    className="w-4 h-4 rounded-full flex items-center justify-center text-blue-500 hover:text-white hover:bg-blue-600 dark:hover:bg-blue-500 transition-colors cursor-pointer shrink-0"
+                    title={`Remove ${rEmail}`}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              ))}
+
+              {/* Input for typing next recipient */}
               <input
+                ref={toInputRef}
                 type="text"
-                placeholder={t(language, 'to_placeholder')}
-                value={to}
-                onFocus={() => setToAutocompleteOpen(true)}
+                placeholder={recipientsList.length === 0 ? t(language, 'to_placeholder') : ''}
+                value={recipientInput}
+                onFocus={() => {
+                  if (recipientInput.trim()) {
+                    setToAutocompleteOpen(true);
+                  }
+                }}
                 onChange={(e) => {
-                  setTo(e.target.value);
-                  setToAutocompleteOpen(true);
-                  setSelectedSuggestionIdx(0);
+                  const val = e.target.value;
+                  // If user typed comma or semicolon, commit immediately
+                  if (val.includes(',') || val.includes(';')) {
+                    commitRecipientInput(val);
+                  } else {
+                    setRecipientInput(val);
+                    setToAutocompleteOpen(Boolean(val.trim()));
+                    setSelectedSuggestionIdx(0);
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasteText = e.clipboardData.getData('text');
+                  if (pasteText && (pasteText.includes(',') || pasteText.includes(';') || pasteText.includes('\n'))) {
+                    e.preventDefault();
+                    commitRecipientInput(pasteText);
+                  }
                 }}
                 onKeyDown={(e) => {
                   if (toAutocompleteOpen && recipientSuggestions.length > 0) {
@@ -829,26 +919,51 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                       setSelectedSuggestionIdx((prev) =>
                         Math.min(prev + 1, recipientSuggestions.length - 1)
                       );
-                    } else if (e.key === 'ArrowUp') {
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
                       e.preventDefault();
                       setSelectedSuggestionIdx((prev) => Math.max(prev - 1, 0));
-                    } else if (e.key === 'Enter' || e.key === 'Tab') {
+                      return;
+                    }
+                    if (e.key === 'Enter' || e.key === 'Tab') {
                       if (recipientSuggestions[selectedSuggestionIdx]) {
                         e.preventDefault();
                         applyRecipientSuggestion(recipientSuggestions[selectedSuggestionIdx].email);
+                        return;
                       }
-                    } else if (e.key === 'Escape') {
+                    }
+                    if (e.key === 'Escape') {
                       setToAutocompleteOpen(false);
+                      return;
                     }
                   }
+
+                  if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',' || e.key === ';') {
+                    const candidate = recipientInput.trim().replace(/^[,;\s]+|[,;\s]+$/g, '');
+                    if (candidate) {
+                      e.preventDefault();
+                      commitRecipientInput(candidate);
+                    } else if (e.key === ',' || e.key === ';') {
+                      e.preventDefault();
+                    }
+                  } else if (e.key === 'Backspace' && !recipientInput && recipientsList.length > 0) {
+                    e.preventDefault();
+                    setRecipientsList((prev) => prev.slice(0, prev.length - 1));
+                  }
                 }}
-                className="flex-1 bg-transparent border-none outline-none text-sm text-[#202124] dark:text-white"
-                required
+                onBlur={() => {
+                  const candidate = recipientInput.trim().replace(/^[,;\s]+|[,;\s]+$/g, '');
+                  if (candidate) {
+                    commitRecipientInput(candidate);
+                  }
+                }}
+                className="flex-1 min-w-[130px] bg-transparent border-none outline-none text-sm text-[#202124] dark:text-white py-1"
               />
 
               {/* Autocomplete Dropdown Popover */}
               {toAutocompleteOpen && recipientSuggestions.length > 0 && (
-                <div className="absolute top-full left-14 right-4 mt-1 bg-white/98 dark:bg-[#161F33]/98 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl backdrop-blur-xl p-1.5 z-[100] animate-in fade-in duration-100">
+                <div className="absolute top-full left-12 right-4 mt-1 bg-white/98 dark:bg-[#161F33]/98 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl backdrop-blur-xl p-1.5 z-[100] animate-in fade-in duration-100">
                   <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 px-2 py-1 uppercase tracking-wider">
                     Suggested Contacts
                   </div>
@@ -1076,7 +1191,8 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                     onDiscardDraft(draftId);
                   }
                   setDraftId(undefined);
-                  setTo('');
+                  setRecipientsList([]);
+                  setRecipientInput('');
                   setSubject('');
                   setBody('');
                   setAttachments([]);

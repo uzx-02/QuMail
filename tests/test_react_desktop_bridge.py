@@ -433,11 +433,16 @@ def test_draft_lifecycle_and_outbox_retry(tmp_path, monkeypatch):
     assert not any(m["id"] == draft_id for m in api.getMessages())
 
     # 4. Simulate SMTP failure on WebLink -> queued in outbox with outboxError, then retry succeeds
-    monkeypatch.setattr("core.cloud_directory.CloudDirectoryClient._ensure_session_token", lambda self: None)
-    monkeypatch.setattr(
-        "core.cloud_directory.CloudDirectoryClient.create_weblink",
-        lambda self, **kwargs: {"access_url": "https://example.workers.dev/v/abc#key"},
-    )
+    class OwnedDirectorySession:
+        def _ensure_session_token(self):
+            return None
+
+        def create_weblink(self, **_kwargs):
+            return {"access_url": "https://example.workers.dev/v/abc#key"}
+
+    # WebLink creation requires an already-owned directory session.  Account
+    # ownership is separately tested at the CloudDirectoryClient boundary.
+    monkeypatch.setattr(api, "_directory_client_for_active_account", lambda: OwnedDirectorySession())
     def fail_smtp(s, r, m):
         raise RuntimeError("Network unreachable")
     monkeypatch.setattr("transport.smtp_sender.send_email", fail_smtp)
@@ -719,11 +724,14 @@ def test_multi_recipient_mixed_group_rejection_and_resolution(monkeypatch):
     assert "stranger@external.com" in res_pq["unregistered"]
 
     # Switching to 'weblink' mode succeeds for the mixed group
-    monkeypatch.setattr("core.cloud_directory.CloudDirectoryClient._ensure_session_token", lambda self: None)
-    monkeypatch.setattr(
-        "core.cloud_directory.CloudDirectoryClient.create_weblink",
-        lambda self, **kwargs: {"access_url": "https://example.workers.dev/v/mixed#key"},
-    )
+    class OwnedDirectorySession:
+        def _ensure_session_token(self):
+            return None
+
+        def create_weblink(self, **_kwargs):
+            return {"access_url": "https://example.workers.dev/v/mixed#key"}
+
+    monkeypatch.setattr(api, "_directory_client_for_active_account", lambda: OwnedDirectorySession())
     monkeypatch.setattr("transport.smtp_sender.send_email", lambda s, r, m: None)
 
     res_weblink = api.sendMessage({
@@ -768,6 +776,36 @@ def test_large_attachment_handling_and_unicode_filenames(monkeypatch):
     assert len(dispatched) == 1
     s, r, wire_msg = dispatched[0]
     assert s == "alice@qumail.sec"
+
+    class EncryptedAttachmentDirectory:
+        def _ensure_session_token(self):
+            return None
+
+        def create_weblink(self, **kwargs):
+            assert kwargs["attachments"] == [(sample_payload, "secret.pdf")]
+            return {"access_url": "https://example.workers.dev/v/" + "a" * 32 + "#key=test"}
+
+    monkeypatch.setattr(api, "_directory_client_for_active_account", lambda: EncryptedAttachmentDirectory())
+
+    # A WebLink invitation remains metadata-only. The attachment is handed to
+    # the encrypted directory envelope, never to SMTP.
+    res_weblink_attachment = api.sendMessage({
+        "recipients": ["external@example.com"],
+        "subject": "Confidential invoice",
+        "body": "Confidential body",
+        "securityMode": "weblink",
+        "attachments": [{
+            "name": "secret.pdf",
+            "size": len(sample_payload),
+            "type": "application/pdf",
+            "data": b64_data,
+        }],
+    })
+    assert res_weblink_attachment["success"] is True
+    assert len(dispatched) == 2
+    _, _, invitation = dispatched[-1]
+    assert b"secret.pdf" not in invitation.as_bytes()
+    assert sample_payload not in invitation.as_bytes()
 
     # 2. Rejection of attachments exceeding 30 MB limit
     oversized_b64 = "A" * (41 * 1024 * 1024)

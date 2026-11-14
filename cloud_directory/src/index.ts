@@ -15,6 +15,8 @@
  * 10. Hourly scheduled purge trigger for expired entities.
  */
 
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
 export interface Env {
   DB: D1Database;
   DIRECTORY_PEPPER?: string;
@@ -35,6 +37,45 @@ const SESSION_TTL_SECONDS = 86400; // 24 hours
 const OTP_TTL_SECONDS = 300; // 5 minutes
 const WEBLINK_OTP_MAX_ATTEMPTS = 3; // Burn link after 3 failed OTP guesses
 const TOMBSTONE_RETENTION_SECONDS = 90 * 86400; // 90 days
+const DIRECTORY_NONCE_TTL_SECONDS = 300;
+const WEBLINK_ACCESS_GRANT_TTL_SECONDS = 300;
+const WEBLINK_ATTACHMENT_TOTAL_BYTES = 30 * 1024 * 1024;
+const WEBLINK_ATTACHMENT_CHUNK_BYTES = 512 * 1024;
+const WEBLINK_ATTACHMENT_CIPHERTEXT_MAX_BYTES = WEBLINK_ATTACHMENT_CHUNK_BYTES + 16;
+const WEBLINK_ATTACHMENT_MAX_COUNT = 20;
+const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+function validWebLinkId(linkId: string): boolean {
+  // Accept existing 64-bit IDs while issuing 128-bit IDs for new links.
+  return /^[a-f0-9]{16}(?:[a-f0-9]{16})?$/i.test(linkId);
+}
+
+function validAttachmentId(attachmentId: string): boolean {
+  return /^[a-f0-9]{32}$/i.test(attachmentId);
+}
+
+function randomHex(byteLength: number): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(byteLength)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function issueWebLinkAccessGrant(db: D1Database, linkId: string, now: number): Promise<string> {
+  const grant = randomHex(32);
+  await db.prepare(
+    "INSERT INTO weblink_access_grants (grant_hash, link_id, expires_at, created_at) VALUES (?, ?, ?, ?)"
+  ).bind(await sha256Hex(grant), linkId, now + WEBLINK_ACCESS_GRANT_TTL_SECONDS, now).run();
+  return grant;
+}
+
+async function hasWebLinkAccessGrant(request: Request, db: D1Database, linkId: string, now: number): Promise<boolean> {
+  const grant = request.headers.get("X-QuMail-WebLink-Grant") || "";
+  if (!/^[a-f0-9]{64}$/i.test(grant)) return false;
+  const row = await db.prepare(
+    "SELECT grant_hash FROM weblink_access_grants WHERE grant_hash = ? AND link_id = ? AND expires_at >= ?"
+  ).bind(await sha256Hex(grant), linkId, now).first();
+  return Boolean(row);
+}
 
 // ============================================================================
 // 1. Email Normalization & Cryptographic Utilities
@@ -79,6 +120,31 @@ export async function hmacSha256(message: string, secret: string): Promise<strin
     .join("");
 }
 
+async function mailboxAccountId(email: string, pepper: string): Promise<string> {
+  // The domain separator prevents a directory identifier from being reused as
+  // an HMAC identifier in a different QuMail protocol.
+  return hmacSha256(`qumail-directory/mailbox/v1\0${normalizeEmail(email)}`, pepper);
+}
+
+async function legacyMailboxAccountId(email: string, pepper: string): Promise<string> {
+  // Compatibility only: rows created before the v1 domain separator are read
+  // and explicitly bound during a verified re-enrollment; no new row uses it.
+  return hmacSha256(normalizeEmail(email), pepper);
+}
+
+async function resolveMailboxAccountId(db: D1Database, email: string, pepper: string): Promise<string> {
+  const current = await mailboxAccountId(email, pepper);
+  const legacy = await legacyMailboxAccountId(email, pepper);
+  const currentRow = await db.prepare("SELECT account_id FROM accounts WHERE account_id = ?").bind(current).first();
+  if (currentRow) return current;
+  const legacyRow = await db.prepare("SELECT account_id FROM accounts WHERE account_id = ?").bind(legacy).first();
+  return legacyRow ? legacy : current;
+}
+
+async function googleBindingId(issuer: string, subject: string, pepper: string): Promise<string> {
+  return hmacSha256(`qumail-directory/google-subject/v1\0${issuer}\0${subject}`, pepper);
+}
+
 export async function sha256Hex(data: string | Uint8Array): Promise<string> {
   const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
   const hash = await crypto.subtle.digest("SHA-256", bytes);
@@ -103,29 +169,26 @@ export function timingSafeEqualHex(aHex: string, bHex: string): boolean {
 async function verifyGoogleIdToken(
   idToken: string,
   expectedClientId?: string
-): Promise<{ email: string; email_verified: boolean } | null> {
+): Promise<{ email: string; email_verified: boolean; issuer: string; subject: string } | null> {
   try {
-    const parts = idToken.split(".");
-    if (parts.length !== 3) return null;
-
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-
-    // Basic validity checks
-    const now = Math.floor(Date.now() / 1000);
-    if (!payload.iss || !payload.exp || payload.exp < now) return null;
-    if (payload.iss !== "https://accounts.google.com" && payload.iss !== "accounts.google.com") {
+    // Do not decode-and-trust JWT payloads. jose validates the JWS signature
+    // against Google's rotating JWKS as well as issuer, audience, and time.
+    if (!expectedClientId) return null;
+    const verified = await jwtVerify(idToken, GOOGLE_JWKS, {
+      algorithms: ["RS256"],
+      issuer: ["https://accounts.google.com", "accounts.google.com"],
+      audience: expectedClientId,
+    });
+    const payload = verified.payload;
+    if (typeof payload.email !== "string" || typeof payload.sub !== "string" ||
+        !payload.sub || (payload.email_verified !== true && payload.email_verified !== "true")) {
       return null;
     }
-    if (expectedClientId && payload.aud !== expectedClientId) {
-      return null;
-    }
-    if (payload.email_verified !== true && payload.email_verified !== "true") {
-      return null;
-    }
-
     return {
       email: payload.email,
       email_verified: true,
+      issuer: String(payload.iss),
+      subject: payload.sub,
     };
   } catch {
     return null;
@@ -152,37 +215,28 @@ async function verifyTurnstileToken(secretKey: string, token: string, ip: string
 
 async function verifyProofOfPossession(
   deviceId: string,
-  accountId: string,
-  kemPubBase64: string,
+  qumailIdentityId: string,
+  fingerprint: string,
   nonceHex: string,
   dsaPubBase64: string,
   popSigBase64: string
 ): Promise<boolean> {
   try {
-    // In automated testing or fallback, verify message commitment hash
-    const commitmentStr = `${deviceId}:${accountId}:${kemPubBase64}:${nonceHex}`;
-    const expectedHash = await sha256Hex(commitmentStr);
-
-    // Verify non-empty signature format
-    if (!popSigBase64 || popSigBase64.length < 32 || !dsaPubBase64 || dsaPubBase64.length < 32) {
+    if (!/^[0-9a-f]{32}$/.test(qumailIdentityId) || !/^[0-9a-f]{64}$/i.test(fingerprint) ||
+        !/^[0-9a-f]{64}$/i.test(nonceHex) || !dsaPubBase64 || !popSigBase64) {
       return false;
     }
-
-    // Attempt pure JS ML-DSA-65 verification if available
-    try {
-      const noble = await import("@noble/post-quantum/ml-dsa");
-      if (noble && noble.ml_dsa65) {
-        const pubBytes = Uint8Array.from(atob(dsaPubBase64), (c) => c.charCodeAt(0));
-        const sigBytes = Uint8Array.from(atob(popSigBase64), (c) => c.charCodeAt(0));
-        const msgBytes = new TextEncoder().encode(expectedHash);
-        return noble.ml_dsa65.verify(sigBytes, msgBytes, pubBytes);
-      }
-    } catch {
-      // Noble ML-DSA not bundled or running in mocked environment; validate structural binding
-    }
-
-    // Structural acceptance of cryptographically bound signature payload
-    return Boolean(popSigBase64 && dsaPubBase64 && nonceHex);
+    const noble = await import("@noble/post-quantum/ml-dsa");
+    const pubBytes = Uint8Array.from(atob(dsaPubBase64), (c) => c.charCodeAt(0));
+    const sigBytes = Uint8Array.from(atob(popSigBase64), (c) => c.charCodeAt(0));
+    const message = new TextEncoder().encode(
+      `QUMAIL-DIRECTORY-POP-v1\0${qumailIdentityId}\0${deviceId}\0${fingerprint}\0${nonceHex}`
+    );
+    // There is intentionally no structural or hash-as-signature fallback.
+    // Noble verifies in public-key, message, signature order.  Reversing the
+    // public key and signature makes every otherwise-valid native ML-DSA-65
+    // directory proof fail before enrollment.
+    return noble.ml_dsa65.verify(pubBytes, message, sigBytes);
   } catch {
     return false;
   }
@@ -190,10 +244,8 @@ async function verifyProofOfPossession(
 
 async function authenticateSession(
   request: Request,
-  db: D1Database,
-  pepper?: string,
-  googleClientId?: string
-): Promise<{ accountId: string; deviceId: string } | null> {
+  db: D1Database
+): Promise<{ accountId: string; deviceId: string; scope: string; qumailIdentityId: string } | null> {
   const authHeader = request.headers.get("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
@@ -204,25 +256,40 @@ async function authenticateSession(
   const now = Math.floor(Date.now() / 1000);
 
   const row = (await db
-    .prepare("SELECT account_id, device_id, expires_at FROM sessions WHERE session_token_hash = ?")
+    .prepare("SELECT s.account_id, s.device_id, s.expires_at, s.scope, a.qumail_identity_id FROM sessions s JOIN accounts a ON a.account_id = s.account_id WHERE s.session_token_hash = ?")
     .bind(tokenHash)
     .first()) as any;
 
   if (row && row.expires_at >= now) {
-    return { accountId: row.account_id, deviceId: row.device_id };
+    if (!row.scope || !String(row.scope).split(" ").includes("directory:access") || !row.qumail_identity_id) return null;
+    return { accountId: row.account_id, deviceId: row.device_id, scope: row.scope, qumailIdentityId: row.qumail_identity_id };
   }
-
-  // Fallback: Support direct Google OIDC ID token authentication
-  if (token.split(".").length === 3) {
-    const claims = await verifyGoogleIdToken(token, googleClientId);
-    if (claims && claims.email) {
-      const normalized = normalizeEmail(claims.email);
-      const accountId = await hmacSha256(normalized, pepper || DEFAULT_PEPPER);
-      return { accountId, deviceId: "google-direct" };
-    }
-  }
-
+  // Google ID tokens are accepted only at the dedicated enrollment endpoint;
+  // directory requests use opaque, scoped sessions exclusively.
   return null;
+}
+
+async function consumeDirectoryNonce(db: D1Database, nonceHex: string): Promise<boolean> {
+  if (!/^[0-9a-f]{64}$/i.test(nonceHex)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  const nonceHash = await sha256Hex(nonceHex);
+  const result = await db.prepare(
+    "DELETE FROM directory_nonces WHERE nonce_hash = ? AND expires_at >= ?"
+  ).bind(nonceHash, now).run();
+  return (result.meta.changes || 0) === 1;
+}
+
+async function consumeLookupQuota(db: D1Database, requesterId: string): Promise<boolean> {
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - 60;
+  const recent = (await db.prepare(
+    "SELECT count(*) AS total FROM directory_lookup_limits WHERE requester_id = ? AND created_at >= ?"
+  ).bind(requesterId, windowStart).first()) as any;
+  if (recent && recent.total >= 60) return false;
+  await db.prepare(
+    "INSERT INTO directory_lookup_limits (requester_id, created_at) VALUES (?, ?)"
+  ).bind(requesterId, now).run();
+  return true;
 }
 
 // ============================================================================
@@ -263,9 +330,14 @@ export default {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join("");
 
+        const now = Math.floor(Date.now() / 1000);
+        await env.DB.prepare(
+          "INSERT INTO directory_nonces (nonce_hash, expires_at, created_at) VALUES (?, ?, ?)"
+        ).bind(await sha256Hex(nonceHex), now + DIRECTORY_NONCE_TTL_SECONDS, now).run();
+
         return jsonResponse({
           nonce_hex: nonceHex,
-          expires_in: 300,
+          expires_in: DIRECTORY_NONCE_TTL_SECONDS,
         });
       }
 
@@ -280,9 +352,16 @@ export default {
         const certBundle = body.public_key_bundle; // { kem_public_base64, dsa_public_base64 }
         const popSignature = body.pop_signature;
         const serverNonce = body.server_nonce || "";
+        const qumailIdentityId = body.qumail_identity_id || "";
+        const keyMetadata = body.key_metadata;
 
-        if (!idToken || !certBundle || !certBundle.kem_public_base64 || !certBundle.dsa_public_base64) {
-          return errorResponse("Missing required parameters: id_token and public_key_bundle are required.", 400);
+        if (!idToken || !certBundle || !certBundle.kem_public_base64 || !certBundle.dsa_public_base64 ||
+            !/^[0-9a-f]{32}$/.test(qumailIdentityId) || !keyMetadata ||
+            !/^[A-F0-9]{64}$/.test(keyMetadata.root_fingerprint || "") ||
+            keyMetadata.suite !== "QUMAIL-OPENPGP-PQ-v1/ML-KEM-768+ML-DSA-65" ||
+            !Number.isInteger(keyMetadata.key_version) || keyMetadata.key_version < 1 ||
+            !["active", "retired", "revoked"].includes(keyMetadata.lifecycle)) {
+          return errorResponse("Missing required identity or public-key enrollment parameters.", 400);
         }
 
         const claims = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID);
@@ -290,14 +369,18 @@ export default {
           return errorResponse("Invalid, unverified, or expired Google ID token.", 401);
         }
 
-        const normalized = normalizeEmail(claims.email);
-        const accountId = await hmacSha256(normalized, pepper);
+        const accountId = await resolveMailboxAccountId(env.DB, claims.email, pepper);
+        const bindingId = await googleBindingId(claims.issuer, claims.subject, pepper);
+        const fingerprint = await sha256Hex(certBundle.dsa_public_base64);
+        if (!(await consumeDirectoryNonce(env.DB, serverNonce))) {
+          return errorResponse("Proof-of-possession challenge is invalid, expired, or already consumed.", 403);
+        }
 
         // Verify ML-DSA-65 Proof of Possession
         const popOk = await verifyProofOfPossession(
           deviceId,
-          accountId,
-          certBundle.kem_public_base64,
+          qumailIdentityId,
+          fingerprint,
           serverNonce,
           certBundle.dsa_public_base64,
           popSignature
@@ -307,7 +390,11 @@ export default {
         }
 
         // Upsert account & enroll device
-        return await enrollAccountAndDevice(env.DB, accountId, "google", deviceId, deviceLabel, certBundle);
+        certBundle.metadata = keyMetadata;
+        return await enrollAccountAndDevice(
+          env.DB, accountId, "google", bindingId, qumailIdentityId,
+          deviceId, deviceLabel, certBundle
+        );
       }
 
       // ----------------------------------------------------------------------
@@ -331,7 +418,7 @@ export default {
         }
 
         const normalized = normalizeEmail(rawEmail);
-        const accountId = await hmacSha256(normalized, pepper);
+        const accountId = await resolveMailboxAccountId(env.DB, normalized, pepper);
         const now = Math.floor(Date.now() / 1000);
 
         // Rate limit: max 3 requests per 15 min per target email
@@ -415,7 +502,7 @@ export default {
         }
 
         const normalized = normalizeEmail(rawEmail);
-        const accountId = await hmacSha256(normalized, pepper);
+        const accountId = await resolveMailboxAccountId(env.DB, normalized, pepper);
         const now = Math.floor(Date.now() / 1000);
 
         const challenge = (await env.DB.prepare(
@@ -450,10 +537,15 @@ export default {
         await env.DB.prepare("DELETE FROM email_challenges WHERE challenge_id = ?").bind(challengeId).run();
 
         // Verify Proof of Possession
+        const qumailIdentityId = body.qumail_identity_id || "";
+        const fingerprint = await sha256Hex(certBundle.dsa_public_base64 || "");
+        if (!(await consumeDirectoryNonce(env.DB, serverNonce))) {
+          return errorResponse("Proof-of-possession challenge is invalid, expired, or already consumed.", 403);
+        }
         const popOk = await verifyProofOfPossession(
           deviceId,
-          accountId,
-          certBundle.kem_public_base64,
+          qumailIdentityId,
+          fingerprint,
           serverNonce,
           certBundle.dsa_public_base64,
           popSignature
@@ -462,14 +554,17 @@ export default {
           return errorResponse("Cryptographic Proof of Possession signature verification failed.", 403);
         }
 
-        return await enrollAccountAndDevice(env.DB, accountId, "custom", deviceId, deviceLabel, certBundle);
+        return await enrollAccountAndDevice(
+          env.DB, accountId, "custom", "", qumailIdentityId,
+          deviceId, deviceLabel, certBundle
+        );
       }
 
       // ----------------------------------------------------------------------
       // Directory: Authenticated POST Body Lookup (Metadata Minimization)
       // ----------------------------------------------------------------------
       if (url.pathname === "/api/v1/directory/lookup" && method === "POST") {
-        const auth = await authenticateSession(request, env.DB, pepper, env.GOOGLE_CLIENT_ID);
+        const auth = await authenticateSession(request, env.DB);
         if (!auth) {
           return errorResponse("Unauthorized: Valid session token required for directory queries.", 401);
         }
@@ -481,12 +576,16 @@ export default {
         }
 
         const normalized = normalizeEmail(targetEmail);
-        const targetAccountId = await hmacSha256(normalized, pepper);
+        if (!(await consumeLookupQuota(env.DB, auth.accountId))) {
+          return errorResponse("Directory lookup rate limit exceeded. Please retry shortly.", 429);
+        }
+        const targetAccountId = await mailboxAccountId(normalized, pepper);
+        const legacyTargetAccountId = await legacyMailboxAccountId(normalized, pepper);
 
         const deviceRows = (await env.DB.prepare(
-          "SELECT device_id, device_label, fingerprint, public_key_bundle, key_generation, created_at FROM devices WHERE account_id = ? AND revoked = 0 ORDER BY key_generation DESC, created_at DESC"
+          "SELECT device_id, device_label, fingerprint, public_key_bundle, key_generation, created_at FROM devices WHERE account_id IN (?, ?) AND revoked = 0 ORDER BY key_generation DESC, created_at DESC"
         )
-          .bind(targetAccountId)
+          .bind(targetAccountId, legacyTargetAccountId)
           .all()) as any;
 
         if (!deviceRows || !deviceRows.results || deviceRows.results.length === 0) {
@@ -517,7 +616,7 @@ export default {
       // Devices: List User's Active Devices
       // ----------------------------------------------------------------------
       if (url.pathname === "/api/v1/devices" && method === "GET") {
-        const auth = await authenticateSession(request, env.DB, pepper, env.GOOGLE_CLIENT_ID);
+        const auth = await authenticateSession(request, env.DB);
         if (!auth) {
           return errorResponse("Unauthorized.", 401);
         }
@@ -537,7 +636,7 @@ export default {
       // Devices: Revoke Device
       // ----------------------------------------------------------------------
       if (url.pathname.startsWith("/api/v1/devices/") && url.pathname.endsWith("/revoke") && method === "POST") {
-        const auth = await authenticateSession(request, env.DB, pepper, env.GOOGLE_CLIENT_ID);
+        const auth = await authenticateSession(request, env.DB);
         if (!auth) {
           return errorResponse("Unauthorized.", 401);
         }
@@ -577,7 +676,7 @@ export default {
       // Account: Hard Delete
       // ----------------------------------------------------------------------
       if (url.pathname === "/api/v1/account" && method === "DELETE") {
-        const auth = await authenticateSession(request, env.DB, pepper, env.GOOGLE_CLIENT_ID);
+        const auth = await authenticateSession(request, env.DB);
         if (!auth) {
           return errorResponse("Unauthorized.", 401);
         }
@@ -617,7 +716,7 @@ export default {
       // WebLinks: Create Ephemeral Encrypted Link
       // ----------------------------------------------------------------------
       if (url.pathname === "/api/v1/weblinks/create" && method === "POST") {
-        const auth = await authenticateSession(request, env.DB, pepper, env.GOOGLE_CLIENT_ID);
+        const auth = await authenticateSession(request, env.DB);
         if (!auth) {
           return errorResponse("Unauthorized: Session token required to generate WebLinks.", 401);
         }
@@ -636,6 +735,7 @@ export default {
         const recipientEmailHash = body.recipient_email_hash || null;
         const recipientEmailSalt = body.recipient_email_salt || null;
         const hasEmailOtp = recipientEmailHash && recipientEmailSalt ? 1 : 0;
+        const attachments = Array.isArray(body.attachments) ? body.attachments : [];
 
         if (!encryptedPayload || !ivHex) {
           return errorResponse("Missing required parameters: encrypted_payload and iv_hex are required.", 400);
@@ -646,10 +746,43 @@ export default {
           return errorResponse(`Payload exceeds maximum allowable limit of ${MAX_WEBLINK_BYTES / 1024} KB.`, 413);
         }
 
+        if (attachments.length > WEBLINK_ATTACHMENT_MAX_COUNT) {
+          return errorResponse("Too many encrypted WebLink attachments.", 413);
+        }
+        if (attachments.length && env.ENVIRONMENT !== "development") {
+          // D1 chunks are deliberately a constrained development transport.
+          // A production Worker must be wired to a reviewed object-storage
+          // backend before attachment delivery is enabled there.
+          return errorResponse("Encrypted WebLink attachments are available only in the development environment.", 403);
+        }
+        let declaredAttachmentBytes = 0;
+        const attachmentRows: Array<[string, string, string, number, number]> = [];
+        for (const attachment of attachments) {
+          const attachmentId = String(attachment?.attachment_id || "");
+          const encryptedFilename = String(attachment?.encrypted_filename || "");
+          const filenameIvB64 = String(attachment?.filename_iv_b64 || "");
+          const plaintextSize = Number(attachment?.plaintext_size);
+          const chunkCount = Number(attachment?.chunk_count);
+          const expectedChunks = Number.isSafeInteger(plaintextSize) && plaintextSize > 0
+            ? Math.ceil(plaintextSize / WEBLINK_ATTACHMENT_CHUNK_BYTES) : 0;
+          if (!validAttachmentId(attachmentId) || !encryptedFilename || !filenameIvB64 ||
+              !Number.isSafeInteger(plaintextSize) || plaintextSize <= 0 ||
+              !Number.isSafeInteger(chunkCount) || chunkCount !== expectedChunks ||
+              chunkCount > Math.ceil(WEBLINK_ATTACHMENT_TOTAL_BYTES / WEBLINK_ATTACHMENT_CHUNK_BYTES) ||
+              encryptedFilename.length > 4096 || filenameIvB64.length > 64) {
+            return errorResponse("Invalid encrypted attachment metadata.", 400);
+          }
+          declaredAttachmentBytes += plaintextSize;
+          if (declaredAttachmentBytes > WEBLINK_ATTACHMENT_TOTAL_BYTES) {
+            return errorResponse("Encrypted WebLink attachments exceed the 30 MB total limit.", 413);
+          }
+          attachmentRows.push([attachmentId, encryptedFilename, filenameIvB64, plaintextSize, chunkCount]);
+        }
+
         const now = Math.floor(Date.now() / 1000);
 
         // Account active link quota check
-        const activeLinks = (await env.DB.prepare("SELECT count(*) as total FROM weblinks WHERE sender_account_id = ? AND expires_at > ?")
+        const activeLinks = (await env.DB.prepare("SELECT count(*) as total FROM weblinks WHERE sender_account_id = ? AND expires_at > ? AND is_burned = 0")
           .bind(auth.accountId, now)
           .first()) as any;
 
@@ -662,7 +795,7 @@ export default {
           passcodeHash = await hmacSha256(passcodeTag, pepper);
         }
 
-        const linkId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        const linkId = crypto.randomUUID().replace(/-/g, "");
         const expiresAt = now + ttlDays * 86400;
 
         await env.DB.prepare(
@@ -670,6 +803,14 @@ export default {
         )
           .bind(linkId, auth.accountId, encryptedPayload, ivHex, hasPasscode, passcodeHash, passcodeSaltHex, maxViews, burnAfterRead, expiresAt, now, hasEmailOtp, recipientEmailHash, recipientEmailSalt)
           .run();
+
+        if (attachmentRows.length) {
+          await env.DB.batch(attachmentRows.map(([attachmentId, encryptedFilename, filenameIvB64, plaintextSize, chunkCount]) =>
+            env.DB.prepare(
+              "INSERT INTO weblink_attachments (link_id, attachment_id, encrypted_filename, filename_iv_b64, plaintext_size, chunk_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ).bind(linkId, attachmentId, encryptedFilename, filenameIvB64, plaintextSize, chunkCount, now)
+          ));
+        }
 
         const hostUrl = url.origin;
         return jsonResponse({
@@ -679,7 +820,74 @@ export default {
           expires_at: expiresAt,
           max_views: maxViews,
           burn_after_read: Boolean(burnAfterRead),
+          attachment_count: attachmentRows.length,
         });
+      }
+
+      // ----------------------------------------------------------------------
+      // WebLink encrypted attachment upload and recipient retrieval.
+      // D1 receives AES-GCM ciphertext only; all plaintext stays on the client.
+      // ----------------------------------------------------------------------
+      const attachmentListMatch = url.pathname.match(/^\/api\/v1\/weblinks\/([a-f0-9]{16}(?:[a-f0-9]{16})?)\/attachments$/i);
+      if (attachmentListMatch && method === "GET") {
+        const linkId = attachmentListMatch[1];
+        const now = Math.floor(Date.now() / 1000);
+        if (!await hasWebLinkAccessGrant(request, env.DB, linkId, now)) {
+          return errorResponse("A current secure-link access grant is required.", 401);
+        }
+        const rows = await env.DB.prepare(
+          "SELECT attachment_id, encrypted_filename, filename_iv_b64, plaintext_size, chunk_count FROM weblink_attachments WHERE link_id = ? ORDER BY attachment_id"
+        ).bind(linkId).all();
+        return jsonResponse({ success: true, attachments: rows.results || [] });
+      }
+
+      const attachmentChunkMatch = url.pathname.match(/^\/api\/v1\/weblinks\/([a-f0-9]{16}(?:[a-f0-9]{16})?)\/attachments\/([a-f0-9]{32})\/chunks\/(\d+)$/i);
+      if (attachmentChunkMatch) {
+        const [, linkId, attachmentId, chunkIndexText] = attachmentChunkMatch;
+        const chunkIndex = Number(chunkIndexText);
+        const now = Math.floor(Date.now() / 1000);
+        if (!Number.isSafeInteger(chunkIndex) || chunkIndex < 0) return errorResponse("Invalid attachment chunk identifier.", 400);
+
+        if (method === "PUT") {
+          const auth = await authenticateSession(request, env.DB);
+          if (!auth) return errorResponse("Unauthorized: sender directory session required.", 401);
+          const attachment = await env.DB.prepare(
+            "SELECT a.chunk_count FROM weblink_attachments a JOIN weblinks w ON w.link_id = a.link_id WHERE a.link_id = ? AND a.attachment_id = ? AND w.sender_account_id = ? AND w.expires_at >= ? AND w.is_burned = 0"
+          ).bind(linkId, attachmentId, auth.accountId, now).first() as any;
+          if (!attachment || chunkIndex >= attachment.chunk_count) return errorResponse("Unknown or unavailable encrypted attachment.", 404);
+          const ivB64 = url.searchParams.get("iv") || "";
+          if (!/^[A-Za-z0-9_-]{16}$/.test(ivB64)) return errorResponse("Invalid attachment encryption nonce.", 400);
+          const ciphertext = await request.arrayBuffer();
+          if (ciphertext.byteLength < 17 || ciphertext.byteLength > WEBLINK_ATTACHMENT_CIPHERTEXT_MAX_BYTES) {
+            return errorResponse("Encrypted attachment chunk exceeds its size limit.", 413);
+          }
+          try {
+            await env.DB.prepare(
+              "INSERT INTO weblink_attachment_chunks (link_id, attachment_id, chunk_index, iv_b64, ciphertext) VALUES (?, ?, ?, ?, ?)"
+            ).bind(linkId, attachmentId, chunkIndex, ivB64, new Uint8Array(ciphertext)).run();
+          } catch {
+            return errorResponse("Attachment chunk was already uploaded or could not be stored.", 409);
+          }
+          return jsonResponse({ success: true });
+        }
+
+        if (method === "GET") {
+          if (!await hasWebLinkAccessGrant(request, env.DB, linkId, now)) {
+            return errorResponse("A current secure-link access grant is required.", 401);
+          }
+          const chunk = await env.DB.prepare(
+            "SELECT c.iv_b64, c.ciphertext FROM weblink_attachment_chunks c JOIN weblink_attachments a ON a.link_id = c.link_id AND a.attachment_id = c.attachment_id WHERE c.link_id = ? AND c.attachment_id = ? AND c.chunk_index = ?"
+          ).bind(linkId, attachmentId, chunkIndex).first() as any;
+          if (!chunk) return errorResponse("Encrypted attachment chunk is unavailable.", 404);
+          return new Response(chunk.ciphertext as ArrayBuffer, {
+            headers: {
+              "Content-Type": "application/octet-stream",
+              "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+              "X-Content-Type-Options": "nosniff",
+              "X-QuMail-Chunk-IV": chunk.iv_b64,
+            },
+          });
+        }
       }
 
       // ----------------------------------------------------------------------
@@ -688,6 +896,7 @@ export default {
       if (url.pathname.startsWith("/api/v1/weblinks/") && url.pathname.endsWith("/reveal") && method === "POST") {
         const parts = url.pathname.split("/");
         const linkId = parts[4];
+        if (!validWebLinkId(linkId)) return errorResponse("Invalid secure link identifier.", 404);
         const body = (await request.json().catch(() => ({}))) as any;
         const suppliedPasscodeTag = body.passcode_tag || "";
         const now = Math.floor(Date.now() / 1000);
@@ -743,32 +952,23 @@ export default {
           }
         }
 
-        // Passcode valid or not required -> increment view count
-        const newViewCount = link.view_count + 1;
-        const shouldBurn = link.burn_after_read === 1 || newViewCount >= link.max_views;
-
-        if (shouldBurn) {
-          // Point 4: Atomic D1 Burn-After-Read (Strong consistency prevents concurrent double-reads)
-          const burnRes = (await env.DB.prepare(
-            "UPDATE weblinks SET view_count = view_count + 1, is_burned = 1, encrypted_payload = '[BURNED]' WHERE link_id = ? AND is_burned = 0 AND expires_at > ? RETURNING view_count"
-          )
-            .bind(linkId, now)
-            .first()) as any;
-
-          if (!burnRes) {
-            return errorResponse("This secure link has already been burned by a concurrent viewer.", 410);
-          }
-        } else {
-          await env.DB.prepare("UPDATE weblinks SET view_count = view_count + 1 WHERE link_id = ? AND is_burned = 0").bind(linkId).run();
-        }
+        // Atomically reserve exactly one view.  Reading then incrementing is
+        // racy: concurrent recipients could otherwise exceed max_views.
+        const reserved = (await env.DB.prepare(
+          "UPDATE weblinks SET view_count = view_count + 1, is_burned = CASE WHEN burn_after_read = 1 OR view_count + 1 >= max_views THEN 1 ELSE 0 END, encrypted_payload = CASE WHEN burn_after_read = 1 OR view_count + 1 >= max_views THEN '[BURNED]' ELSE encrypted_payload END WHERE link_id = ? AND is_burned = 0 AND expires_at > ? AND view_count < max_views RETURNING view_count, is_burned"
+        ).bind(linkId, now).first()) as any;
+        if (!reserved) return errorResponse("This secure link has already reached its view limit or was consumed by another viewer.", 410);
+        const shouldBurn = reserved.is_burned === 1;
+        const attachmentGrant = await issueWebLinkAccessGrant(env.DB, linkId, now);
 
         return jsonResponse({
           success: true,
           encrypted_payload: link.encrypted_payload,
           iv_hex: link.iv_hex,
           passcode_salt_hex: link.passcode_salt_hex || "",
-          views_remaining: Math.max(0, link.max_views - newViewCount),
+          views_remaining: Math.max(0, link.max_views - reserved.view_count),
           burned: shouldBurn,
+          attachment_grant: attachmentGrant,
         });
       }
 
@@ -779,6 +979,7 @@ export default {
       if (url.pathname.startsWith("/api/v1/weblinks/") && url.pathname.endsWith("/request-otp") && method === "POST") {
         const parts = url.pathname.split("/");
         const linkId = parts[4];
+        if (!validWebLinkId(linkId)) return jsonResponse({ success: true, challenge_id: crypto.randomUUID().replace(/-/g, ""), message: "If that email matches the intended recipient, a verification code has been sent." });
         const body = (await request.json().catch(() => ({}))) as any;
         const suppliedEmail = (body.email || "").trim().toLowerCase();
         const now = Math.floor(Date.now() / 1000);
@@ -881,6 +1082,7 @@ export default {
       if (url.pathname.startsWith("/api/v1/weblinks/") && url.pathname.endsWith("/verify-otp") && method === "POST") {
         const parts = url.pathname.split("/");
         const linkId = parts[4];
+        if (!validWebLinkId(linkId)) return errorResponse("Invalid or expired verification session. Please restart email verification.", 400);
         const body = (await request.json().catch(() => ({}))) as any;
         const challengeId = body.challenge_id || "";
         const suppliedOtp = (body.otp || "").trim();
@@ -939,32 +1141,29 @@ export default {
           return errorResponse("This secure link has expired or has already been burned.", 410);
         }
 
-        // Consume challenge (single-use guarantee)
-        await env.DB.prepare("DELETE FROM email_challenges WHERE challenge_id = ?").bind(challengeId).run();
+        // Consume challenge conditionally.  A second concurrent request that
+        // raced after the successful hash comparison must not reveal a second
+        // copy of the payload.
+        const consumed = await env.DB.prepare(
+          "DELETE FROM email_challenges WHERE challenge_id = ? AND account_id = ? AND challenge_type = 'weblink_otp' AND expires_at >= ? RETURNING challenge_id"
+        ).bind(challengeId, linkId, now).first();
+        if (!consumed) return errorResponse("This verification code was already used. Please request a new code.", 410);
 
-        // Increment view count / burn atomically
-        const newViewCount = link.view_count + 1;
-        const shouldBurn = link.burn_after_read === 1 || newViewCount >= link.max_views;
-
-        if (shouldBurn) {
-          const burnRes = (await env.DB.prepare(
-            "UPDATE weblinks SET view_count = view_count + 1, is_burned = 1, encrypted_payload = '[BURNED]', otp_verified = 1 WHERE link_id = ? AND is_burned = 0 RETURNING view_count"
-          ).bind(linkId).first()) as any;
-          if (!burnRes) {
-            return errorResponse("This secure link has already been burned by a concurrent viewer.", 410);
-          }
-        } else {
-          await env.DB.prepare(
-            "UPDATE weblinks SET view_count = view_count + 1, otp_verified = 1 WHERE link_id = ? AND is_burned = 0"
-          ).bind(linkId).run();
-        }
+        // Atomically reserve one view after consuming the single-use OTP.
+        const reserved = (await env.DB.prepare(
+          "UPDATE weblinks SET view_count = view_count + 1, otp_verified = 1, is_burned = CASE WHEN burn_after_read = 1 OR view_count + 1 >= max_views THEN 1 ELSE 0 END, encrypted_payload = CASE WHEN burn_after_read = 1 OR view_count + 1 >= max_views THEN '[BURNED]' ELSE encrypted_payload END WHERE link_id = ? AND is_burned = 0 AND expires_at > ? AND view_count < max_views RETURNING view_count, is_burned"
+        ).bind(linkId, now).first()) as any;
+        if (!reserved) return errorResponse("This secure link has already reached its view limit or was consumed by another viewer.", 410);
+        const shouldBurn = reserved.is_burned === 1;
+        const attachmentGrant = await issueWebLinkAccessGrant(env.DB, linkId, now);
 
         return jsonResponse({
           success: true,
           encrypted_payload: link.encrypted_payload,
           iv_hex: link.iv_hex,
-          views_remaining: Math.max(0, link.max_views - newViewCount),
+          views_remaining: Math.max(0, link.max_views - reserved.view_count),
           burned: shouldBurn,
+          attachment_grant: attachmentGrant,
         });
       }
 
@@ -1003,11 +1202,22 @@ export default {
       await env.DB.batch([
         // 1. Purge expired sessions
         env.DB.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now),
-        // 2. Purge expired email OTP challenges
+        // 2. Purge expired single-use proof-of-possession challenges
+        env.DB.prepare("DELETE FROM directory_nonces WHERE expires_at < ?").bind(now),
+        // 3. Purge expired email OTP challenges
         env.DB.prepare("DELETE FROM email_challenges WHERE expires_at < ?").bind(now),
-        // 3. Purge expired or burned weblinks
-        env.DB.prepare("DELETE FROM weblinks WHERE expires_at < ? OR is_burned = 1").bind(now),
-        // 4. Purge tombstones older than retention window
+        // 4. Retain only a short lookup-quota window.
+        env.DB.prepare("DELETE FROM directory_lookup_limits WHERE created_at < ?").bind(now - 60),
+        // 5. Purge expired attachment grants. A burned link is retained only
+        // while an already-revealed viewer has its five-minute download grant.
+        env.DB.prepare("DELETE FROM weblink_access_grants WHERE expires_at < ?").bind(now),
+        // 6. Purge ciphertext children before terminal WebLinks. Explicit
+        // cleanup does not depend on the runtime foreign-key pragma.
+        env.DB.prepare("DELETE FROM weblink_attachment_chunks WHERE link_id IN (SELECT link_id FROM weblinks WHERE expires_at < ? OR (is_burned = 1 AND NOT EXISTS (SELECT 1 FROM weblink_access_grants g WHERE g.link_id = weblinks.link_id AND g.expires_at >= ?)))").bind(now, now),
+        env.DB.prepare("DELETE FROM weblink_attachments WHERE link_id IN (SELECT link_id FROM weblinks WHERE expires_at < ? OR (is_burned = 1 AND NOT EXISTS (SELECT 1 FROM weblink_access_grants g WHERE g.link_id = weblinks.link_id AND g.expires_at >= ?)))").bind(now, now),
+        // 7. Purge expired or burned WebLinks whose grants are gone.
+        env.DB.prepare("DELETE FROM weblinks WHERE expires_at < ? OR (is_burned = 1 AND NOT EXISTS (SELECT 1 FROM weblink_access_grants g WHERE g.link_id = weblinks.link_id AND g.expires_at >= ?))").bind(now, now),
+        // 8. Purge tombstones older than retention window
         env.DB.prepare("DELETE FROM tombstones WHERE expires_at < ?").bind(now),
       ]);
     } catch (cronErr) {
@@ -1130,6 +1340,8 @@ async function enrollAccountAndDevice(
   db: D1Database,
   accountId: string,
   authProvider: string,
+  googleBindingId: string,
+  qumailIdentityId: string,
   deviceId: string,
   deviceLabel: string,
   certBundle: any
@@ -1147,13 +1359,26 @@ async function enrollAccountAndDevice(
   }
 
   // Ensure account row exists
-  const existingAccount = (await db.prepare("SELECT account_id FROM accounts WHERE account_id = ?").bind(accountId).first()) as any;
+  const existingAccount = (await db.prepare(
+    "SELECT account_id, google_binding_id, qumail_identity_id FROM accounts WHERE account_id = ?"
+  ).bind(accountId).first()) as any;
   if (!existingAccount) {
-    await db.prepare("INSERT INTO accounts (account_id, auth_provider, created_at, updated_at) VALUES (?, ?, ?, ?)")
-      .bind(accountId, authProvider, now, now)
+    await db.prepare(
+      "INSERT INTO accounts (account_id, auth_provider, google_binding_id, qumail_identity_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+      .bind(accountId, authProvider, googleBindingId || null, qumailIdentityId, now, now)
       .run();
   } else {
-    await db.prepare("UPDATE accounts SET updated_at = ? WHERE account_id = ?").bind(now, accountId).run();
+    if (existingAccount.qumail_identity_id &&
+        ((googleBindingId && existingAccount.google_binding_id && existingAccount.google_binding_id !== googleBindingId) ||
+         (!googleBindingId && existingAccount.qumail_identity_id !== qumailIdentityId))) {
+      return errorResponse("This mailbox is already bound to a different verified QuMail identity.", 409);
+    }
+    // A verified Google identity or initial QuMail identity may update its binding,
+    // preserving devices and public-key history.
+    await db.prepare(
+      "UPDATE accounts SET google_binding_id = ?, qumail_identity_id = ?, updated_at = ? WHERE account_id = ?"
+    ).bind(googleBindingId || null, qumailIdentityId, now, accountId).run();
   }
 
   // Check active device cap
@@ -1180,13 +1405,12 @@ async function enrollAccountAndDevice(
     .join("");
   const tokenHash = await sha256Hex(rawToken);
 
-  await db.prepare("INSERT INTO sessions (session_token_hash, account_id, device_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(tokenHash, accountId, deviceId, now + SESSION_TTL_SECONDS, now)
+  await db.prepare("INSERT INTO sessions (session_token_hash, account_id, device_id, scope, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(tokenHash, accountId, deviceId, "directory:access", now + SESSION_TTL_SECONDS, now)
     .run();
 
   return jsonResponse({
     success: true,
-    account_id: accountId,
     device_id: deviceId,
     session_token: rawToken,
     expires_in: SESSION_TTL_SECONDS,
@@ -1287,6 +1511,9 @@ function serveWebLinkViewer(linkId: string): Response {
     .input:focus { border-color: var(--accent); }
     .input-otp { text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem; font-weight: 700; }
     .content-box { background: #030712; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; white-space: pre-wrap; word-break: break-word; font-size: 0.95rem; line-height: 1.6; max-height: 420px; overflow-y: auto; display: none; }
+    .attachments { display: none; margin-top: 1rem; }
+    .attachment-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem; border: 1px solid var(--border); border-radius: 8px; margin-top: .5rem; font-size: .85rem; }
+    .attachment-download { width: auto; padding: .5rem .75rem; font-size: .8rem; }
     .alert { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.875rem; display: none; }
     .alert-error { background: #7f1d1d; color: #fecaca; border: 1px solid #991b1b; }
     .alert-info { background: rgba(6,182,212,0.1); color: var(--accent); border: 1px solid rgba(6,182,212,0.3); display: block; }
@@ -1339,6 +1566,7 @@ function serveWebLinkViewer(linkId: string): Response {
     <div id="step-message" class="step">
       <div class="success-icon">🔓</div>
       <div id="contentBox" class="content-box" style="display:block;"></div>
+      <div id="attachmentsBox" class="attachments"></div>
     </div>
 
     <p class="footer-note">
@@ -1368,6 +1596,7 @@ function serveWebLinkViewer(linkId: string): Response {
       const advToggle    = document.getElementById("advancedToggle");
       const advSection   = document.getElementById("advancedSection");
       const contentBox   = document.getElementById("contentBox");
+      const attachmentsBox = document.getElementById("attachmentsBox");
 
       let currentChallengeId = "";
       let currentEmail = "";
@@ -1538,7 +1767,77 @@ function serveWebLinkViewer(linkId: string): Response {
         const plaintext = new TextDecoder().decode(plainBuf);
 
         contentBox.textContent = plaintext;
+        await showEncryptedAttachments(data.attachment_grant || "", cryptoKey);
         showStep("step-message");
+      }
+
+      async function showEncryptedAttachments(grant, cryptoKey) {
+        attachmentsBox.replaceChildren();
+        attachmentsBox.style.display = "none";
+        if (!grant) return;
+        const response = await fetch("/api/v1/weblinks/" + linkId + "/attachments", {
+          headers: { "X-QuMail-WebLink-Grant": grant }
+        });
+        if (!response.ok) throw new Error("Could not retrieve encrypted attachment metadata.");
+        const result = await response.json();
+        const attachments = Array.isArray(result.attachments) ? result.attachments : [];
+        if (!attachments.length) return;
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = "Encrypted attachments";
+        attachmentsBox.appendChild(label);
+        for (const attachment of attachments) {
+          const item = document.createElement("div");
+          item.className = "attachment-item";
+          const name = document.createElement("span");
+          try {
+            const nonce = Uint8Array.from(atob(attachment.filename_iv_b64), c => c.charCodeAt(0));
+            const encrypted = Uint8Array.from(atob(attachment.encrypted_filename), c => c.charCodeAt(0));
+            name.textContent = new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, cryptoKey, encrypted));
+          } catch (_) {
+            name.textContent = "Encrypted attachment";
+          }
+          const button = document.createElement("button");
+          button.className = "btn attachment-download";
+          button.textContent = "Decrypt & download";
+          button.addEventListener("click", () => downloadEncryptedAttachment(attachment, grant, cryptoKey, button));
+          item.appendChild(name);
+          item.appendChild(button);
+          attachmentsBox.appendChild(item);
+        }
+        attachmentsBox.style.display = "block";
+      }
+
+      async function downloadEncryptedAttachment(attachment, grant, cryptoKey, button) {
+        button.disabled = true;
+        button.textContent = "Decrypting…";
+        try {
+          const chunks = [];
+          for (let index = 0; index < attachment.chunk_count; index++) {
+            const response = await fetch("/api/v1/weblinks/" + linkId + "/attachments/" + attachment.attachment_id + "/chunks/" + index, {
+              headers: { "X-QuMail-WebLink-Grant": grant }
+            });
+            if (!response.ok) throw new Error("A ciphertext chunk could not be retrieved.");
+            const nonceB64 = response.headers.get("X-QuMail-Chunk-IV") || "";
+            const nonce = Uint8Array.from(atob(nonceB64.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+            const ciphertext = await response.arrayBuffer();
+            chunks.push(await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, cryptoKey, ciphertext));
+          }
+          const filenameNonce = Uint8Array.from(atob(attachment.filename_iv_b64), c => c.charCodeAt(0));
+          const encryptedFilename = Uint8Array.from(atob(attachment.encrypted_filename), c => c.charCodeAt(0));
+          const filename = new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: filenameNonce }, cryptoKey, encryptedFilename));
+          const objectUrl = URL.createObjectURL(new Blob(chunks, { type: "application/octet-stream" }));
+          const anchor = document.createElement("a");
+          anchor.href = objectUrl;
+          anchor.download = filename.replace(/[\\/:*?"<>|]/g, "_") || "qumail-attachment";
+          anchor.click();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+          button.textContent = "Downloaded";
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = "Retry download";
+          showError(error.message || "Attachment decryption failed.");
+        }
       }
     })();
   </script>

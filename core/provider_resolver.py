@@ -2,7 +2,7 @@
 Native Cryptographic Provider Path Resolver & Integrity Verification.
 
 Provides runtime resolution for QuMail's native Rust cryptographic helpers
-(qumail-m3-provider and qumail-m5-provider) across repository development,
+(qumail-vault-provider and qumail-crypto-provider) across repository development,
 packaged single-directory distributions, and custom deployment layouts.
 """
 
@@ -37,11 +37,6 @@ _VALID_NAMES = {
     "qumail-crypto-provider": "qumail-crypto-provider",
     "vault": "qumail-vault-provider",
     "crypto": "qumail-crypto-provider",
-    # Backward-compatible milestone aliases
-    "qumail-m3-provider": "qumail-vault-provider",
-    "qumail-m5-provider": "qumail-crypto-provider",
-    "m3": "qumail-vault-provider",
-    "m5": "qumail-crypto-provider",
 }
 
 
@@ -149,9 +144,9 @@ def resolve_provider(name: str = "qumail-crypto-provider") -> Path:
 
     locations = "\n  - ".join(str(p) for p in searched)
     env_hint = (
-        "QUMAIL_VAULT_PROVIDER_PATH (or QUMAIL_M3_PROVIDER_PATH)"
-        if "vault" in canonical or canonical == "qumail-m3-provider"
-        else "QUMAIL_CRYPTO_PROVIDER_PATH (or QUMAIL_M5_PROVIDER_PATH)"
+        "QUMAIL_VAULT_PROVIDER_PATH"
+        if "vault" in canonical
+        else "QUMAIL_CRYPTO_PROVIDER_PATH"
     )
     raise ProviderNotFoundError(
         f"Native cryptographic provider '{name}' ({canonical}) could not be located.\n"
@@ -232,7 +227,7 @@ def load_manifest(manifest_path: Path | None = None) -> dict[str, object] | None
         return None
 
 
-def verify_provider(name: str = "qumail-m5-provider") -> dict[str, object]:
+def verify_provider(name: str = "qumail-crypto-provider") -> dict[str, object]:
     """
     Resolve and thoroughly verify a provider executable's existence,
     mitigation flags, and manifest consistency.
@@ -248,9 +243,6 @@ def verify_provider(name: str = "qumail-m5-provider") -> dict[str, object]:
     if manifest_data:
         providers = manifest_data.get("providers", {})
         entry = providers.get(canonical)
-        if not entry:
-            fallback_key = "qumail-m3-provider" if "vault" in canonical else "qumail-m5-provider"
-            entry = providers.get(fallback_key)
         if entry and "sha256" in entry:
             manifest_match = (entry["sha256"].lower() == digest.lower())
 
@@ -266,7 +258,7 @@ def verify_provider(name: str = "qumail-m5-provider") -> dict[str, object]:
 
 if __name__ == "__main__":
     print("QuMail Native Provider Verification:")
-    for prov in ("qumail-m3-provider", "qumail-m5-provider"):
+    for prov in ("qumail-vault-provider", "qumail-crypto-provider"):
         try:
             res = verify_provider(prov)
             print(f"\n[OK] {prov}:")
