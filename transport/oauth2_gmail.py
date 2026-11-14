@@ -90,21 +90,96 @@ def _ensure_secret_dir(path: Path | str) -> None:
         pass
 
 
+_DPAPI_MAGIC = b"QUMAIL_DPAPI_v1\0"
+
+
+def dpapi_protect(data: bytes, description: str = "QuMail OAuth Master Key") -> bytes:
+    """Encrypt sensitive key material at rest using Windows DPAPI (CryptProtectData)."""
+    if os.name != "nt":
+        return data
+    try:
+        import win32crypt
+        return win32crypt.CryptProtectData(data, description, None, None, None, 0)
+    except Exception:
+        pass
+    try:
+        import ctypes as c
+        from ctypes import wintypes as w
+
+        class DATA_BLOB(c.Structure):
+            _fields_ = [("cbData", w.DWORD), ("pbData", c.POINTER(c.c_byte))]
+
+        crypt32 = c.windll.crypt32
+        kernel32 = c.windll.kernel32
+        blob_in = DATA_BLOB(len(data), c.cast(c.create_string_buffer(data, len(data)), c.POINTER(c.c_byte)))
+        blob_out = DATA_BLOB()
+        if not crypt32.CryptProtectData(c.byref(blob_in), description, None, None, None, 0, c.byref(blob_out)):
+            raise OSError(f"DPAPI CryptProtectData failed: {c.GetLastError()}")
+        res = c.string_at(blob_out.pbData, blob_out.cbData)
+        kernel32.LocalFree(blob_out.pbData)
+        return res
+    except Exception as exc:
+        logger.warning("Windows DPAPI protect fallback note: %s", exc)
+        return data
+
+
+def dpapi_unprotect(data: bytes) -> bytes:
+    """Decrypt sensitive key material using Windows DPAPI (CryptUnprotectData)."""
+    if os.name != "nt":
+        return data
+    try:
+        import win32crypt
+        return win32crypt.CryptUnprotectData(data, None, None, None, 0)[1]
+    except Exception:
+        pass
+    try:
+        import ctypes as c
+        from ctypes import wintypes as w
+
+        class DATA_BLOB(c.Structure):
+            _fields_ = [("cbData", w.DWORD), ("pbData", c.POINTER(c.c_byte))]
+
+        crypt32 = c.windll.crypt32
+        kernel32 = c.windll.kernel32
+        blob_in = DATA_BLOB(len(data), c.cast(c.create_string_buffer(data, len(data)), c.POINTER(c.c_byte)))
+        blob_out = DATA_BLOB()
+        if not crypt32.CryptUnprotectData(c.byref(blob_in), None, None, None, None, 0, c.byref(blob_out)):
+            raise OSError(f"DPAPI CryptUnprotectData failed: {c.GetLastError()}")
+        res = c.string_at(blob_out.pbData, blob_out.cbData)
+        kernel32.LocalFree(blob_out.pbData)
+        return res
+    except Exception as exc:
+        logger.warning("Windows DPAPI unprotect fallback note: %s", exc)
+        return data
+
+
 def _get_fernet() -> Fernet:
-    """Return Fernet instance backed by the local master key file."""
+    """Return Fernet instance backed by the DPAPI-wrapped local master key file."""
     mk_path = get_oauth_master_key_path()
     _ensure_secret_dir(mk_path)
     if mk_path.is_file():
-        key = mk_path.read_bytes()
+        raw_bytes = mk_path.read_bytes()
+        if raw_bytes.startswith(_DPAPI_MAGIC):
+            key = dpapi_unprotect(raw_bytes[len(_DPAPI_MAGIC):])
+        else:
+            # Legacy plaintext Fernet key on disk: seamlessly migrate to DPAPI wrapping
+            key = raw_bytes
+            try:
+                Fernet(key)
+                wrapped = _DPAPI_MAGIC + dpapi_protect(key)
+                _atomic_write_bytes(mk_path, wrapped)
+                logger.info("Migrated plaintext OAuth master key to Windows DPAPI-wrapped storage at %s", mk_path)
+            except Exception as mig_err:
+                logger.warning("Could not migrate legacy OAuth master key to DPAPI: %s", mig_err)
     else:
         # Check legacy relative path if present
         legacy = Path("secrets/oauth_master.key")
         if legacy.is_file():
             key = legacy.read_bytes()
-            mk_path.write_bytes(key)
         else:
             key = Fernet.generate_key()
-            mk_path.write_bytes(key)
+        wrapped = _DPAPI_MAGIC + dpapi_protect(key)
+        _atomic_write_bytes(mk_path, wrapped)
         try:
             os.chmod(str(mk_path), stat.S_IRUSR | stat.S_IWUSR)
         except OSError:

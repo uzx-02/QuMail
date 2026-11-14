@@ -339,3 +339,53 @@ def test_quantum_private_mail_fails_closed_on_unregistered_recipients(monkeypatc
     assert res["code"] == "UNREGISTERED_RECIPIENTS"
     assert "unregistered@stranger.example.org" in res["unregistered"]
     assert "Secure Private Link" in res["message"]
+
+
+# ============================================================================
+# Security Hardening: Windows DPAPI Protection for OAuth Master Key
+# ============================================================================
+
+def test_oauth_master_key_is_dpapi_wrapped_on_disk(tmp_path, monkeypatch):
+    """
+    oauth_master.key on disk must be wrapped with Windows DPAPI (prefixed with
+    _DPAPI_MAGIC) rather than stored as raw plaintext.
+    """
+    key_file = tmp_path / "oauth_master.key"
+    monkeypatch.setattr(oauth_module, "get_oauth_master_key_path", lambda: key_file)
+
+    # First call generates key and saves DPAPI-wrapped
+    fernet = oauth_module._get_fernet()
+    assert key_file.is_file()
+    raw_on_disk = key_file.read_bytes()
+    assert raw_on_disk.startswith(oauth_module._DPAPI_MAGIC)
+
+    # Roundtrip check: second call unprotects and produces equivalent functional Fernet
+    fernet2 = oauth_module._get_fernet()
+    ciphertext = fernet.encrypt(b"confidential token data")
+    assert fernet2.decrypt(ciphertext) == b"confidential token data"
+
+
+def test_legacy_plaintext_master_key_migrates_to_dpapi(tmp_path, monkeypatch):
+    """
+    If a legacy plaintext 44-byte Fernet key exists from an older version,
+    _get_fernet() transparently migrates it to DPAPI-wrapped storage without data loss.
+    """
+    from cryptography.fernet import Fernet
+    legacy_key = Fernet.generate_key()
+    key_file = tmp_path / "oauth_master.key"
+    key_file.write_bytes(legacy_key)
+
+    monkeypatch.setattr(oauth_module, "get_oauth_master_key_path", lambda: key_file)
+
+    # Call _get_fernet which should trigger migration
+    fernet = oauth_module._get_fernet()
+
+    # The file on disk should now be DPAPI-wrapped
+    raw_on_disk = key_file.read_bytes()
+    assert raw_on_disk.startswith(oauth_module._DPAPI_MAGIC)
+
+    # The functional key should match the original legacy key
+    orig_fernet = Fernet(legacy_key)
+    ciphertext = orig_fernet.encrypt(b"token payload")
+    assert fernet.decrypt(ciphertext) == b"token payload"
+
