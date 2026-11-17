@@ -1,0 +1,11 @@
+{
+  "app_name": "QuMail",
+  "display_name": "QuMail Secure Email",
+  "version": "1.0.0",
+  "build_utc": "2026-11-10T08:10:08.839605+00:00",
+  "commit_sha": "0be6cb1",
+  "platform": "win32-x64",
+  "provider_schema": "1.0",
+  "rust_profile": "release-cfg",
+  "pe_mitigations_verified": true
+}

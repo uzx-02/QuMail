@@ -1,0 +1,8 @@
+{
+  "name": "qumail-android-bridge",
+  "platforms": ["android"],
+  "android": {
+    "package": "com.qumail",
+    "packageClass": "com.qumail.CryptoBridgePackage"
+  }
+}

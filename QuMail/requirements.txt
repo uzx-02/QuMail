@@ -1,0 +1,2 @@
+# Hash-locked runtime inputs. Native validation setup: see README.md.
+-r packaging/requirements-runtime.lock

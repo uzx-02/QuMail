@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" class="dark" style="background-color: #0A0E17; color-scheme: dark;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuMail — Post-Quantum Secure Corporate Email</title>
+    <script>
+      window.__qumailStartTime = Date.now();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap"></noscript>
+    <style>
+      :root {
+        --qm-bg: #0A0E17;
+        --qm-title: #F8FAFC;
+        --qm-subtitle: #94A3B8;
+        --qm-track: rgba(255, 255, 255, 0.08);
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #0A0E17 !important;
+        color-scheme: dark;
+        font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      #qumail-preloader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #0A0E17 !important;
+        z-index: 99999;
+        user-select: none;
+        transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      #qumail-preloader.qm-fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .qm-emblem {
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #06B6D4 0%, #2563EB 100%);
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 30px rgba(6, 182, 212, 0.35);
+        animation: qm-pulse 2.4s ease-in-out infinite;
+      }
+      .qm-emblem svg {
+        width: 32px;
+        height: 32px;
+        fill: #FFFFFF;
+      }
+      .qm-brand {
+        margin-top: 20px;
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--qm-title);
+        letter-spacing: -0.5px;
+      }
+      .qm-subtitle {
+        margin-top: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--qm-subtitle);
+        letter-spacing: 0.1px;
+      }
+      .qm-progress-track {
+        width: 220px;
+        height: 3px;
+        background: var(--qm-track);
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+        margin-top: 36px;
+      }
+      .qm-progress-bar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, #06B6D4, #3B82F6, #2563EB);
+        border-radius: 3px;
+        animation: qm-indeterminate 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .qm-status-label {
+        margin-top: 14px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+      }
+      @keyframes qm-indeterminate {
+        0% {
+          left: -40%;
+          width: 30%;
+        }
+        50% {
+          left: 25%;
+          width: 60%;
+        }
+        100% {
+          left: 100%;
+          width: 30%;
+        }
+      }
+      @keyframes qm-pulse {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.04);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-[#0A0E17] dark:bg-[#0A0E17] text-[#202124] dark:text-[#F1F5F9] antialiased select-none overflow-hidden h-screen w-screen">
+    <!-- Gmail-style Pre-loader Overlay -->
+    <div id="qumail-preloader">
+      <div class="qm-emblem">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 2.18l7 3.89v4.93c0 4.54-3.14 8.79-7 9.88-3.86-1.09-7-5.34-7-9.88V8.07l7-3.89zM10.85 15.5l5.65-5.65-1.41-1.41-4.24 4.24-2.12-2.12-1.41 1.41 3.53 3.53z" />
+        </svg>
+      </div>
+      <div class="qm-brand">QuMail</div>
+      <div class="qm-subtitle">Post-Quantum Secure Corporate Email</div>
+      <div class="qm-progress-track">
+        <div class="qm-progress-bar"></div>
+      </div>
+      <div class="qm-status-label">Loading QuMail...</div>
+    </div>
+
+    <!-- Main React App Container -->
+    <div id="root" class="h-full w-full flex flex-col"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms & Conditions — QuMail Legal &amp; Compliance</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230B57D0'><path d='M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z'/></svg>">
+  <style>
+    :root {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --primary: #0B57D0;
+      --primary-hover: #0842A0;
+      --primary-subtle: #EFF6FF;
+      --accent: #4F46E5;
+      --badge-bg: #EEF2FF;
+      --badge-text: #4338CA;
+      --badge-border: #C7D2FE;
+      --h1-color: #0F172A;
+      --h2-color: #1E293B;
+      --h3-color: #334155;
+      --hr-color: #E2E8F0;
+      --code-bg: #F1F5F9;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --header-bg: rgba(255, 255, 255, 0.85);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #090D16;
+        --card-bg: #111726;
+        --text: #E2E8F0;
+        --text-muted: #94A3B8;
+        --border: #1E293B;
+        --primary: #38BDF8;
+        --primary-hover: #0EA5E9;
+        --primary-subtle: #0C4A6E;
+        --accent: #818CF8;
+        --badge-bg: #1E1B4B;
+        --badge-text: #A5B4FC;
+        --badge-border: #3730A3;
+        --h1-color: #F8FAFC;
+        --h2-color: #F1F5F9;
+        --h3-color: #E2E8F0;
+        --hr-color: #1E293B;
+        --code-bg: #1E293B;
+        --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+        --header-bg: rgba(17, 23, 38, 0.88);
+      }
+    }
+
+    body[data-theme="light"] {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --primary: #0B57D0;
+      --primary-hover: #0842A0;
+      --primary-subtle: #EFF6FF;
+      --accent: #4F46E5;
+      --badge-bg: #EEF2FF;
+      --badge-text: #4338CA;
+      --badge-border: #C7D2FE;
+      --h1-color: #0F172A;
+      --h2-color: #1E293B;
+      --h3-color: #334155;
+      --hr-color: #E2E8F0;
+      --code-bg: #F1F5F9;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      --header-bg: rgba(255, 255, 255, 0.85);
+    }
+
+    body[data-theme="dark"] {
+      --bg: #090D16;
+      --card-bg: #111726;
+      --text: #E2E8F0;
+      --text-muted: #94A3B8;
+      --border: #1E293B;
+      --primary: #38BDF8;
+      --primary-hover: #0EA5E9;
+      --primary-subtle: #0C4A6E;
+      --accent: #818CF8;
+      --badge-bg: #1E1B4B;
+      --badge-text: #A5B4FC;
+      --badge-border: #3730A3;
+      --h1-color: #F8FAFC;
+      --h2-color: #F1F5F9;
+      --h3-color: #E2E8F0;
+      --hr-color: #1E293B;
+      --code-bg: #1E293B;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+      --header-bg: rgba(17, 23, 38, 0.88);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0B57D0, #4F46E5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(11, 87, 208, 0.3);
+    }
+
+    .brand-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--h1-color);
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .actions-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      background: var(--primary-subtle);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      color: white;
+    }
+
+    .main-container {
+      max-width: 860px;
+      margin: 32px auto 80px auto;
+      padding: 0 24px;
+    }
+
+    .doc-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px;
+      box-shadow: var(--shadow);
+    }
+
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      border: 1px solid var(--badge-border);
+      margin-bottom: 16px;
+    }
+
+    .doc-h1 {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--h1-color);
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .doc-meta span strong {
+      color: var(--text);
+    }
+
+    .doc-h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--h2-color);
+      margin-top: 36px;
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: -0.01em;
+    }
+
+    .doc-h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--h3-color);
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    .doc-p {
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .doc-ul {
+      margin: 12px 0 18px 24px;
+      color: var(--text);
+    }
+
+    .doc-ul li {
+      margin-bottom: 6px;
+    }
+
+    .doc-link {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .doc-link:hover {
+      color: var(--primary-hover);
+    }
+
+    .doc-divider {
+      border: none;
+      border-top: 1px solid var(--hr-color);
+      margin: 32px 0;
+    }
+
+    .footer-nav {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      .top-bar, .actions-group, .footer-nav {
+        display: none !important;
+      }
+      .doc-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+      }
+      body {
+        background: white !important;
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <a href="#" class="brand-group">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">QuMail 1.0</div>
+        <div class="brand-subtitle">Official Legal &amp; Compliance Portal</div>
+      </div>
+    </a>
+    <div class="actions-group">
+      <a href="privacy-policy.html" class="btn">
+        <span>Privacy Policy</span> &rarr;
+      </a>
+      <button class="btn" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+        <span>Print</span>
+      </button>
+      <button class="btn btn-primary" onclick="window.close()">
+        <span>Close Tab</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <article class="doc-card">
+      <div class="doc-badge">Official QuMail Agreement</div>
+      <h1 class="doc-h1">QuMail – Terms &amp; Conditions</h1>
+<p class="doc-p"><strong>Effective Date:</strong> 14/11/2026<strong>Last Updated:</strong> 14/11/2026</p>
+<h2 class="doc-h2">1. Introduction</h2>
+<p class="doc-p">Welcome to QuMail.</p>
+<p class="doc-p">QuMail is a Windows desktop email client developed and maintained by the QuMail Project Team (&quot;Project Team&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;).</p>
+<p class="doc-p">These Terms &amp; Conditions (&quot;Terms&quot;) govern your access to and use of the QuMail software, its associated cryptographic functionality, encrypted WebLink services, and supporting online infrastructure.</p>
+<p class="doc-p">QuMail is currently distributed as a private prototype for limited testing and evaluation. It is not represented as a fully established commercial email service or a production-grade enterprise communication platform.</p>
+<p class="doc-p">By installing, accessing, or using QuMail, you acknowledge that you have read and understood these Terms.</p>
+<p class="doc-p">If you do not agree with these Terms, you must discontinue using the software.</p>
+<h2 class="doc-h2">2. Definitions</h2>
+<p class="doc-p">For the purposes of these Terms:</p>
+<ul class="doc-ul">
+<li><strong>QuMail:</strong> The Windows desktop email application and its associated components.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>Project Team:</strong> The group responsible for developing and maintaining the QuMail prototype.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>User:</strong> An individual authorized to access or test QuMail.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>PQ Mail:</strong> QuMail&#x27;s post-quantum encrypted email functionality.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>WebLink:</strong> An encrypted message access link generated for recipients who do not have QuMail installed.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>Cloud Directory:</strong> The cloud infrastructure supporting public-key discovery, account enrollment, and encrypted WebLink storage.</li>
+</ul>
+<ul class="doc-ul">
+<li><strong>Third-Party Services:</strong> External services used by QuMail, including email providers and cloud infrastructure providers.</li>
+</ul>
+<h2 class="doc-h2">3. Nature and Status of the Software</h2>
+<p class="doc-p">QuMail is an experimental software project currently made available for private prototype testing and evaluation.</p>
+<p class="doc-p">The software provides additional cryptographic functionality over existing email infrastructure.</p>
+<p class="doc-p">Its principal communication mechanisms include:</p>
+<h3 class="doc-h3">3.1 Post-Quantum Encrypted Email</h3>
+<p class="doc-p">QuMail enables enrolled users to exchange supported encrypted messages using:</p>
+<ul class="doc-ul">
+<li>ML-KEM-768 for post-quantum key encapsulation.</li>
+</ul>
+<ul class="doc-ul">
+<li>ML-DSA-65 for post-quantum digital signatures.</li>
+</ul>
+<ul class="doc-ul">
+<li>OpenPGP-based MIME message formatting.</li>
+</ul>
+<ul class="doc-ul">
+<li>Locally managed cryptographic identities and private keys.</li>
+</ul>
+<p class="doc-p">Both sender and recipient must have compatible enrolled QuMail identities to use this communication mode.</p>
+<h3 class="doc-h3">3.2 Encrypted WebLinks</h3>
+<p class="doc-p">QuMail provides encrypted WebLinks for communicating with recipients who do not have QuMail installed.</p>
+<p class="doc-p">This functionality uses:</p>
+<ul class="doc-ul">
+<li>AES-256-GCM message and attachment encryption.</li>
+</ul>
+<ul class="doc-ul">
+<li>Ed25519 signature binding.</li>
+</ul>
+<ul class="doc-ul">
+<li>Cloud-hosted encrypted payload storage.</li>
+</ul>
+<ul class="doc-ul">
+<li>Browser-based client-side decryption.</li>
+</ul>
+<ul class="doc-ul">
+<li>URL fragment-based decryption key delivery.</li>
+</ul>
+<p class="doc-p">Optional controls include OTP verification and burn-after-read restrictions.</p>
+<h3 class="doc-h3">3.3 Additional Functionality</h3>
+<p class="doc-p">Other functionality may include:</p>
+<ul class="doc-ul">
+<li>Google OAuth authentication.</li>
+</ul>
+<ul class="doc-ul">
+<li>Custom IMAP/SMTP mailbox connections.</li>
+</ul>
+<ul class="doc-ul">
+<li>Email synchronization.</li>
+</ul>
+<ul class="doc-ul">
+<li>Offline Hindi and Marathi translation.</li>
+</ul>
+<ul class="doc-ul">
+<li>Local encrypted credential storage.</li>
+</ul>
+<ul class="doc-ul">
+<li>Security PIN and automatic vault locking.</li>
+</ul>
+<ul class="doc-ul">
+<li>Contact trust evaluation and key-change detection.</li>
+</ul>
+<p class="doc-p">Available functionality may change as the prototype develops.</p>
+<h2 class="doc-h2">4. Prototype and Testing Conditions</h2>
+<p class="doc-p">You acknowledge and agree that:</p>
+<p class="doc-p">1.  QuMail is currently a prototype and may contain defects, incomplete functionality, compatibility issues, or unexpected behavior.</p>
+<p class="doc-p">2.  Features may be modified, suspended, restricted, or removed without a guarantee of continued availability.</p>
+<p class="doc-p">3.  External integrations may become unavailable due to changes in third-party services.</p>
+<p class="doc-p">4.  The Project Team does not guarantee uninterrupted operation, message delivery, synchronization, or permanent storage.</p>
+<p class="doc-p">5.  Updates may introduce changes to application behavior or data handling.</p>
+<p class="doc-p">You should not rely on QuMail as your sole means of communication or as the only repository of important information.</p>
+<p class="doc-p">During prototype testing, users are strongly advised to use test accounts and non-critical communications.</p>
+<p class="doc-p">Do not use the prototype as the sole communication channel for emergencies, safety-critical operations, financial transactions, legal notices, or other communications requiring guaranteed delivery or independently assured confidentiality.</p>
+<h2 class="doc-h2">5. Eligibility and Account Responsibility</h2>
+<p class="doc-p">QuMail is intended for a general audience.</p>
+<p class="doc-p">You are responsible for ensuring that your use of QuMail is lawful and that you have the necessary authority to connect the email accounts you use.</p>
+<p class="doc-p">You must:</p>
+<ul class="doc-ul">
+<li>Provide accurate account information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Maintain the confidentiality of your email credentials.</li>
+</ul>
+<ul class="doc-ul">
+<li>Protect your Windows user account.</li>
+</ul>
+<ul class="doc-ul">
+<li>Protect your QuMail security PIN.</li>
+</ul>
+<ul class="doc-ul">
+<li>Safeguard your cryptographic recovery information, where applicable.</li>
+</ul>
+<ul class="doc-ul">
+<li>Protect complete WebLink URLs and associated access credentials.</li>
+</ul>
+<p class="doc-p">If you are under 18, you should use QuMail with the knowledge and involvement of a parent or legal guardian.</p>
+<h2 class="doc-h2">6. Acceptable Use</h2>
+<p class="doc-p">You agree not to use QuMail to:</p>
+<ul class="doc-ul">
+<li>Facilitate fraud, phishing, harassment, threats, or unlawful activities.</li>
+</ul>
+<ul class="doc-ul">
+<li>Distribute malware or malicious attachments.</li>
+</ul>
+<ul class="doc-ul">
+<li>Gain unauthorized access to another person&#x27;s account, identity, or communications.</li>
+</ul>
+<ul class="doc-ul">
+<li>Attack, disrupt, or interfere with QuMail infrastructure.</li>
+</ul>
+<ul class="doc-ul">
+<li>Exploit vulnerabilities in the Cloud Directory or associated services.</li>
+</ul>
+<ul class="doc-ul">
+<li>Abuse account enrollment, public-key discovery, OTP verification, or WebLink storage.</li>
+</ul>
+<ul class="doc-ul">
+<li>Circumvent security controls for unauthorized purposes.</li>
+</ul>
+<ul class="doc-ul">
+<li>Violate applicable Indian laws or other laws applicable to your use.</li>
+</ul>
+<p class="doc-p">You remain responsible for all content you create, transmit, or share through QuMail.</p>
+<h2 class="doc-h2">7. Cryptographic Security and Limitations</h2>
+<p class="doc-p">QuMail incorporates cryptographic mechanisms intended to improve the confidentiality and integrity of electronic communications.</p>
+<p class="doc-p">However, no cryptographic system or software application can guarantee absolute security.</p>
+<h3 class="doc-h3">7.1 Post-Quantum Cryptography</h3>
+<p class="doc-p">QuMail implements ML-KEM-768 and ML-DSA-65 in supported communication workflows.</p>
+<p class="doc-p">The use of standardized algorithms does not guarantee that the complete application, implementation, operating environment, or communication process is free from vulnerabilities.</p>
+<h3 class="doc-h3">7.2 Local Key Protection</h3>
+<p class="doc-p">Private identity keys and certain credentials are maintained locally using Windows DPAPI-protected vault mechanisms.</p>
+<p class="doc-p">The security of this storage depends on the integrity of the operating system, Windows user account, device, and application environment.</p>
+<p class="doc-p">Malware, compromised operating systems, unauthorized physical access, or other endpoint attacks may expose information accessible to the application.</p>
+<h3 class="doc-h3">7.3 Contact Trust and Verification</h3>
+<p class="doc-p">QuMail uses Trust-On-First-Use (TOFU) contact pinning and security indicators to identify certain changes in correspondent keys and signatures.</p>
+<p class="doc-p">Users should carefully review unexpected key-change notifications and signature-verification failures.</p>
+<h3 class="doc-h3">7.4 Encrypted WebLinks</h3>
+<p class="doc-p">WebLink messages are encrypted using AES-256-GCM before their encrypted payloads are uploaded to cloud infrastructure.</p>
+<p class="doc-p">The decryption key is embedded in the URL fragment and is designed not to be included in ordinary HTTP requests to the storage server.</p>
+<p class="doc-p">However, anyone who obtains the complete WebLink may potentially gain access to its contents, depending on the applicable access controls.</p>
+<p class="doc-p">Users must treat complete WebLinks as confidential credentials.</p>
+<h3 class="doc-h3">7.5 No Independent Security Certification</h3>
+<p class="doc-p">The existence of cryptographic algorithms, operating-system protections, automated tests, or implementation-level security checks does not constitute an independent security certification, penetration test, or guarantee against compromise.</p>
+<h2 class="doc-h2">8. Email Providers and Third-Party Services</h2>
+<p class="doc-p">QuMail connects to existing email infrastructure using supported authentication and communication mechanisms, including Google OAuth 2.0, IMAP, and SMTP.</p>
+<p class="doc-p">Your use of these providers remains subject to their respective terms and privacy policies.</p>
+<p class="doc-p">The Project Team does not own or control your underlying email account.</p>
+<p class="doc-p">You authorize the application to perform the mailbox operations associated with the permissions and credentials you provide.</p>
+<p class="doc-p">QuMail also depends on external cloud infrastructure for certain functions, including Cloud Directory operations and encrypted WebLink storage.</p>
+<p class="doc-p">The availability and operation of those services are outside the Project Team&#x27;s complete control.</p>
+<h2 class="doc-h2">9. User Content and Data Responsibility</h2>
+<p class="doc-p">You retain whatever rights you hold in your messages, attachments, and other content.</p>
+<p class="doc-p">You are responsible for:</p>
+<ul class="doc-ul">
+<li>Ensuring you have permission to transmit your content.</li>
+</ul>
+<ul class="doc-ul">
+<li>Maintaining appropriate backups.</li>
+</ul>
+<ul class="doc-ul">
+<li>Verifying recipients where necessary.</li>
+</ul>
+<ul class="doc-ul">
+<li>Protecting your cryptographic keys and access credentials.</li>
+</ul>
+<ul class="doc-ul">
+<li>Complying with applicable confidentiality and data-protection requirements.</li>
+</ul>
+<p class="doc-p">QuMail does not guarantee recovery of lost messages, credentials, private keys, or encrypted content.</p>
+<p class="doc-p">The processing of information through QuMail is described in the separate Privacy Policy.</p>
+<h2 class="doc-h2">10. Intellectual Property and Third-Party Licenses</h2>
+<p class="doc-p">QuMail includes original project components and third-party libraries and technologies.</p>
+<p class="doc-p">The ownership and licensing of individual components remain subject to their applicable intellectual property rights and licenses.</p>
+<p class="doc-p">Nothing in these Terms grants you ownership of proprietary project components or rights beyond those expressly permitted by the applicable software licenses.</p>
+<p class="doc-p">Third-party dependencies remain subject to their respective licenses.</p>
+<h2 class="doc-h2">11. Updates and Discontinuation</h2>
+<p class="doc-p">The Project Team may modify, update, suspend, or discontinue QuMail or its associated infrastructure as part of prototype development and maintenance.</p>
+<p class="doc-p">The Project Team does not guarantee that:</p>
+<ul class="doc-ul">
+<li>A particular version will remain available.</li>
+</ul>
+<ul class="doc-ul">
+<li>Existing functionality will remain unchanged.</li>
+</ul>
+<ul class="doc-ul">
+<li>Future versions will preserve compatibility with previous versions.</li>
+</ul>
+<ul class="doc-ul">
+<li>Cloud-dependent functionality will remain continuously accessible.</li>
+</ul>
+<p class="doc-p">Users are responsible for maintaining appropriate copies of important information.</p>
+<h2 class="doc-h2">12. Disclaimer of Warranties</h2>
+<p class="doc-p">To the maximum extent permitted by applicable law, QuMail is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis.</p>
+<p class="doc-p">The Project Team makes no guarantee that the software will:</p>
+<ul class="doc-ul">
+<li>Operate without errors.</li>
+</ul>
+<ul class="doc-ul">
+<li>Remain continuously available.</li>
+</ul>
+<ul class="doc-ul">
+<li>Successfully deliver every message.</li>
+</ul>
+<ul class="doc-ul">
+<li>Prevent every unauthorized disclosure.</li>
+</ul>
+<ul class="doc-ul">
+<li>Remain compatible with all email providers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Provide uninterrupted access to cloud-dependent functionality.</li>
+</ul>
+<ul class="doc-ul">
+<li>Be free from vulnerabilities or defects.</li>
+</ul>
+<p class="doc-p">Nothing in these Terms excludes warranties or rights that cannot legally be excluded under applicable law.</p>
+<h2 class="doc-h2">13. Limitation of Liability</h2>
+<p class="doc-p">To the maximum extent permitted by applicable law, the Project Team shall not be liable for indirect, incidental, special, or consequential losses arising from the use of, or inability to use, QuMail.</p>
+<p class="doc-p">This may include losses associated with:</p>
+<ul class="doc-ul">
+<li>Failed or delayed email delivery.</li>
+</ul>
+<ul class="doc-ul">
+<li>Lost or inaccessible data.</li>
+</ul>
+<ul class="doc-ul">
+<li>Compromised devices or email accounts.</li>
+</ul>
+<ul class="doc-ul">
+<li>Exposure of WebLink access URLs.</li>
+</ul>
+<ul class="doc-ul">
+<li>Third-party service interruptions.</li>
+</ul>
+<ul class="doc-ul">
+<li>User configuration errors.</li>
+</ul>
+<ul class="doc-ul">
+<li>Loss of access to locally stored cryptographic material.</li>
+</ul>
+<p class="doc-p">Nothing in this section excludes liability for fraud, wilful misconduct, or any liability that cannot legally be excluded or limited.</p>
+<h2 class="doc-h2">14. Suspension and Termination</h2>
+<p class="doc-p">You may stop using QuMail at any time.</p>
+<p class="doc-p">The Project Team may restrict or suspend access to associated online services where reasonably necessary to protect infrastructure, prevent abuse, address security incidents, or comply with applicable legal requirements.</p>
+<p class="doc-p">Discontinuing use or uninstalling QuMail does not automatically delete information held by your email provider or external infrastructure.</p>
+<p class="doc-p">Local application data and cloud-stored records may require separate deletion procedures.</p>
+<h2 class="doc-h2">15. Privacy</h2>
+<p class="doc-p">Your use of QuMail is also governed by the QuMail Privacy Policy.</p>
+<p class="doc-p">The Privacy Policy explains the categories of information processed, local and cloud storage arrangements, external service providers, retention practices, and privacy-related contact procedures.</p>
+<h2 class="doc-h2">16. Governing Law and Jurisdiction</h2>
+<p class="doc-p">These Terms shall be governed by the laws of India.</p>
+<p class="doc-p">Disputes arising in connection with these Terms shall be subject to the jurisdiction of competent courts in India, subject to applicable mandatory legal rights and consumer protections.</p>
+<h2 class="doc-h2">17. Changes to These Terms</h2>
+<p class="doc-p">The Project Team may revise these Terms to reflect changes in the prototype, infrastructure, security architecture, or applicable legal requirements.</p>
+<p class="doc-p">The latest version will be made available through the official QuMail distribution or documentation channel.</p>
+<p class="doc-p">The effective date will be updated whenever material changes are made.</p>
+<h2 class="doc-h2">18. Contact Information</h2>
+<p class="doc-p">For questions, concerns, or requests concerning these Terms, contact:</p>
+<p class="doc-p"><strong>QuMail Project Team</strong></p>
+<ul class="doc-ul">
+<li>Email: <a href="mailto:uzair.shaikh.sec@gmail.com" target="_blank" rel="noopener noreferrer" class="doc-link">uzair.shaikh.sec@gmail.com</a></li>
+</ul>
+<ul class="doc-ul">
+<li>Jurisdiction: India</li>
+</ul>
+<ul class="doc-ul">
+<li>Official Website: Not currently designated.</li>
+</ul>
+<p class="doc-p"><strong>End of Terms &amp; Conditions</strong></p>
+      
+      <div class="footer-nav">
+        <div>&copy; 2026 QuMail Project Team · All Rights Reserved.</div>
+        <div>
+          <a href="privacy-policy.html" class="doc-link">Privacy Policy</a>
+        </div>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

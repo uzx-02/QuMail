@@ -1,0 +1,77 @@
+name: M1 research baseline
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+      UV_MANAGED_PYTHON: 'true'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9
+        with:
+          version: '0.12.22'
+          python-version: '3.12.14'
+          activate-environment: true
+          enable-cache: false
+      - name: Install Linux Qt system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          sudo apt-get install --no-install-recommends -y libegl1 libopengl0
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dpkg-query -W libegl1 libopengl0
+      - name: Report runtime inputs
+        run: |
+          uv --version
+          python -c "import platform, sys; print(platform.platform()); print(sys.version); assert sys.version_info[:3] == (3, 12, 14)"
+      - name: Install hash-locked research dependencies
+        run: uv pip install --require-hashes -r packaging/requirements-dev.lock
+      - name: Check dependency consistency
+        run: uv pip check
+      - name: Fetch explicit pinned native research source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: open-quantum-safe/liboqs
+          ref: 5a1a854b0dc9f2141bdc771c555ee60c37950183
+          path: tmp/liboqs-src
+          persist-credentials: false
+      - name: Build explicit native research inputs
+        run: |
+          $manifest = Get-Content packaging/native-research.json | ConvertFrom-Json
+          $revision = git -C tmp/liboqs-src rev-parse HEAD
+          if ($revision -ne $manifest.commit) { throw 'Unexpected native source commit' }
+          $prefix = Join-Path $env:GITHUB_WORKSPACE 'tmp/oqs-install'
+          $generator = if ($IsWindows) { @('-G', 'Visual Studio 17 2022', '-A', 'x64') } else { @('-G', 'Ninja', '-DCMAKE_INSTALL_LIBDIR=lib') }
+          cmake -S tmp/liboqs-src -B tmp/liboqs-build @generator "-DCMAKE_INSTALL_PREFIX=$prefix" @($manifest.cmake_flags)
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build tmp/liboqs-build --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --install tmp/liboqs-build --config Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "OQS_INSTALL_PATH=$prefix" >> $env:GITHUB_ENV
+      - name: Report available research provider and native hash
+        run: python -m crypto.legacy_provider --research
+      - name: Complete regression
+        run: python -m pytest -q
+      - name: Complete regression in reverse order
+        run: python -m pytest -q --test-order reverse
+      - name: Complete regression with fixed shuffled order
+        run: python -m pytest -q --test-order 20261003

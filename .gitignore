@@ -1,0 +1,86 @@
+# Repository root is the publication boundary for QuMail (desktop) and
+# QuMail_App (Android). Each application keeps its own .gitignore; this file
+# covers shared and root-level concerns only.
+
+# Local archive of pre-publication Git metadata. Never published.
+_git_archive/
+
+# Root-level development leftovers and private backups
+/Docs/
+/.vscode/
+/.wrangler/
+/.cloudflare/
+QuMail_Backup_*.zip
+QuMail_Demonstration_Golden_Backup_*.zip
+QuMail-Identity-*.html
+dump.xml
+*.sqlite
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+venv/
+.uv-cache/
+*.egg-info/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Rust
+target/
+*.rs.bk
+
+# Build output
+build/
+dist/
+!QuMail/frontend/dist/
+bin/*.exe
+*.msi
+*.dmg
+*.AppImage
+
+# Android and Gradle generated output
+.gradle/
+.kotlin/
+.cxx/
+.expo/
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+local.properties
+*.tsbuildinfo
+
+# Secrets and local runtime state
+secrets/
+certs/
+.env
+.env.*
+!.env.example
+.qumail_data/
+.wrangler/
+.cloudflare/
+scratch/
+*_audit.json
+client_secret*.json
+token*.json
+*.pem
+*.key
+*.pfx
+*.pyd
+
+# Agent tooling and local workspace settings
+.qoder/
+.claude/
+skills-lock.json
+
+# Large local presentation media
+QuMail/QuMail_Stakeholder_Presentation/
+QuMail/screen.png

@@ -1,0 +1,47 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pem
+*.pyd
+*.exe
+bin/*.exe
+!bin/.gitkeep
+.pytest_cache/
+venv/
+.venv*/
+tmp/
+build/
+dist/
+!frontend/dist/
+.uv-cache/
+.env
+node_modules/
+
+# QuMail local secrets, models, and runtime artifacts
+secrets/
+!secrets/.gitkeep
+certs/
+.qumail_data/
+.wrangler/
+scratch/
+cloud_directory/devices.json
+*.argosmodel
+*.bin
+# Public RFC 9980 test vectors (draft-ietf-openpgp-pqc-14 Appendix A.3)
+!tests/data/rfc9980/*.bin
+*.sqlite
+translation_models/
+client_secret*.json
+token*.json
+
+liboqs/
+
+# Internal development documents — not for public repository
+recycle/
+INSTRUCTIONS.md
+audit_report.md
+cloud_run_migration_plan.md
+qumail_audit_report.md
+QuMail_Project_Abstract.md
+.cloudflare/
+*_audit.json

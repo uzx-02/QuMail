@@ -1,0 +1,4 @@
+# Frontend dependencies and builds
+node_modules/
+.vite/
+*.local

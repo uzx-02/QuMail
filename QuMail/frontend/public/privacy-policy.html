@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — QuMail Legal &amp; Compliance</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230B57D0'><path d='M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z'/></svg>">
+  <style>
+    :root {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --primary: #0B57D0;
+      --primary-hover: #0842A0;
+      --primary-subtle: #EFF6FF;
+      --accent: #4F46E5;
+      --badge-bg: #EEF2FF;
+      --badge-text: #4338CA;
+      --badge-border: #C7D2FE;
+      --h1-color: #0F172A;
+      --h2-color: #1E293B;
+      --h3-color: #334155;
+      --hr-color: #E2E8F0;
+      --code-bg: #F1F5F9;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --header-bg: rgba(255, 255, 255, 0.85);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #090D16;
+        --card-bg: #111726;
+        --text: #E2E8F0;
+        --text-muted: #94A3B8;
+        --border: #1E293B;
+        --primary: #38BDF8;
+        --primary-hover: #0EA5E9;
+        --primary-subtle: #0C4A6E;
+        --accent: #818CF8;
+        --badge-bg: #1E1B4B;
+        --badge-text: #A5B4FC;
+        --badge-border: #3730A3;
+        --h1-color: #F8FAFC;
+        --h2-color: #F1F5F9;
+        --h3-color: #E2E8F0;
+        --hr-color: #1E293B;
+        --code-bg: #1E293B;
+        --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+        --header-bg: rgba(17, 23, 38, 0.88);
+      }
+    }
+
+    body[data-theme="light"] {
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #1E293B;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --primary: #0B57D0;
+      --primary-hover: #0842A0;
+      --primary-subtle: #EFF6FF;
+      --accent: #4F46E5;
+      --badge-bg: #EEF2FF;
+      --badge-text: #4338CA;
+      --badge-border: #C7D2FE;
+      --h1-color: #0F172A;
+      --h2-color: #1E293B;
+      --h3-color: #334155;
+      --hr-color: #E2E8F0;
+      --code-bg: #F1F5F9;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+      --header-bg: rgba(255, 255, 255, 0.85);
+    }
+
+    body[data-theme="dark"] {
+      --bg: #090D16;
+      --card-bg: #111726;
+      --text: #E2E8F0;
+      --text-muted: #94A3B8;
+      --border: #1E293B;
+      --primary: #38BDF8;
+      --primary-hover: #0EA5E9;
+      --primary-subtle: #0C4A6E;
+      --accent: #818CF8;
+      --badge-bg: #1E1B4B;
+      --badge-text: #A5B4FC;
+      --badge-border: #3730A3;
+      --h1-color: #F8FAFC;
+      --h2-color: #F1F5F9;
+      --h3-color: #E2E8F0;
+      --hr-color: #1E293B;
+      --code-bg: #1E293B;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4);
+      --header-bg: rgba(17, 23, 38, 0.88);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0B57D0, #4F46E5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(11, 87, 208, 0.3);
+    }
+
+    .brand-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--h1-color);
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .actions-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      background: var(--primary-subtle);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+      color: white;
+    }
+
+    .main-container {
+      max-width: 860px;
+      margin: 32px auto 80px auto;
+      padding: 0 24px;
+    }
+
+    .doc-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px;
+      box-shadow: var(--shadow);
+    }
+
+    .doc-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      border: 1px solid var(--badge-border);
+      margin-bottom: 16px;
+    }
+
+    .doc-h1 {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--h1-color);
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .doc-meta span strong {
+      color: var(--text);
+    }
+
+    .doc-h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--h2-color);
+      margin-top: 36px;
+      margin-bottom: 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      letter-spacing: -0.01em;
+    }
+
+    .doc-h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--h3-color);
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    .doc-p {
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+
+    .doc-ul {
+      margin: 12px 0 18px 24px;
+      color: var(--text);
+    }
+
+    .doc-ul li {
+      margin-bottom: 6px;
+    }
+
+    .doc-link {
+      color: var(--primary);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .doc-link:hover {
+      color: var(--primary-hover);
+    }
+
+    .doc-divider {
+      border: none;
+      border-top: 1px solid var(--hr-color);
+      margin: 32px 0;
+    }
+
+    .footer-nav {
+      margin-top: 40px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      .top-bar, .actions-group, .footer-nav {
+        display: none !important;
+      }
+      .doc-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+      }
+      body {
+        background: white !important;
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <a href="#" class="brand-group">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm-2 16l-4-4 1.41-1.41L10 15.17l6.59-6.59L18 10l-8 8z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">QuMail 1.0</div>
+        <div class="brand-subtitle">Official Legal &amp; Compliance Portal</div>
+      </div>
+    </a>
+    <div class="actions-group">
+      <a href="terms-and-conditions.html" class="btn">
+        <span>Terms & Conditions</span> &rarr;
+      </a>
+      <button class="btn" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+        <span>Print</span>
+      </button>
+      <button class="btn btn-primary" onclick="window.close()">
+        <span>Close Tab</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <article class="doc-card">
+      <div class="doc-badge">Official QuMail Agreement</div>
+      <h1 class="doc-h1">QuMail – Privacy Policy</h1>
+<p class="doc-p"><strong>Effective Date:</strong> 14/11/2026<strong>Last Updated:</strong> 14/11/2026</p>
+<h2 class="doc-h2">1. Introduction</h2>
+<p class="doc-p">The QuMail Project Team (&quot;Project Team&quot;, &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) respects the privacy of individuals using QuMail.</p>
+<p class="doc-p">QuMail is a Windows desktop email client designed to provide additional cryptographic protection for electronic communications through post-quantum encrypted email and encrypted WebLinks.</p>
+<p class="doc-p">QuMail is currently distributed as a private prototype for limited testing and evaluation.</p>
+<p class="doc-p">This Privacy Policy explains how information is processed, stored, transmitted, and protected when you use the QuMail desktop application and its associated online infrastructure.</p>
+<p class="doc-p">QuMail follows a local-first approach for important cryptographic operations. However, certain functionality requires communication with external email providers and cloud infrastructure.</p>
+<p class="doc-p">This policy distinguishes between local processing, email-provider processing, and cloud-based processing.</p>
+<h2 class="doc-h2">2. Who Operates QuMail?</h2>
+<p class="doc-p">QuMail is developed and maintained by the <strong>QuMail Project Team</strong>.</p>
+<p class="doc-p">The Project Team currently operates as a project team rather than representing itself through a registered company or incorporated organization in this Privacy Policy.</p>
+<p class="doc-p">For privacy-related questions, requests, or concerns, you may contact:</p>
+<p class="doc-p"><strong>QuMail Project Team</strong></p>
+<p class="doc-p">Email: <a href="mailto:uzair.shaikh.sec@gmail.com" target="_blank" rel="noopener noreferrer" class="doc-link">uzair.shaikh.sec@gmail.com</a></p>
+<p class="doc-p">Jurisdiction: India.</p>
+<h2 class="doc-h2">3. Scope of This Policy</h2>
+<p class="doc-p">This Privacy Policy applies to:</p>
+<ul class="doc-ul">
+<li>The QuMail Windows desktop application.</li>
+</ul>
+<ul class="doc-ul">
+<li>Local application storage and cryptographic vaults.</li>
+</ul>
+<ul class="doc-ul">
+<li>Google OAuth authentication.</li>
+</ul>
+<ul class="doc-ul">
+<li>Custom IMAP/SMTP mailbox connections.</li>
+</ul>
+<ul class="doc-ul">
+<li>QuMail Cloud Directory functionality.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted WebLink generation and storage.</li>
+</ul>
+<ul class="doc-ul">
+<li>Associated application settings and local processing.</li>
+</ul>
+<p class="doc-p">This policy does not replace the independent privacy policies of Google, other email providers, Cloudflare, or other third-party services.</p>
+<h2 class="doc-h2">4. Information Processed by QuMail</h2>
+<p class="doc-p">The information processed depends on the functionality you choose to use.</p>
+<h3 class="doc-h3">4.1 Account and Identity Information</h3>
+<p class="doc-p">When you configure an email account or enroll a QuMail identity, the application may process:</p>
+<ul class="doc-ul">
+<li>Email addresses.</li>
+</ul>
+<ul class="doc-ul">
+<li>Account identifiers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Authentication tokens.</li>
+</ul>
+<ul class="doc-ul">
+<li>Mailbox configuration details.</li>
+</ul>
+<ul class="doc-ul">
+<li>Cryptographic public keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>Public-key fingerprints.</li>
+</ul>
+<ul class="doc-ul">
+<li>Identity-related records.</li>
+</ul>
+<p class="doc-p">The Cloud Directory uses HMAC-SHA256-derived email identifiers for account indexing rather than storing raw email addresses in the account index.</p>
+<p class="doc-p">This does not mean that email addresses are never processed. They remain necessary for certain authentication, enrollment, and email-related operations.</p>
+<h3 class="doc-h3">4.2 Authentication Information</h3>
+<p class="doc-p">QuMail supports Google OAuth 2.0 and custom IMAP/SMTP authentication.</p>
+<p class="doc-p">Depending on the authentication method, information processed may include:</p>
+<ul class="doc-ul">
+<li>OAuth access tokens.</li>
+</ul>
+<ul class="doc-ul">
+<li>OAuth refresh tokens.</li>
+</ul>
+<ul class="doc-ul">
+<li>Email addresses.</li>
+</ul>
+<ul class="doc-ul">
+<li>Mailbox authentication credentials.</li>
+</ul>
+<ul class="doc-ul">
+<li>IMAP and SMTP configuration details.</li>
+</ul>
+<p class="doc-p">Certain credentials and tokens are maintained in local storage protected through Windows DPAPI-based mechanisms.</p>
+<p class="doc-p">When using Google OAuth, authentication is performed through Google&#x27;s supported authorization workflow rather than requiring you to provide your Google account password directly to QuMail.</p>
+<h3 class="doc-h3">4.3 Email Messages and Attachments</h3>
+<p class="doc-p">When you connect an email account, QuMail may process information necessary to retrieve, display, synchronize, and send messages.</p>
+<p class="doc-p">This may include:</p>
+<ul class="doc-ul">
+<li>Sender and recipient addresses.</li>
+</ul>
+<ul class="doc-ul">
+<li>Email subjects.</li>
+</ul>
+<ul class="doc-ul">
+<li>Message bodies.</li>
+</ul>
+<ul class="doc-ul">
+<li>Message headers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Attachments.</li>
+</ul>
+<ul class="doc-ul">
+<li>Timestamps.</li>
+</ul>
+<ul class="doc-ul">
+<li>Mailbox and folder information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Message status information.</li>
+</ul>
+<p class="doc-p">Messages retrieved through supported mailbox connections are processed by the local application.</p>
+<p class="doc-p">Depending on the application workflow, mailbox information may also be retained in local application storage for synchronization and access.</p>
+<p class="doc-p">Ordinary email messages remain subject to the processing and storage practices of your email provider.</p>
+<h3 class="doc-h3">4.4 Cryptographic Information</h3>
+<p class="doc-p">QuMail processes cryptographic information necessary to establish and maintain secure communication.</p>
+<p class="doc-p">This includes:</p>
+<ul class="doc-ul">
+<li>ML-KEM-768 key material.</li>
+</ul>
+<ul class="doc-ul">
+<li>ML-DSA-65 key material.</li>
+</ul>
+<ul class="doc-ul">
+<li>Ed25519 signing information used by WebLink functionality.</li>
+</ul>
+<ul class="doc-ul">
+<li>Public-key fingerprints.</li>
+</ul>
+<ul class="doc-ul">
+<li>Key enrollment and verification information.</li>
+</ul>
+<p class="doc-p">Private identity keys are generated and managed locally through the native Rust cryptographic providers.</p>
+<p class="doc-p">The Cloud Directory receives public-key information and associated identity records required for public-key discovery.</p>
+<p class="doc-p">Private cryptographic identity keys are not intended to be transmitted to the Cloud Directory.</p>
+<h3 class="doc-h3">4.5 Encrypted WebLink Information</h3>
+<p class="doc-p">When you generate an encrypted WebLink, QuMail processes:</p>
+<ul class="doc-ul">
+<li>Message content.</li>
+</ul>
+<ul class="doc-ul">
+<li>Attachments.</li>
+</ul>
+<ul class="doc-ul">
+<li>Recipient information required for delivery.</li>
+</ul>
+<ul class="doc-ul">
+<li>A randomly generated AES-256-GCM encryption key.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted message payloads.</li>
+</ul>
+<ul class="doc-ul">
+<li>WebLink identifiers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Optional access-control settings.</li>
+</ul>
+<p class="doc-p">The message and attachments are encrypted locally before the encrypted payload is uploaded to the Cloudflare-hosted infrastructure.</p>
+<p class="doc-p">The decryption key is embedded in the URL fragment.</p>
+<p class="doc-p">The key is designed not to be transmitted in ordinary HTTP requests to the storage server.</p>
+<p class="doc-p">However, the complete WebLink may be included in an email delivered to the recipient. Anyone obtaining the complete link may potentially access the message, depending on the configured access controls.</p>
+<p class="doc-p">Users should treat WebLinks as confidential access credentials.</p>
+<h3 class="doc-h3">4.6 Application Settings and Preferences</h3>
+<p class="doc-p">QuMail may store settings necessary for application functionality, including:</p>
+<ul class="doc-ul">
+<li>Interface language.</li>
+</ul>
+<ul class="doc-ul">
+<li>Theme preferences.</li>
+</ul>
+<ul class="doc-ul">
+<li>Account preferences.</li>
+</ul>
+<ul class="doc-ul">
+<li>Security settings.</li>
+</ul>
+<ul class="doc-ul">
+<li>Offline translation preferences.</li>
+</ul>
+<ul class="doc-ul">
+<li>Onboarding completion information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Other application configuration.</li>
+</ul>
+<p class="doc-p">These settings may be stored locally using the application&#x27;s frontend and backend storage mechanisms.</p>
+<h3 class="doc-h3">4.7 Offline Translation Information</h3>
+<p class="doc-p">QuMail provides local translation functionality for supported languages, currently Hindi and Marathi.</p>
+<p class="doc-p">The translation engine uses locally installed CTranslate2 models.</p>
+<p class="doc-p">When translation is requested:</p>
+<ul class="doc-ul">
+<li>Selected text is processed locally.</li>
+</ul>
+<ul class="doc-ul">
+<li>Translation inference takes place on your device.</li>
+</ul>
+<ul class="doc-ul">
+<li>Downloaded translation models are used for local processing.</li>
+</ul>
+<ul class="doc-ul">
+<li>Translation does not require sending the selected message text to an external translation API.</li>
+</ul>
+<p class="doc-p">An internet connection may be required to download the translation models initially.</p>
+<h2 class="doc-h2">5. How Information Is Used</h2>
+<p class="doc-p">Information processed through QuMail is used to provide the application&#x27;s functionality.</p>
+<p class="doc-p">PurposeInformation involvedAccount authenticationEmail addresses and authentication tokensMailbox configurationServer settings and credentialsEmail operationsMessages, headers, recipients and attachmentsIdentity enrollmentEmail-derived identifiers and public keysKey discoveryPublic-key bundles and fingerprintsPost-quantum communicationCryptographic information and message payloadsWebLink creationEncrypted messages, attachments and access identifiersSecurity verificationKey fingerprints and signature-verification resultsOffline translationSelected text and local translation modelsApplication operationPreferences and local configuration</p>
+<p class="doc-p">The Project Team does not describe QuMail as an advertising or data-broker service.</p>
+<h2 class="doc-h2">6. Local Processing and Storage</h2>
+<p class="doc-p">QuMail uses local storage for important application information.</p>
+<p class="doc-p">Depending on the features used, this may include:</p>
+<ul class="doc-ul">
+<li>Encrypted account credentials.</li>
+</ul>
+<ul class="doc-ul">
+<li>OAuth tokens.</li>
+</ul>
+<ul class="doc-ul">
+<li>Cryptographic identity keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>Mailbox information and caches.</li>
+</ul>
+<ul class="doc-ul">
+<li>Application settings.</li>
+</ul>
+<ul class="doc-ul">
+<li>Contact trust information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Translation models and associated local data.</li>
+</ul>
+<p class="doc-p">Windows DPAPI and associated local encryption mechanisms are used to protect documented credentials and vault information at rest.</p>
+<p class="doc-p">These protections are associated with the local Windows security environment.</p>
+<p class="doc-p">However, local encryption cannot guarantee protection against every threat, including compromised operating systems, malware, unauthorized access to an unlocked session, or attacks on the user&#x27;s device.</p>
+<h2 class="doc-h2">7. Cloud Infrastructure and External Services</h2>
+<p class="doc-p">QuMail uses external infrastructure to provide selected features.</p>
+<h3 class="doc-h3">7.1 Cloudflare</h3>
+<p class="doc-p">QuMail uses Cloudflare Workers and D1 database infrastructure for Cloud Directory and encrypted WebLink functionality.</p>
+<p class="doc-p">Depending on the workflow, information processed by this infrastructure may include:</p>
+<ul class="doc-ul">
+<li>HMAC-derived account identifiers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Public cryptographic keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>Public-key fingerprints.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted WebLink payloads.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted attachment payloads.</li>
+</ul>
+<ul class="doc-ul">
+<li>WebLink identifiers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Associated access-control information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Technical request information required for service operation.</li>
+</ul>
+<p class="doc-p">The Cloud Directory is designed to store encrypted WebLink payloads rather than the corresponding plaintext message content.</p>
+<p class="doc-p">The Cloudflare infrastructure remains an external service provider subject to its own privacy and operational practices.</p>
+<h3 class="doc-h3">7.2 Email Providers</h3>
+<p class="doc-p">QuMail connects to external email services through Google OAuth, IMAP, and SMTP.</p>
+<p class="doc-p">Depending on your selected provider and communication method, those services may process:</p>
+<ul class="doc-ul">
+<li>Email addresses.</li>
+</ul>
+<ul class="doc-ul">
+<li>Message headers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Message content.</li>
+</ul>
+<ul class="doc-ul">
+<li>Attachments.</li>
+</ul>
+<ul class="doc-ul">
+<li>Timestamps.</li>
+</ul>
+<ul class="doc-ul">
+<li>Authentication information.</li>
+</ul>
+<ul class="doc-ul">
+<li>WebLink URLs.</li>
+</ul>
+<p class="doc-p">For ordinary email, the email provider may be able to access message contents.</p>
+<p class="doc-p">For supported post-quantum encrypted messages, the email transport carries encrypted message payloads.</p>
+<p class="doc-p">Your relationship with your email provider remains subject to its own privacy policy and terms.</p>
+<h3 class="doc-h3">7.3 Other Service Providers</h3>
+<p class="doc-p">Additional service providers may be involved in specific application operations, infrastructure hosting, or model distribution.</p>
+<p class="doc-p">Any additional provider that processes personal information should be identified and reflected in this policy before the corresponding functionality is made available to users.</p>
+<h2 class="doc-h2">8. What the Cloud Directory Can and Cannot Access</h2>
+<p class="doc-p">QuMail is designed to limit the information exposed to its Cloud Directory.</p>
+<p class="doc-p">Based on the documented architecture:</p>
+<p class="doc-p"><strong>Information that may be available to the Cloud Directory:</strong></p>
+<ul class="doc-ul">
+<li>Public cryptographic keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>Public-key fingerprints.</li>
+</ul>
+<ul class="doc-ul">
+<li>HMAC-derived account identifiers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted WebLink payloads.</li>
+</ul>
+<ul class="doc-ul">
+<li>Encrypted attachment payloads.</li>
+</ul>
+<ul class="doc-ul">
+<li>WebLink identifiers and access-control information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Technical information required for service operation.</li>
+</ul>
+<p class="doc-p"><strong>Information not intentionally uploaded through the documented cryptographic workflows:</strong></p>
+<ul class="doc-ul">
+<li>Private ML-KEM-768 identity keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>Private ML-DSA-65 identity keys.</li>
+</ul>
+<ul class="doc-ul">
+<li>WebLink AES-256-GCM decryption keys through ordinary payload uploads.</li>
+</ul>
+<ul class="doc-ul">
+<li>Plaintext WebLink message content through encrypted payload storage.</li>
+</ul>
+<p class="doc-p">These statements describe the intended application architecture and documented data flows. They do not constitute a guarantee against endpoint compromise, recipient-side disclosure, malicious browser extensions, or every possible information-security incident.</p>
+<h2 class="doc-h2">9. Data Retention</h2>
+<p class="doc-p">Information is retained according to its purpose and the storage mechanism involved.</p>
+<h3 class="doc-h3">9.1 Local Information</h3>
+<p class="doc-p">Local credentials, encrypted vaults, mailbox information, application settings, and translation data may remain on your device until removed through the application, operating system, or relevant cleanup procedure.</p>
+<p class="doc-p">Uninstalling QuMail should not be assumed to delete every locally stored application record.</p>
+<h3 class="doc-h3">9.2 Cloud Directory Information</h3>
+<p class="doc-p">Information maintained by the Cloud Directory is subject to the applicable record lifecycle, access-control, and deletion mechanisms implemented in the deployed infrastructure.</p>
+<p class="doc-p">The Project Team does not make an unverified universal retention-period claim for all Cloud Directory records.</p>
+<h3 class="doc-h3">9.3 Email Provider Information</h3>
+<p class="doc-p">Messages transmitted through your email account remain subject to your email provider&#x27;s storage, retention, backup, and deletion policies.</p>
+<p class="doc-p">Deleting a message locally does not necessarily delete other copies maintained by an email provider or recipient.</p>
+<h2 class="doc-h2">10. Information Sharing and Disclosure</h2>
+<p class="doc-p">Information may be shared with external service providers where necessary to provide the functionality requested by the user.</p>
+<p class="doc-p">This includes:</p>
+<ul class="doc-ul">
+<li>Cloudflare for Cloud Directory and encrypted WebLink infrastructure.</li>
+</ul>
+<ul class="doc-ul">
+<li>Google and other email providers for authentication and email transport.</li>
+</ul>
+<ul class="doc-ul">
+<li>Other providers where required for a documented application function.</li>
+</ul>
+<p class="doc-p">Information may also be disclosed where required by applicable law, valid legal process, or to protect the security and integrity of the application and its infrastructure.</p>
+<p class="doc-p">The Project Team does not intentionally upload private cryptographic identity keys to the Cloud Directory.</p>
+<h2 class="doc-h2">11. Security Measures</h2>
+<p class="doc-p">QuMail incorporates multiple security mechanisms intended to protect user information.</p>
+<p class="doc-p">These include:</p>
+<ul class="doc-ul">
+<li>ML-KEM-768 and ML-DSA-65 for supported post-quantum communication.</li>
+</ul>
+<ul class="doc-ul">
+<li>AES-256-GCM for encrypted WebLinks.</li>
+</ul>
+<ul class="doc-ul">
+<li>Ed25519 signatures for WebLink signature binding.</li>
+</ul>
+<ul class="doc-ul">
+<li>Windows DPAPI-protected local credential and vault storage.</li>
+</ul>
+<ul class="doc-ul">
+<li>Local cryptographic key generation.</li>
+</ul>
+<ul class="doc-ul">
+<li>SHA-256 integrity verification for native cryptographic providers.</li>
+</ul>
+<ul class="doc-ul">
+<li>Trust-On-First-Use contact pinning.</li>
+</ul>
+<ul class="doc-ul">
+<li>Key-change and signature-verification indicators.</li>
+</ul>
+<ul class="doc-ul">
+<li>Security PIN and automatic vault-lock functionality.</li>
+</ul>
+<ul class="doc-ul">
+<li>HTTPS communication with the Cloud Directory.</li>
+</ul>
+<p class="doc-p">These mechanisms reduce certain security risks but cannot guarantee absolute protection.</p>
+<p class="doc-p">The security of information also depends on device integrity, user practices, external infrastructure, and recipient systems.</p>
+<h2 class="doc-h2">12. Your Privacy Choices and Requests</h2>
+<p class="doc-p">For questions or requests concerning information processed through QuMail, you may contact the Project Team using the email address provided in this policy.</p>
+<p class="doc-p">You may request assistance concerning:</p>
+<ul class="doc-ul">
+<li>Information associated with your QuMail identity.</li>
+</ul>
+<ul class="doc-ul">
+<li>Correction of inaccurate information, where feasible.</li>
+</ul>
+<ul class="doc-ul">
+<li>Deletion of eligible information.</li>
+</ul>
+<ul class="doc-ul">
+<li>Questions about information sharing and processing.</li>
+</ul>
+<ul class="doc-ul">
+<li>Privacy-related concerns or complaints.</li>
+</ul>
+<p class="doc-p">Requests may require verification to ensure that information is not disclosed or deleted on behalf of an unauthorized person.</p>
+<p class="doc-p">Certain information may remain with external email providers or infrastructure providers under their independent retention obligations.</p>
+<p class="doc-p">Deleting local application data does not automatically delete information held by external services.</p>
+<p class="doc-p">Privacy requests will be handled in accordance with applicable Indian law and the provisions in force at the relevant time.</p>
+<h2 class="doc-h2">13. International Data Processing</h2>
+<p class="doc-p">QuMail integrates with external infrastructure providers that may process or store information in different geographical locations.</p>
+<p class="doc-p">The location of processing depends on the relevant provider, service configuration, and deployment arrangements.</p>
+<p class="doc-p">Where personal information is processed or transferred internationally, the applicable legal requirements will govern such processing.</p>
+<p class="doc-p">The Project Team does not represent that all QuMail-related data is exclusively stored within India.</p>
+<h2 class="doc-h2">14. Children&#x27;s Privacy</h2>
+<p class="doc-p">QuMail is intended for a general audience and is not specifically designed to collect information from children.</p>
+<p class="doc-p">Individuals under 18 should use the application with the knowledge and involvement of a parent or legal guardian.</p>
+<p class="doc-p">The Project Team does not intentionally seek to collect children&#x27;s personal information beyond what is necessary for an authorized and lawful use.</p>
+<p class="doc-p">Applicable requirements concerning children&#x27;s personal data will be observed as required by the laws in force.</p>
+<h2 class="doc-h2">15. Third-Party Privacy Policies</h2>
+<p class="doc-p">Your use of integrated third-party services may be subject to their respective privacy policies.</p>
+<p class="doc-p">Relevant providers include:</p>
+<ul class="doc-ul">
+<li>Google: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" class="doc-link">https://policies.google.com/privacy</a></li>
+</ul>
+<ul class="doc-ul">
+<li>Cloudflare: <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer" class="doc-link">https://www.cloudflare.com/privacypolicy/</a></li>
+</ul>
+<p class="doc-p">Other provider policies will be identified where applicable.</p>
+<h2 class="doc-h2">16. Changes to This Privacy Policy</h2>
+<p class="doc-p">The Project Team may update this Privacy Policy when:</p>
+<ul class="doc-ul">
+<li>QuMail functionality changes.</li>
+</ul>
+<ul class="doc-ul">
+<li>New integrations are introduced.</li>
+</ul>
+<ul class="doc-ul">
+<li>Data processing practices change.</li>
+</ul>
+<ul class="doc-ul">
+<li>The cloud architecture is modified.</li>
+</ul>
+<ul class="doc-ul">
+<li>Applicable legal requirements change.</li>
+</ul>
+<p class="doc-p">The latest version will be made available through the official QuMail distribution or documentation channel.</p>
+<p class="doc-p">The effective date will be updated whenever material changes are made.</p>
+<h2 class="doc-h2">17. Contact Information</h2>
+<p class="doc-p">For privacy-related questions, information requests, or complaints, contact:</p>
+<p class="doc-p"><strong>QuMail Project Team</strong></p>
+<ul class="doc-ul">
+<li>Email: <a href="mailto:uzair.shaikh.sec@gmail.com" target="_blank" rel="noopener noreferrer" class="doc-link">uzair.shaikh.sec@gmail.com</a></li>
+</ul>
+<ul class="doc-ul">
+<li>Jurisdiction: India</li>
+</ul>
+<ul class="doc-ul">
+<li>Official Website: Not currently designated.</li>
+</ul>
+<p class="doc-p"><strong>End of Privacy Policy</strong></p>
+      
+      <div class="footer-nav">
+        <div>&copy; 2026 QuMail Project Team · All Rights Reserved.</div>
+        <div>
+          <a href="terms-and-conditions.html" class="doc-link">Terms & Conditions</a>
+        </div>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

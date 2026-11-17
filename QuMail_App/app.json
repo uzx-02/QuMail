@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "QuMail",
+    "slug": "qumail-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": [
+      "qumail",
+      "com.qumail",
+      "com.googleusercontent.apps.953431543574-8ci0e8ebrubaapsfvdhr0b2t5hvhojl1"
+    ],
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.qumail",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0D14"
+      },
+      "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceDetectorSettings": {}
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow QuMail to access your biometric credentials to unlock the quantum vault."
+        }
+      ]
+    ]
+  }
+}
